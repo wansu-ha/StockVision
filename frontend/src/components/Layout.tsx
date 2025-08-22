@@ -15,35 +15,37 @@ const Layout = ({ children }: LayoutProps) => {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Navigation */}
-      <nav className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
+      <nav className="bg-white shadow-lg border-b border-gray-100">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="flex justify-between h-20">
             <div className="flex items-center">
-              <Link to="/" className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold text-lg">S</span>
+              <Link to="/" className="flex items-center space-x-3">
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl flex items-center justify-center shadow-lg">
+                  <span className="text-white font-bold text-xl">S</span>
                 </div>
-                <span className="text-xl font-bold text-gray-900">StockVision</span>
+                <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-700 bg-clip-text text-transparent">
+                  StockVision
+                </span>
               </Link>
             </div>
             
-            <div className="flex items-center space-x-8">
+            <div className="flex items-center space-x-2">
               <Link
                 to="/"
-                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                className={`px-6 py-3 rounded-2xl text-sm font-semibold transition-all duration-200 ${
                   isActive('/') 
-                    ? 'bg-primary-100 text-primary-700' 
-                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                    ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg' 
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                 }`}
               >
                 대시보드
               </Link>
               <Link
                 to="/stocks"
-                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                className={`px-6 py-3 rounded-2xl text-sm font-semibold transition-all duration-200 ${
                   isActive('/stocks') 
-                    ? 'bg-primary-100 text-primary-700' 
-                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                    ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg' 
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                 }`}
               >
                 주식 목록
@@ -54,7 +56,7 @@ const Layout = ({ children }: LayoutProps) => {
       </nav>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+      <main>
         {children}
       </main>
     </div>
