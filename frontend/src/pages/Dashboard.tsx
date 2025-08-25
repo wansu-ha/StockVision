@@ -1,4 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   ChartBarIcon,
   ArrowTrendingUpIcon,
@@ -6,12 +8,23 @@ import {
   ExclamationTriangleIcon,
   RocketLaunchIcon,
   BanknotesIcon,
-  ChartPieIcon
+  ChartPieIcon,
+  MagnifyingGlassIcon
 } from '@heroicons/react/24/outline'
-import { Card, CardBody, CardHeader, Chip } from '@heroui/react'
+import { Card, CardBody, CardHeader, Chip, Button } from '@heroui/react'
 import { stockApi } from '../services/api'
+import StockSearch from '../components/StockSearch'
+import LiveStockCard from '../components/LiveStockCard'
+import AIMarketOverview from '../components/AIMarketOverview'
+import type { Stock } from '../types'
 
 const Dashboard = () => {
+  const navigate = useNavigate()
+  const [searchTerm, setSearchTerm] = useState('')
+  const [selectedStock, setSelectedStock] = useState<Stock | null>(null)
+  
+
+
   const { data: stocksData, isLoading, error } = useQuery({
     queryKey: ['stocks'],
     queryFn: stockApi.getStocks,
@@ -55,6 +68,34 @@ const Dashboard = () => {
     monthlyChange: 12.45
   }
 
+  // 검색된 주식 필터링
+  const filteredStocks = stocks.filter(stock => {
+    if (!searchTerm) return stocks.slice(0, 6) // 검색어가 없으면 처음 6개
+    
+    const term = searchTerm.toLowerCase()
+    return (
+      stock.symbol.toLowerCase().includes(term) ||
+      stock.name.toLowerCase().includes(term) ||
+      stock.sector.toLowerCase().includes(term) ||
+      stock.industry.toLowerCase().includes(term)
+    )
+  }).slice(0, 6)
+
+  const handleStockSelect = (stock: Stock) => {
+    setSelectedStock(stock)
+    setSearchTerm(stock.symbol)
+  }
+
+  const handleViewDetails = (stock: Stock) => {
+    navigate(`/stocks/${stock.symbol}`)
+  }
+
+  const handleQuickSearch = () => {
+    if (selectedStock) {
+      navigate(`/stocks/${selectedStock.symbol}`)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
       {/* Hero Header */}
@@ -69,11 +110,35 @@ const Dashboard = () => {
               StockVision
             </h1>
             
-            <p className="text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
+            <p className="text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed mb-8">
               AI 기반 주식 동향 예측과 가상 거래로 스마트한 투자 결정을 내리세요
             </p>
+
+            {/* 주식 검색 */}
+            <div className="max-w-2xl mx-auto mb-8">
+              <StockSearch
+                onStockSelect={handleStockSelect}
+                placeholder="주식 심볼, 회사명, 섹터로 검색..."
+                className="w-full"
+                enablePageTransition={true}
+              />
+              {selectedStock && (
+                <div className="mt-4 flex items-center justify-center space-x-4">
+                  <span className="text-sm text-gray-600">
+                    선택된 주식: <strong>{selectedStock.symbol}</strong> - {selectedStock.name}
+                  </span>
+                  <Button
+                    size="sm"
+                    color="primary"
+                    onPress={handleQuickSearch}
+                  >
+                    상세 정보 보기
+                  </Button>
+                </div>
+              )}
+            </div>
             
-            <div className="flex items-center justify-center space-x-6 mt-8">
+            <div className="flex items-center justify-center space-x-6">
               <div className="flex items-center space-x-2 bg-blue-50 px-4 py-2 rounded-full">
                 <ChartPieIcon className="w-5 h-5 text-blue-600" />
                 <span className="text-blue-800 font-medium">실시간 분석</span>
@@ -87,6 +152,8 @@ const Dashboard = () => {
                 <span className="text-purple-800 font-medium">가상 거래</span>
               </div>
             </div>
+            
+
           </div>
         </div>
       </div>
@@ -139,6 +206,43 @@ const Dashboard = () => {
           </Card>
         </div>
 
+        {/* AI 시장 분석 */}
+        <div className="mb-12">
+          <AIMarketOverview />
+        </div>
+
+        {/* 실시간 주식 모니터링 */}
+        <Card className="mb-12 shadow-lg">
+          <CardHeader className="pb-6 p-6">
+            <div className="flex flex-col space-y-3">
+              <h2 className="text-2xl font-bold text-foreground">실시간 주식 모니터링</h2>
+              <p className="text-default-500 text-medium">
+                {searchTerm ? `"${searchTerm}" 검색 결과` : '주요 기술주들의 실시간 현황'}
+              </p>
+            </div>
+          </CardHeader>
+          <CardBody className="pt-0 px-6 pb-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredStocks.map((stock) => (
+                <LiveStockCard
+                  key={stock.id}
+                  stock={stock}
+                  onViewDetails={handleViewDetails}
+                />
+              ))}
+            </div>
+            {filteredStocks.length === 0 && (
+              <div className="text-center py-12 text-gray-500">
+                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <MagnifyingGlassIcon className="w-8 h-8 text-gray-400" />
+                </div>
+                <div className="text-lg font-medium">검색 결과가 없습니다</div>
+                <div className="text-sm">다른 키워드로 검색해보세요</div>
+              </div>
+            )}
+          </CardBody>
+        </Card>
+
         {/* Recent Stocks Section */}
         <Card className="mb-12 shadow-lg">
           <CardHeader className="pb-6 p-6">
@@ -163,7 +267,7 @@ const Dashboard = () => {
               <tbody className="divide-y divide-gray-200">
                 {stocks.length > 0 ? (
                   stocks.slice(0, 5).map((stock) => (
-                    <tr key={stock.id} className="hover:bg-gray-50 transition-colors">
+                    <tr key={stock.id} className="hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => handleViewDetails(stock)}>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
                           <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white font-bold text-sm">
