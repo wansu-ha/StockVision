@@ -1,7 +1,7 @@
 import axios from 'axios'
 import type { ApiResponse, Stock, StockPrice, TechnicalIndicator, StockSummary } from '../types'
 
-const API_BASE_URL = 'http://localhost:8000'
+const API_BASE_URL = 'http://localhost:8000/api/v1'
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -50,6 +50,46 @@ export const stockApi = {
     const response = await api.get(`/stocks/${symbol}/summary`)
     return response.data
   },
+}
+
+// AI 분석 API
+export const aiAnalysisApi = {
+  // 전반적인 시장 분석
+  getMarketOverview: async () => {
+    const response = await api.get('/ai-analysis/market-overview')
+    return response.data
+  },
+
+  // 개별 주식 AI 분석
+  getStockAnalysis: async (symbol: string) => {
+    const response = await api.get(`/ai-analysis/stocks/${symbol}/analysis`)
+    return response.data
+  },
+
+  // 섹터별 AI 분석
+  getSectorAnalysis: async (sector: string) => {
+    const response = await api.get(`/ai-analysis/sectors/${sector}/analysis`)
+    return response.data
+  },
+
+  // 최신 AI 인사이트
+  getLatestInsights: async () => {
+    const response = await api.get('/ai-analysis/ai-insights/latest')
+    return response.data
+  },
+}
+
+// 백엔드 서버 상태 확인
+export const healthApi = {
+  checkHealth: async () => {
+    const response = await axios.get('http://localhost:8000/health')
+    return response.data
+  },
+  
+  getApiInfo: async () => {
+    const response = await axios.get('http://localhost:8000/api-info')
+    return response.data
+  }
 }
 
 export default api
