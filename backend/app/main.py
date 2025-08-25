@@ -4,6 +4,7 @@ from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import HTMLResponse
 from app.api import stocks
+from app.api.ai_analysis import router as ai_analysis_router
 import datetime
 import sqlite3
 import os
@@ -150,6 +151,7 @@ app.openapi = custom_openapi
 
 # API 라우터 등록
 app.include_router(stocks.router, prefix="/api/v1", tags=["stocks"])
+app.include_router(ai_analysis_router, prefix="/api/v1/ai-analysis", tags=["ai-analysis"])
 
 
 # 테스트 엔드포인트
@@ -157,114 +159,9 @@ app.include_router(stocks.router, prefix="/api/v1", tags=["stocks"])
 async def test():
     return {"message": "Hello World", "status": "working"}
 
-@app.get("/test-ai")
-async def test_ai():
-    return {"message": "AI Analysis API is working", "status": "success"}
 
-# AI 분석 API 엔드포인트
-@app.get("/api/v1/ai-analysis/market-overview")
-async def get_market_overview():
-    """전반적인 주식시장 AI 분석"""
-    return {
-        "success": True,
-        "data": {
-            "overall_sentiment": "긍정적",
-            "sentiment_score": 0.75,
-            "market_trend": "상승 추세",
-            "market_volatility": "보통",
-            "key_factors": [
-                "글로벌 경제 회복세 지속",
-                "기업 실적 개선 전망",
-                "중앙은행의 완화적 통화정책"
-            ],
-            "sector_outlook": {
-                "technology": "긍정적",
-                "healthcare": "중립",
-                "finance": "긍정적",
-                "consumer": "보통"
-            },
-            "risk_level": "보통",
-            "liquidity_condition": "양호",
-            "investment_advice": "단계적 매수 전략 권장",
-            "analysis_timestamp": "2025-08-25T16:50:00"
-        },
-        "message": "시장 분석이 성공적으로 생성되었습니다."
-    }
 
-@app.get("/api/v1/ai-analysis/stocks/{symbol}/analysis")
-async def get_stock_analysis(symbol: str):
-    """개별 주식 AI 분석"""
-    return {
-        "success": True,
-        "data": {
-            "stock_symbol": symbol.upper(),
-            "stock_name": f"Test Company {symbol}",
-            "analysis_timestamp": "2025-08-25T16:50:00",
-            "investment_opinion": {
-                "recommendation": "매수",
-                "confidence_level": "높음",
-                "reasoning": "테스트용 분석 결과입니다.",
-                "risk_reward_ratio": 2.5,
-                "time_horizon": "중기(3-12개월)"
-            },
-            "technical_analysis": {
-                "trend_strength": "강함",
-                "rsi_signal": "과매수",
-                "macd_signal": "상승",
-                "volume_trend": "증가",
-                "support_level": 150.0,
-                "resistance_level": 180.0
-            },
-            "news_analysis": {
-                "recent_news": [
-                    {
-                        "topic": "신제품 출시",
-                        "sentiment": "긍정적",
-                        "impact_level": "높음",
-                        "summary": "새로운 혁신 제품으로 시장 점유율 확대 전망"
-                    },
-                    {
-                        "topic": "실적 발표",
-                        "sentiment": "긍정적",
-                        "impact_level": "보통",
-                        "summary": "예상치 상회하는 분기 실적 달성"
-                    }
-                ]
-            },
-            "investor_sentiment": {
-                "overall_sentiment": "긍정적",
-                "institutional_confidence": "높음",
-                "retail_confidence": "보통"
-            },
-            "sentiment_analysis": {
-                "retail_sentiment": "긍정적",
-                "institutional_sentiment": "긍정적",
-                "analyst_rating": "매수",
-                "price_target_consensus": 200.0,
-                "earnings_expectations": "긍정적"
-            },
-            "price_targets": {
-                "short_term": 175.0,
-                "medium_term": 200.0,
-                "long_term": 250.0
-            },
-            "risk_assessment": {
-                "overall_risk": "보통",
-                "volatility_risk": "보통",
-                "liquidity_risk": "낮음",
-                "risk_factors": [
-                    "시장 변동성 증가",
-                    "섹터별 순환 조정",
-                    "글로벌 경제 불확실성"
-                ]
-            },
-            "holding_period": {
-                "recommended_period": "중기",
-                "rebalancing_frequency": "분기 1회"
-            }
-        },
-        "message": f"{symbol}의 AI 분석이 성공적으로 생성되었습니다."
-    }
+
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
