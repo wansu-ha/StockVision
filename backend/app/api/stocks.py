@@ -7,30 +7,45 @@ import pandas as pd
 from app.core.database import get_db
 from app.models.stock import Stock, StockPrice, TechnicalIndicator
 from app.services.technical_indicators import TechnicalIndicatorCalculator
+from app.services.stock_list_service import StockListService
+from app.services.stock_data_service import StockDataService
 
 router = APIRouter(prefix="/stocks", tags=["stocks"])
 
+# 서비스 인스턴스 직접 생성
+from app.services.stock_list_service import StockListService
+from app.services.stock_data_service import StockDataService
+
+stock_list_service = StockListService()
+stock_data_service = StockDataService()
+
 @router.get("/")
-async def get_stocks(db: Session = Depends(get_db)):
-    """등록된 모든 주식 목록 조회"""
+async def get_stocks():
+    """등록된 모든 주식 목록 조회 (메모리 캐싱 적용)"""
+    import time
+    start_time = time.time()
+    
     try:
-        stocks = db.query(Stock).all()
+        stocks = stock_list_service.get_stock_list()
+        process_time = time.time() - start_time
+        
+        # 응답 시간이 1초 이상이면 로그 기록
+        if process_time > 1.0:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"느린 주식 목록 조회: {process_time:.3f}초")
+        
         return {
             "success": True,
-            "data": [
-                {
-                    "id": stock.id,
-                    "symbol": stock.symbol,
-                    "name": stock.name,
-                    "sector": stock.sector,
-                    "industry": stock.industry,
-                    "market_cap": stock.market_cap
-                }
-                for stock in stocks
-            ],
-            "count": len(stocks)
+            "data": stocks,
+            "count": len(stocks),
+            "process_time": f"{process_time:.3f}s"
         }
     except Exception as e:
+        process_time = time.time() - start_time
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"주식 목록 조회 실패 ({process_time:.3f}초): {str(e)}")
         raise HTTPException(status_code=500, detail=f"주식 목록 조회 실패: {str(e)}")
 
 @router.get("/{symbol}")
@@ -62,43 +77,19 @@ async def get_stock_detail(symbol: str, db: Session = Depends(get_db)):
 @router.get("/{symbol}/prices")
 async def get_stock_prices(
     symbol: str,
-    days: int = Query(30, ge=1, le=365, description="조회할 일수"),
-    db: Session = Depends(get_db)
+    days: int = Query(30, ge=1, le=365, description="조회할 일수")
 ):
-    """주식 가격 데이터 조회"""
+    """주식 가격 데이터 조회 (메모리 캐싱 + DB 캐싱)"""
     try:
-        # 주식 ID 조회
-        stock = db.query(Stock).filter(Stock.symbol == symbol.upper()).first()
-        if not stock:
-            raise HTTPException(status_code=404, detail=f"주식을 찾을 수 없습니다: {symbol}")
+        # 캐싱 서비스를 통한 데이터 조회
+        data = stock_data_service.get_stock_data(symbol.upper(), days)
         
-        # 가격 데이터 조회
-        end_date = datetime.now()
-        start_date = end_date - timedelta(days=days)
-        
-        prices = db.query(StockPrice).filter(
-            StockPrice.stock_id == stock.id,
-            StockPrice.date >= start_date
-        ).order_by(StockPrice.date).all()
+        if not data or len(data) == 0:
+            raise HTTPException(status_code=404, detail=f"주식 데이터를 찾을 수 없습니다: {symbol}")
         
         return {
             "success": True,
-            "data": {
-                "symbol": stock.symbol,
-                "name": stock.name,
-                "prices": [
-                    {
-                        "date": price.date.strftime("%Y-%m-%d"),
-                        "open": price.open,
-                        "high": price.high,
-                        "low": price.low,
-                        "close": price.close,
-                        "volume": price.volume
-                    }
-                    for price in prices
-                ]
-            },
-            "count": len(prices)
+            "data": data
         }
     except HTTPException:
         raise
@@ -160,46 +151,76 @@ async def get_stock_indicators(
         raise HTTPException(status_code=500, detail=f"기술적 지표 조회 실패: {str(e)}")
 
 @router.get("/{symbol}/summary")
-async def get_stock_summary(symbol: str, db: Session = Depends(get_db)):
-    """주식 요약 정보 조회 (가격 + 지표)"""
+async def get_stock_summary(symbol: str):
+    """주식 요약 정보 조회 (메모리 캐싱 적용)"""
     try:
-        # 주식 ID 조회
-        stock = db.query(Stock).filter(Stock.symbol == symbol.upper()).first()
-        if not stock:
-            raise HTTPException(status_code=404, detail=f"주식을 찾을 수 없습니다: {symbol}")
+        # 캐싱 서비스를 통한 요약 정보 조회
+        summary = stock_data_service.get_stock_summary(symbol.upper())
         
-        # 최신 가격 데이터
-        latest_price = db.query(StockPrice).filter(
-            StockPrice.stock_id == stock.id
-        ).order_by(StockPrice.date.desc()).first()
-        
-        # 최신 기술적 지표들
-        latest_indicators = db.query(TechnicalIndicator).filter(
-            TechnicalIndicator.stock_id == stock.id
-        ).order_by(TechnicalIndicator.date.desc()).all()
-        
-        # 지표별 최신 값
-        current_indicators = {}
-        for indicator in latest_indicators:
-            if indicator.indicator_type not in current_indicators:
-                current_indicators[indicator.indicator_type] = indicator.value
+        if not summary:
+            raise HTTPException(status_code=404, detail=f"주식 요약 정보를 찾을 수 없습니다: {symbol}")
         
         return {
             "success": True,
-            "data": {
-                "symbol": stock.symbol,
-                "name": stock.name,
-                "sector": stock.sector,
-                "industry": stock.industry,
-                "latest_price": {
-                    "date": latest_price.date.strftime("%Y-%m-%d") if latest_price else None,
-                    "close": latest_price.close if latest_price else None,
-                    "volume": latest_price.volume if latest_price else None
-                } if latest_price else None,
-                "current_indicators": current_indicators
-            }
+            "data": summary
         }
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"주식 요약 정보 조회 실패: {str(e)}")
+
+@router.get("/cache/status")
+async def get_cache_status():
+    """캐시 상태 정보 조회"""
+    try:
+        return {
+            "success": True,
+            "data": {
+                "stock_list_cache": stock_list_service.get_cache_info(),
+                "stock_data_cache": stock_data_service.get_cache_info(),
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"캐시 상태 조회 실패: {str(e)}")
+
+@router.post("/cache/refresh")
+async def refresh_cache():
+    """전체 캐시 강제 갱신"""
+    try:
+        # 주식 목록 캐시 갱신
+        stock_list_refreshed = stock_list_service.refresh_cache()
+        
+        # 가격 데이터 캐시 정리
+        stock_data_service.clear_cache()
+        
+        return {
+            "success": True,
+            "data": {
+                "stock_list_cache_refreshed": stock_list_refreshed,
+                "stock_data_cache_cleared": True,
+                "message": "캐시 갱신 완료",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"캐시 갱신 실패: {str(e)}")
+
+@router.post("/cache/refresh/{symbol}")
+async def refresh_stock_cache(symbol: str):
+    """특정 주식의 캐시만 갱신"""
+    try:
+        # 해당 주식의 가격 데이터 캐시만 정리
+        stock_data_service.clear_cache(symbol.upper())
+        
+        return {
+            "success": True,
+            "data": {
+                "symbol": symbol.upper(),
+                "cache_cleared": True,
+                "message": f"{symbol} 주식 캐시 갱신 완료",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"주식 캐시 갱신 실패: {str(e)}")

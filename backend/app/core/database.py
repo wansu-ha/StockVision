@@ -22,3 +22,7 @@ def get_db():
         yield db
     finally:
         db.close()
+
+def get_db_session():
+    """데이터베이스 세션 반환 (캐싱 서비스용)"""
+    return SessionLocal()

@@ -31,6 +31,10 @@ const StockSearch = ({
   const { data: stocksData } = useQuery({
     queryKey: ['stocks'],
     queryFn: stockApi.getStocks,
+    retry: 3, // 3번 재시도
+    retryDelay: 1000, // 1초 후 재시도
+    staleTime: 5 * 60 * 1000, // 5분간 데이터 신선도 유지
+    gcTime: 10 * 60 * 1000, // 10분간 캐시 유지
   })
 
   const stocks = stocksData?.data || []

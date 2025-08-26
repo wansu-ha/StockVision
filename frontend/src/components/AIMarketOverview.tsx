@@ -17,6 +17,10 @@ const AIMarketOverview: React.FC = () => {
     queryKey: ['market-overview'],
     queryFn: aiAnalysisApi.getMarketOverview,
     refetchInterval: 300000, // 5분마다 새로고침
+    retry: 3, // 3번 재시도
+    retryDelay: 1000, // 1초 후 재시도
+    staleTime: 10 * 60 * 1000, // 10분간 데이터 신선도 유지
+    gcTime: 15 * 60 * 1000, // 15분간 캐시 유지
   })
 
   if (isLoading) {

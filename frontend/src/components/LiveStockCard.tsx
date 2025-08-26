@@ -3,7 +3,7 @@ import { ArrowUpIcon, ArrowDownIcon, MinusIcon } from '@heroicons/react/24/solid
 import { Card, CardBody, CardHeader, Chip, Button } from '@heroui/react'
 import { useQuery } from '@tanstack/react-query'
 import { stockApi } from '../services/api'
-import type { Stock, StockPrice } from '../types'
+import type { Stock } from '../types'
 
 interface LiveStockCardProps {
   stock: Stock
@@ -18,11 +18,15 @@ const LiveStockCard = ({ stock, onViewDetails, className = "" }: LiveStockCardPr
   const [volume, setVolume] = useState<number | null>(null)
 
   // 최신 가격 데이터 가져오기
-  const { data: priceData, isLoading: isLoadingPrice } = useQuery({
+  const { data: priceData } = useQuery({
     queryKey: ['stock-prices', stock.symbol, 'latest'],
     queryFn: () => stockApi.getStockPrices(stock.symbol, 2), // 최근 2일 데이터
     refetchInterval: 300000, // 5분마다 갱신 (빈도 조정)
     enabled: !!stock.symbol,
+    retry: 3, // 3번 재시도
+    retryDelay: 1000, // 1초 후 재시도
+    staleTime: 1 * 60 * 1000, // 1분간 데이터 신선도 유지 (실시간성 중요)
+    gcTime: 3 * 60 * 1000, // 3분간 캐시 유지
   })
 
   // 가격 데이터 처리

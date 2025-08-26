@@ -1,13 +1,39 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import HTMLResponse
 from app.api import stocks
 from app.api.ai_analysis import router as ai_analysis_router
+from app.services.cache_scheduler import CacheScheduler
 import datetime
 import sqlite3
 import os
+from dotenv import load_dotenv
+
+# 환경 변수 로딩
+load_dotenv()
+
+# 전역 서비스 인스턴스 (순환 참조 방지)
+stock_list_service = None
+stock_data_service = None
+cache_scheduler = None
+
+def get_stock_list_service():
+    """주식 목록 서비스 인스턴스 반환 (싱글톤)"""
+    global stock_list_service
+    if stock_list_service is None:
+        from app.services.stock_list_service import StockListService
+        stock_list_service = StockListService()
+    return stock_list_service
+
+def get_stock_data_service():
+    """주식 데이터 서비스 인스턴스 반환 (싱글톤)"""
+    global stock_data_service
+    if stock_data_service is None:
+        from app.services.stock_data_service import StockDataService
+        stock_data_service = StockDataService()
+    return stock_data_service
 
 app = FastAPI(
     title="StockVision API",
@@ -45,7 +71,40 @@ app = FastAPI(
     redoc_url=None,  # 기본 ReDoc 비활성화
 )
 
-# CORS 설정
+# 성능 모니터링 미들웨어 (먼저 정의)
+@app.middleware("http")
+async def performance_monitoring(request: Request, call_next):
+    """성능 모니터링 및 캐시 스케줄러 작업 체크"""
+    import time
+    import logging
+    
+    # 로거 설정
+    logger = logging.getLogger(__name__)
+    
+    start_time = time.time()
+    
+    # 캐시 스케줄러 작업 체크 (APScheduler 없을 때 기본 스케줄링)
+    if cache_scheduler:
+        cache_scheduler.check_and_run_tasks()
+    
+    try:
+        response = await call_next(request)
+        process_time = time.time() - start_time
+        
+        # 응답 시간이 1초 이상이면 로그 기록
+        if process_time > 1.0:
+            logger.warning(f"느린 API 응답: {request.method} {request.url.path} - {process_time:.3f}초")
+        
+        # 응답 헤더에 처리 시간 추가
+        response.headers["X-Process-Time"] = str(process_time)
+        return response
+        
+    except Exception as e:
+        process_time = time.time() - start_time
+        logger.error(f"API 오류: {request.method} {request.url.path} - {process_time:.3f}초 - {e}")
+        raise
+
+# CORS 설정 (모든 미들웨어 이후에 추가)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -153,6 +212,36 @@ app.openapi = custom_openapi
 app.include_router(stocks.router, prefix="/api/v1", tags=["stocks"])
 app.include_router(ai_analysis_router, prefix="/api/v1/ai-analysis", tags=["ai-analysis"])
 
+# 캐시 스케줄러 초기화 및 시작
+@app.on_event("startup")
+async def startup_event():
+    global cache_scheduler
+    try:
+        # 캐시 스케줄러 초기화
+        cache_scheduler = CacheScheduler()
+        
+        # 서비스 인스턴스 설정
+        stock_list_service = get_stock_list_service()
+        stock_data_service = get_stock_data_service()
+        
+        cache_scheduler.set_services(stock_list_service, stock_data_service)
+        cache_scheduler.setup_jobs()
+        cache_scheduler.start()
+        
+        print("✅ 캐시 스케줄러 시작됨")
+        
+    except Exception as e:
+        print(f"❌ 캐시 스케줄러 시작 실패: {e}")
+
+# 기본 스케줄링을 위한 주기적 체크 (APScheduler가 없을 때)
+# 성능 모니터링 미들웨어는 CORS 미들웨어 이후에 정의됨
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    global cache_scheduler
+    if cache_scheduler:
+        cache_scheduler.stop()
+        print("🛑 캐시 스케줄러 중지됨")
 
 # 테스트 엔드포인트
 @app.get("/test")

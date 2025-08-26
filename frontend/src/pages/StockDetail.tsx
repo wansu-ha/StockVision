@@ -29,6 +29,10 @@ const StockDetail = () => {
     queryKey: ['stock', symbol],
     queryFn: () => stockApi.getStock(symbol!),
     enabled: !!symbol,
+    retry: 3, // 3번 재시도
+    retryDelay: 1000, // 1초 후 재시도
+    staleTime: 5 * 60 * 1000, // 5분간 데이터 신선도 유지
+    gcTime: 10 * 60 * 1000, // 10분간 캐시 유지
   })
 
   const { data: pricesData, isLoading: pricesLoading } = useQuery({
@@ -36,12 +40,20 @@ const StockDetail = () => {
     queryFn: () => stockApi.getStockPrices(symbol!, 30),
     enabled: !!symbol,
     refetchInterval: 300000, // 5분마다 갱신 (빈도 조정)
+    retry: 3, // 3번 재시도
+    retryDelay: 1000, // 1초 후 재시도
+    staleTime: 2 * 60 * 1000, // 2분간 데이터 신선도 유지 (가격 데이터는 더 자주 갱신)
+    gcTime: 5 * 60 * 1000, // 5분간 캐시 유지
   })
 
   const { data: indicatorsData } = useQuery({
     queryKey: ['stock-indicators', symbol],
     queryFn: () => stockApi.getStockIndicators(symbol!, 30),
     enabled: !!symbol,
+    retry: 3, // 3번 재시도
+    retryDelay: 1000, // 1초 후 재시도
+    staleTime: 10 * 60 * 1000, // 10분간 데이터 신선도 유지 (기술적 지표는 덜 자주 갱신)
+    gcTime: 15 * 60 * 1000, // 15분간 캐시 유지
   })
 
   // 실시간 가격 데이터 처리

@@ -12,7 +12,17 @@ const api = axios.create({
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    console.error('API Error:', error)
+    if (error.code === 'ECONNABORTED') {
+      console.error('API 타임아웃:', error.message)
+      console.error('요청 URL:', error.config?.url)
+      console.error('요청 메서드:', error.config?.method)
+    } else if (error.response) {
+      console.error('API 응답 오류:', error.response.status, error.response.data)
+    } else if (error.request) {
+      console.error('API 요청 실패:', error.message)
+    } else {
+      console.error('API 오류:', error.message)
+    }
     return Promise.reject(error)
   }
 )
