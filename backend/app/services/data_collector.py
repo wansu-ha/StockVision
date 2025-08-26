@@ -4,7 +4,10 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 from app.models.stock import Stock, StockPrice
 from app.core.database import SessionLocal
+from app.core.rate_limit_monitor import rate_limit_monitor
+from app.core.api_logging import api_logger_instance
 import logging
+import asyncio
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -13,56 +16,79 @@ class DataCollector:
     def __init__(self):
         self.session = SessionLocal()
         
-    def collect_stock_info(self, symbols: List[str]) -> List[Dict]:
-        """주식 기본 정보 수집"""
+    async def collect_stock_info(self, symbols: List[str]) -> List[Dict]:
+        """주식 기본 정보 수집 (Semaphore로 동시 호출 제한)"""
         stocks_data = []
         
         for symbol in symbols:
             try:
-                ticker = yf.Ticker(symbol)
-                info = ticker.info
-                
-                stock_data = {
-                    'symbol': symbol,
-                    'name': info.get('longName', symbol),
-                    'sector': info.get('sector', 'Unknown'),
-                    'industry': info.get('industry', 'Unknown'),
-                    'market_cap': info.get('marketCap')
-                }
-                stocks_data.append(stock_data)
-                logger.info(f"주식 정보 수집 완료: {symbol}")
+                # Semaphore로 동시 호출 제한
+                async with rate_limit_monitor.request_semaphore:
+                    # API 제한 확인
+                    can_request, status = rate_limit_monitor.can_make_request()
+                    if not can_request:
+                        logger.warning(f"야후 파이낸스 API 제한 초과: {status['status']}")
+                        continue
+                    
+                    ticker = yf.Ticker(symbol)
+                    info = ticker.info
+                    
+                    stock_data = {
+                        'symbol': symbol,
+                        'name': info.get('longName', symbol),
+                        'sector': info.get('sector', 'Unknown'),
+                        'industry': info.get('industry', 'Unknown'),
+                        'market_cap': info.get('marketCap')
+                    }
+                    stocks_data.append(stock_data)
+                    
+                    # API 호출 기록
+                    rate_limit_monitor.record_request(symbol, "stock_info")
+                    api_logger_instance.increment_yahoo_calls(symbol, "stock_info")
+                    logger.info(f"주식 정보 수집 완료: {symbol}")
                 
             except Exception as e:
                 logger.error(f"주식 정보 수집 실패 {symbol}: {str(e)}")
                 
         return stocks_data
     
-    def collect_stock_prices(self, symbol: str, days: int = 365) -> pd.DataFrame:
-        """주식 가격 데이터 수집"""
+    async def collect_stock_prices(self, symbol: str, days: int = 365) -> pd.DataFrame:
+        """주식 가격 데이터 수집 (Semaphore로 동시 호출 제한)"""
         try:
-            ticker = yf.Ticker(symbol)
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=days)
-            
-            df = ticker.history(start=start_date, end=end_date)
-            
-            if df.empty:
-                logger.warning(f"가격 데이터 없음: {symbol}")
-                return pd.DataFrame()
+            # Semaphore로 동시 호출 제한
+            async with rate_limit_monitor.request_semaphore:
+                # API 제한 확인
+                can_request, status = rate_limit_monitor.can_make_request()
+                if not can_request:
+                    logger.warning(f"야후 파이낸스 API 제한 초과: {status['status']}")
+                    return pd.DataFrame()
                 
-            # 컬럼명 정규화
-            df.columns = [col.lower() for col in df.columns]
-            df.reset_index(inplace=True)
-            
-            # Date 컬럼이 있는지 확인하고 처리
-            if 'date' in df.columns:
-                df.rename(columns={'date': 'date'}, inplace=True)
-            elif 'Date' in df.columns:
-                df.rename(columns={'Date': 'date'}, inplace=True)
-            
-            logger.info(f"가격 데이터 수집 완료: {symbol} ({len(df)}개)")
-            return df
-            
+                ticker = yf.Ticker(symbol)
+                end_date = datetime.now()
+                start_date = end_date - timedelta(days=days)
+                
+                df = ticker.history(start=start_date, end=end_date)
+                
+                if df.empty:
+                    logger.warning(f"가격 데이터 없음: {symbol}")
+                    return pd.DataFrame()
+                    
+                # 컬럼명 정규화
+                df.columns = [col.lower() for col in df.columns]
+                df.reset_index(inplace=True)
+                
+                # Date 컬럼이 있는지 확인하고 처리
+                if 'date' in df.columns:
+                    df.rename(columns={'date': 'date'}, inplace=True)
+                elif 'Date' in df.columns:
+                    df.rename(columns={'Date': 'date'}, inplace=True)
+                
+                # API 호출 기록
+                rate_limit_monitor.record_request(symbol, "price_data")
+                api_logger_instance.increment_yahoo_calls(symbol, "price_data")
+                logger.info(f"가격 데이터 수집 완료: {symbol} ({len(df)}개)")
+                return df
+                
         except Exception as e:
             logger.error(f"가격 데이터 수집 실패 {symbol}: {str(e)}")
             return pd.DataFrame()

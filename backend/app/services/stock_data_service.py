@@ -49,8 +49,22 @@ class StockDataService:
             logger.info(f"DB에 데이터 없음 - yfinance API 호출: {symbol}")
             try:
                 from app.services.data_collector import DataCollector
+                import asyncio
                 collector = DataCollector()
-                prices_df = collector.collect_stock_prices(symbol, days)
+                # async 메서드를 동기적으로 실행
+                try:
+                    prices_df = asyncio.run(collector.collect_stock_prices(symbol, days))
+                except RuntimeError:
+                    # 이미 이벤트 루프가 실행 중인 경우
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        # 백그라운드 태스크로 실행
+                        import concurrent.futures
+                        with concurrent.futures.ThreadPoolExecutor() as executor:
+                            future = executor.submit(asyncio.run, collector.collect_stock_prices(symbol, days))
+                            prices_df = future.result()
+                    else:
+                        prices_df = loop.run_until_complete(collector.collect_stock_prices(symbol, days))
                 if not prices_df.empty:
                     # DataFrame을 딕셔너리 리스트로 변환
                     stored_data = []

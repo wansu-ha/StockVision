@@ -6,6 +6,8 @@ from fastapi.responses import HTMLResponse
 from app.api import stocks
 from app.api.ai_analysis import router as ai_analysis_router
 from app.services.cache_scheduler import CacheScheduler
+from app.core.api_logging import api_logger_instance
+import uuid
 import datetime
 import sqlite3
 import os
@@ -71,7 +73,76 @@ app = FastAPI(
     redoc_url=None,  # 기본 ReDoc 비활성화
 )
 
-# 성능 모니터링 미들웨어 (먼저 정의)
+# API 로깅 미들웨어 (먼저 정의)
+@app.middleware("http")
+async def api_logging_middleware(request: Request, call_next):
+    """API 요청/응답 로깅"""
+    import time
+    import logging
+    
+    # 로거 설정
+    logger = logging.getLogger(__name__)
+    
+    # 로깅이 필요 없는 API 경로들
+    exclude_paths = [
+        # 로그 관련 API (자체 로깅 제외)
+        "/api/v1/logs/stats",      # 로그 통계 API
+        "/api/v1/logs/entries",    # 로그 엔트리 API
+        "/api/v1/logs/stream",     # 로그 스트리밍 API
+        "/api/v1/logs/",           # 로그 대시보드 페이지
+        
+        # 메인 페이지 및 문서 (로깅 불필요)
+        "/",                       # 메인 페이지
+        "/docs",                   # Swagger UI
+        "/redoc",                  # ReDoc
+        "/rapidoc",                # RapiDoc
+        "/test",                   # 테스트 엔드포인트
+        "/health",                 # 헬스체크
+        "/api-info",               # API 정보
+        
+        # 정적 파일 (로깅 불필요)
+        "/favicon.ico",            # 파비콘
+        "/.well-known/",           # 웰노운 파일들
+    ]
+    
+    # 로깅 제외 여부 확인
+    should_log = True
+    for exclude_path in exclude_paths:
+        if request.url.path.startswith(exclude_path):
+            should_log = False
+            break
+    
+    # 로깅이 필요한 경우에만 처리
+    if should_log:
+        # 고유 추적 ID 생성
+        trace_id = str(uuid.uuid4())
+        
+        # 요청 로깅
+        request_data = api_logger_instance.log_request(request, trace_id)
+        
+        start_time = time.time()
+        
+        try:
+            response = await call_next(request)
+            process_time = time.time() - start_time
+            
+            # 응답 로깅
+            api_logger_instance.log_response(request_data, response, process_time, response.status_code)
+            
+            return response
+            
+        except Exception as e:
+            process_time = time.time() - start_time
+            
+            # 오류 로깅
+            api_logger_instance.log_error(request_data, e, process_time)
+            raise
+    else:
+        # 로깅하지 않고 바로 처리
+        logger.debug(f"로깅 제외 API: {request.method} {request.url.path}")
+        return await call_next(request)
+
+# 성능 모니터링 미들웨어
 @app.middleware("http")
 async def performance_monitoring(request: Request, call_next):
     """성능 모니터링 및 캐시 스케줄러 작업 체크"""
@@ -212,6 +283,10 @@ app.openapi = custom_openapi
 app.include_router(stocks.router, prefix="/api/v1", tags=["stocks"])
 app.include_router(ai_analysis_router, prefix="/api/v1/ai-analysis", tags=["ai-analysis"])
 
+# 로그 API 라우터 등록
+from app.api import logs
+app.include_router(logs.router, prefix="/api/v1/logs", tags=["logs"])
+
 # 캐시 스케줄러 초기화 및 시작
 @app.on_event("startup")
 async def startup_event():
@@ -309,6 +384,27 @@ async def root():
                 max-width: 800px;
                 margin-left: auto;
                 margin-right: auto;
+            }}
+            .nav-links {{
+                display: flex;
+                justify-content: center;
+                gap: 20px;
+                margin-bottom: 30px;
+            }}
+            .nav-link {{
+                background: rgba(255,255,255,0.2);
+                color: white;
+                padding: 12px 24px;
+                border-radius: 25px;
+                text-decoration: none;
+                transition: all 0.3s ease;
+                border: 1px solid rgba(255,255,255,0.3);
+                backdrop-filter: blur(10px);
+            }}
+            .nav-link:hover {{
+                background: rgba(255,255,255,0.3);
+                transform: translateY(-2px);
+                box-shadow: 0 5px 15px rgba(0,0,0,0.2);
             }}
             .stats-grid {{ 
                 display: grid; 
@@ -509,6 +605,19 @@ async def root():
                     AI 기반 주식 동향 예측과 가상 거래로 스마트한 투자 결정을 내리세요.<br>
                     머신러닝 모델과 실시간 데이터 분석으로 투자 기회를 발견하고, 리스크 없는 가상 환경에서 전략을 검증하세요.
                 </p>
+                
+                <!-- 네비게이션 링크 -->
+                <div class="nav-links">
+                    <a href="/api/v1/logs/" class="nav-link">
+                        📊 로그 대시보드
+                    </a>
+                    <a href="/docs" class="nav-link">
+                        📚 API 문서
+                    </a>
+                    <a href="/health" class="nav-link">
+                        🏥 시스템 상태
+                    </a>
+                </div>
             </div>
             
             <div class="stats-grid">
