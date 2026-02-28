@@ -283,6 +283,9 @@ app.openapi = custom_openapi
 app.include_router(stocks.router, prefix="/api/v1", tags=["stocks"])
 app.include_router(ai_analysis_router, prefix="/api/v1/ai-analysis", tags=["ai-analysis"])
 
+from app.api.trading import router as trading_router
+app.include_router(trading_router, prefix="/api/v1", tags=["trading"])
+
 # 로그 API 라우터 등록
 from app.api import logs
 app.include_router(logs.router, prefix="/api/v1/logs", tags=["logs"])
