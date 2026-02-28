@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import Dashboard from './pages/Dashboard'
 import StockList from './pages/StockList'
 import StockDetail from './pages/StockDetail'
+import Trading from './pages/Trading'
 import Layout from './components/Layout'
 
 // React Query 클라이언트 생성
@@ -24,6 +25,7 @@ function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/stocks" element={<StockList />} />
             <Route path="/stocks/:symbol" element={<StockDetail />} />
+            <Route path="/trading" element={<Trading />} />
           </Routes>
         </Layout>
       </Router>
