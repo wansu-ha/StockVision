@@ -89,6 +89,90 @@ export const aiAnalysisApi = {
   },
 }
 
+// 가상 거래 API
+import type {
+  VirtualAccount, AccountSummary, VirtualPosition, VirtualTrade,
+  StockScore, BacktestResult, BacktestResultSummary, AutoTradingRule,
+  CreateAccountRequest, PlaceOrderRequest, RunBacktestRequest,
+  CreateRuleRequest, UpdateRuleRequest,
+} from '../types/trading'
+
+export const tradingApi = {
+  // 계좌
+  createAccount: async (data: CreateAccountRequest): Promise<ApiResponse<VirtualAccount>> => {
+    const response = await api.post('/trading/accounts', data)
+    return response.data
+  },
+  getAccounts: async (): Promise<ApiResponse<VirtualAccount[]>> => {
+    const response = await api.get('/trading/accounts')
+    return response.data
+  },
+  getAccountDetail: async (accountId: number): Promise<ApiResponse<AccountSummary>> => {
+    const response = await api.get(`/trading/accounts/${accountId}`)
+    return response.data
+  },
+
+  // 주문
+  placeOrder: async (data: PlaceOrderRequest): Promise<ApiResponse<VirtualTrade>> => {
+    const response = await api.post('/trading/orders', data)
+    return response.data
+  },
+
+  // 포지션
+  getPositions: async (accountId: number): Promise<ApiResponse<VirtualPosition[]>> => {
+    const response = await api.get(`/trading/positions/${accountId}`)
+    return response.data
+  },
+
+  // 거래 내역
+  getTradeHistory: async (accountId: number, limit: number = 50): Promise<ApiResponse<VirtualTrade[]>> => {
+    const response = await api.get(`/trading/history/${accountId}?limit=${limit}`)
+    return response.data
+  },
+
+  // 스코어링
+  calculateScores: async (): Promise<ApiResponse<StockScore[]>> => {
+    const response = await api.post('/trading/scores/calculate')
+    return response.data
+  },
+  getScores: async (limit: number = 20): Promise<ApiResponse<StockScore[]>> => {
+    const response = await api.get(`/trading/scores?limit=${limit}`)
+    return response.data
+  },
+
+  // 백테스팅
+  runBacktest: async (data: RunBacktestRequest): Promise<ApiResponse<BacktestResult>> => {
+    const response = await api.post('/trading/backtest', data)
+    return response.data
+  },
+  getBacktestResult: async (resultId: number): Promise<ApiResponse<BacktestResult>> => {
+    const response = await api.get(`/trading/backtest/${resultId}`)
+    return response.data
+  },
+  getBacktestResults: async (limit: number = 20): Promise<ApiResponse<BacktestResultSummary[]>> => {
+    const response = await api.get(`/trading/backtest?limit=${limit}`)
+    return response.data
+  },
+
+  // 자동매매 규칙
+  createRule: async (data: CreateRuleRequest): Promise<ApiResponse<AutoTradingRule>> => {
+    const response = await api.post('/trading/rules', data)
+    return response.data
+  },
+  getRules: async (): Promise<ApiResponse<AutoTradingRule[]>> => {
+    const response = await api.get('/trading/rules')
+    return response.data
+  },
+  updateRule: async (ruleId: number, data: UpdateRuleRequest): Promise<ApiResponse<AutoTradingRule>> => {
+    const response = await api.patch(`/trading/rules/${ruleId}`, data)
+    return response.data
+  },
+  deleteRule: async (ruleId: number): Promise<ApiResponse<{ id: number; deleted: boolean }>> => {
+    const response = await api.delete(`/trading/rules/${ruleId}`)
+    return response.data
+  },
+}
+
 // 백엔드 서버 상태 확인
 export const healthApi = {
   checkHealth: async () => {
