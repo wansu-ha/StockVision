@@ -76,18 +76,15 @@
 | 파일 | 내용 |
 |------|------|
 | `frontend/src/types/trading.ts` | 거래 관련 타입 정의 (Account, Position, Trade, Score, BacktestResult, Rule) |
-| `frontend/src/services/tradingApi.ts` | 거래 API 클라이언트 (axios 인스턴스 활용) |
-| `frontend/src/pages/Trading.tsx` | 가상 거래 대시보드 (계좌 현황, 포지션, 최근 거래, 주문 폼) |
-| `frontend/src/pages/Scores.tsx` | 스코어링 결과 페이지 (종목 순위, 점수, 신호) |
-| `frontend/src/pages/Backtest.tsx` | 백테스팅 페이지 (실행 폼, 결과 차트, 거래 기록) |
-| `frontend/src/pages/AutoTrading.tsx` | 자동매매 설정 페이지 (규칙 관리, 실행 상태) |
+| `frontend/src/pages/Trading.tsx` | 가상 거래 대시보드 — 탭 구조로 계좌 총괄/스코어링/백테스팅/자동매매 통합 |
 
 ### 프론트엔드 — 기존 파일 수정
 
 | 파일 | 변경 내용 |
 |------|----------|
-| `frontend/src/App.tsx` | /trading, /scores, /backtest, /auto-trading 라우트 추가 |
-| `frontend/src/components/Layout.tsx` | 네비게이션에 거래 관련 메뉴 추가 |
+| `frontend/src/services/api.ts` | tradingApi 객체 추가 (계좌/주문/포지션/스코어/백테스트/규칙 CRUD) |
+| `frontend/src/App.tsx` | /trading 라우트 추가 |
+| `frontend/src/components/Layout.tsx` | 네비게이션에 '가상 거래' 메뉴 추가 |
 
 ## 구현 순서
 
