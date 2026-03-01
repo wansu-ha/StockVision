@@ -101,7 +101,7 @@ class PredictionModel:
             features['month'] = df.index.month
             
             # NaN 값 처리
-            features = features.fillna(method='ffill').fillna(0)
+            features = features.ffill().fillna(0)
             
             # 타겟 변수 (다음 날 종가)
             target = df['close'].shift(-1)

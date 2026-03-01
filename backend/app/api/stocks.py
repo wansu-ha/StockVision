@@ -1,23 +1,56 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime, timedelta
 import pandas as pd
+import logging
 
 from app.core.database import get_db
 from app.models.stock import Stock, StockPrice, TechnicalIndicator
 from app.services.technical_indicators import TechnicalIndicatorCalculator
 from app.services.stock_list_service import StockListService
 from app.services.stock_data_service import StockDataService
+from app.services.data_collector import DataCollector
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/stocks", tags=["stocks"])
 
 # 서비스 인스턴스 직접 생성
-from app.services.stock_list_service import StockListService
-from app.services.stock_data_service import StockDataService
-
 stock_list_service = StockListService()
 stock_data_service = StockDataService()
+
+
+class RegisterRequest(BaseModel):
+    symbols: List[str]
+    days: int = 730
+
+
+@router.post("/register")
+async def register_stocks(request: RegisterRequest):
+    """종목 등록 — yfinance에서 정보/가격 수집 + 기술적 지표 계산"""
+    if not request.symbols:
+        raise HTTPException(status_code=400, detail="symbols 목록이 비어있습니다")
+    if len(request.symbols) > 20:
+        raise HTTPException(status_code=400, detail="한 번에 최대 20개 종목까지 등록 가능합니다")
+
+    try:
+        collector = DataCollector()
+        results = await collector.register_stocks(request.symbols, request.days)
+
+        # 캐시 갱신
+        stock_list_service.refresh_cache()
+
+        return {
+            "success": True,
+            "data": results,
+            "count": len(results['registered'])
+        }
+    except Exception as e:
+        logger.error(f"종목 등록 실패: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"종목 등록 실패: {str(e)}")
+
 
 @router.get("/")
 async def get_stocks():
