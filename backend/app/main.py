@@ -306,33 +306,33 @@ async def startup_event():
         cache_scheduler.setup_jobs()
         cache_scheduler.start()
         
-        print("✅ 캐시 스케줄러 시작됨")
+        print("[OK] 캐시 스케줄러 시작됨")
 
     except Exception as e:
-        print(f"❌ 캐시 스케줄러 시작 실패: {e}")
+        print(f"[ERROR] 캐시 스케줄러 시작 실패: {e}")
 
     # 자동매매 스케줄러 시작
     try:
         from app.services.auto_trade_scheduler import get_auto_scheduler
         auto_scheduler = get_auto_scheduler()
         auto_scheduler.start()
-        print("✅ 자동매매 스케줄러 시작됨")
+        print("[OK] 자동매매 스케줄러 시작됨")
     except Exception as e:
-        print(f"❌ 자동매매 스케줄러 시작 실패: {e}")
+        print(f"[ERROR] 자동매매 스케줄러 시작 실패: {e}")
 
 @app.on_event("shutdown")
 async def shutdown_event():
     global cache_scheduler
     if cache_scheduler:
         cache_scheduler.stop()
-        print("🛑 캐시 스케줄러 중지됨")
+        print("[OK] 캐시 스케줄러 중지됨")
 
     # 자동매매 스케줄러 중지
     try:
         from app.services.auto_trade_scheduler import get_auto_scheduler
         auto_scheduler = get_auto_scheduler()
         auto_scheduler.stop()
-        print("🛑 자동매매 스케줄러 중지됨")
+        print("[OK] 자동매매 스케줄러 중지됨")
     except Exception:
         pass
 
