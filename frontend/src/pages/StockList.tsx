@@ -267,7 +267,7 @@ const StockList = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-medium text-gray-900">
-                            {stock.market_cap ? `$${(stock.market_cap / 1e9).toFixed(1)}B` : 'N/A'}
+                            {stock.market_cap ? (stock.market_cap / 1e8 >= 10000 ? (stock.market_cap / 1e12).toFixed(1) + '조' : (stock.market_cap / 1e8).toFixed(0) + '억') : 'N/A'}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">

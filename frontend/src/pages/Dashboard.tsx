@@ -169,7 +169,7 @@ const Dashboard = () => {
             <CardHeader className="flex gap-4 p-6 pb-4">
               <div className="flex flex-col w-full space-y-3">
                 <p className="text-small text-default-500 font-medium">총 시가총액</p>
-                <p className="text-3xl font-bold text-foreground">${(marketStats.totalValue / 1e12).toFixed(2)}T</p>
+                <p className="text-3xl font-bold text-foreground">{marketStats.totalValue / 1e8 >= 10000 ? (marketStats.totalValue / 1e12).toFixed(1) + '조' : (marketStats.totalValue / 1e8).toFixed(0) + '억'}</p>
               </div>
               <Chip color="success" variant="flat" size="sm" className="self-start">+{marketStats.dailyChange}%</Chip>
             </CardHeader>
@@ -292,7 +292,7 @@ const Dashboard = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">
-                          ${stock.market_cap ? (stock.market_cap / 1e9).toFixed(1) : 'N/A'}B
+                          {stock.market_cap ? (stock.market_cap / 1e8 >= 10000 ? (stock.market_cap / 1e12).toFixed(1) + '조' : (stock.market_cap / 1e8).toFixed(0) + '억') : 'N/A'}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">

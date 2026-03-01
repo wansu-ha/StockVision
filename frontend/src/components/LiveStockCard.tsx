@@ -55,11 +55,11 @@ const LiveStockCard = ({ stock, onViewDetails, className = "" }: LiveStockCardPr
     if (currentPrice === null) return { color: 'default', icon: MinusIcon, text: 'N/A' }
     
     if (priceChange > 0) {
-      return { color: 'success', icon: ArrowUpIcon, text: `+$${priceChange.toFixed(2)}` }
+      return { color: 'success', icon: ArrowUpIcon, text: `+${priceChange.toLocaleString('ko-KR')}` }
     } else if (priceChange < 0) {
-      return { color: 'danger', icon: ArrowDownIcon, text: `-$${Math.abs(priceChange).toFixed(2)}` }
+      return { color: 'danger', icon: ArrowDownIcon, text: `${priceChange.toLocaleString('ko-KR')}` }
     } else {
-      return { color: 'default', icon: MinusIcon, text: '$0.00' }
+      return { color: 'default', icon: MinusIcon, text: '0' }
     }
   }
 
@@ -96,7 +96,7 @@ const LiveStockCard = ({ stock, onViewDetails, className = "" }: LiveStockCardPr
           {/* 현재가 및 변동률 */}
           <div className="text-center">
             <div className="text-3xl font-bold text-foreground mb-2">
-              ${currentPrice?.toFixed(2) || 'N/A'}
+              {currentPrice !== null ? currentPrice.toLocaleString('ko-KR') + '원' : 'N/A'}
             </div>
             <div className="flex items-center justify-center space-x-2">
               <IconComponent className={`w-4 h-4 text-${priceDisplay.color}`} />
@@ -114,13 +114,13 @@ const LiveStockCard = ({ stock, onViewDetails, className = "" }: LiveStockCardPr
             <div className="text-center">
               <p className="text-default-500">거래량</p>
               <p className="font-medium">
-                {volume ? (volume / 1000000).toFixed(1) + 'M' : 'N/A'}
+                {volume ? volume.toLocaleString('ko-KR') : 'N/A'}
               </p>
             </div>
             <div className="text-center">
               <p className="text-default-500">시가총액</p>
               <p className="font-medium">
-                {stock.market_cap ? (stock.market_cap / 1e9).toFixed(1) + 'B' : 'N/A'}
+                {stock.market_cap ? (stock.market_cap / 1e8 >= 10000 ? (stock.market_cap / 1e12).toFixed(1) + '조' : (stock.market_cap / 1e8).toFixed(0) + '억') : 'N/A'}
               </p>
             </div>
           </div>

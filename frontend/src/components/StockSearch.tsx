@@ -199,7 +199,7 @@ const StockSearch = ({
                             </Chip>
                             {stock.market_cap && (
                               <div className="text-xs text-gray-500 mt-1">
-                                ${(stock.market_cap / 1e9).toFixed(1)}B
+                                {stock.market_cap / 1e8 >= 10000 ? (stock.market_cap / 1e12).toFixed(1) + '조' : (stock.market_cap / 1e8).toFixed(0) + '억'}
                               </div>
                             )}
                           </div>

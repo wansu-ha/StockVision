@@ -56,7 +56,7 @@ const StockChart: React.FC<StockChartProps> = ({ prices, symbol }) => {
               boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
             }}
             formatter={(value: number, name: string) => [
-              `$${value.toFixed(2)}`, 
+              `${value.toLocaleString('ko-KR')}원`,
               name
             ]}
             labelFormatter={(label) => `날짜: ${label}`}

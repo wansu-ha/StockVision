@@ -37,7 +37,7 @@ const VolumeChart: React.FC<VolumeChartProps> = ({ prices, symbol }) => {
           <YAxis 
             stroke="#666"
             fontSize={11}
-            tickFormatter={(value: number) => `${(value / 1000000).toFixed(1)}M`}
+            tickFormatter={(value: number) => value >= 1000000 ? `${(value / 10000).toFixed(0)}만` : value.toLocaleString('ko-KR')}
           />
           <Tooltip 
             contentStyle={{
