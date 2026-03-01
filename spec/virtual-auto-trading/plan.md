@@ -240,6 +240,174 @@ verify: 각 페이지 접속 및 기능 동작 확인, 백테스팅 결과 차�
 
 ---
 
+## Phase 2 후반: 런타임 진단 기반 수정 (Step 11~15)
+
+> 2026-03-01 런타임 점검 결과 발견된 10개 이슈를 우선순위별로 수정.
+> 근본 원인: 데이터 파이프라인이 끊겨 있어 모든 하위 기능이 빈 데이터로 동작.
+
+### Step 11: 데이터 파이프라인 정비
+**대상**: `data_collector.py`, `prediction_model.py`, `stocks.py` (API), `stock_data_service.py`
+**의존성**: 없음 (최우선)
+
+문제:
+- 종목 등록 경로 없음 — DB가 비어 있으면 모든 기능 실패
+- yfinance 한국 주식은 `.KS` suffix 필요하나 매핑 없음
+- `fillna(method='ffill')` → pandas 2.x에서 제거됨 (`prediction_model.py:104`)
+- 기술적 지표가 DB에 저장되지 않음 — 스코어링이 예측 점수만으로 동작
+
+작업:
+1. `POST /api/v1/stocks/register` 엔드포인트 추가
+   - 입력: `{ symbols: ["005930", "000660"] }`
+   - yfinance에서 종목 정보 수집 → Stock DB 저장
+   - 가격 데이터 수집 → StockPrice DB 저장
+   - 기술적 지표 계산 → TechnicalIndicator DB 저장
+2. 한국 주식 심볼 매핑 유틸 (`005930` → `005930.KS`)
+3. `prediction_model.py:104` 수정: `fillna(method='ffill')` → `ffill()`
+4. `collect_and_save()`에 지표 계산 단계 추가
+5. 개발용 seed 스크립트 (`backend/scripts/seed_data.py`)
+
+수정 파일:
+
+| 파일 | 변경 내용 |
+|------|----------|
+| `backend/app/api/stocks.py` | `POST /stocks/register` 엔드포인트 추가 |
+| `backend/app/services/data_collector.py` | 심볼 매핑 유틸, `collect_and_save()`에 지표 계산 통합 |
+| `backend/app/services/prediction_model.py` | `fillna(method='ffill')` → `ffill()` |
+| `backend/scripts/seed_data.py` | 신규: 개발용 seed 스크립트 |
+
+verify:
+- `POST /api/v1/stocks/register` 호출 → Stock, StockPrice, TechnicalIndicator 테이블에 데이터 존재 확인
+- `GET /api/v1/stocks/` → 등록한 종목 목록 반환
+- prediction_model.py 에러 없이 특성 준비 완료
+
+---
+
+### Step 12: API 응답 포맷 + 프론트엔드 데이터 표시 수정
+**대상**: `stock_data_service.py`, `stocks.py`, `LiveStockCard.tsx`, `StockDetail.tsx`, `Dashboard.tsx`
+**의존성**: Step 11 (DB에 데이터 필요)
+
+문제:
+- `/stocks/{symbol}/prices` 응답이 리스트를 직접 반환하나, 프론트엔드는 `{ symbol, name, prices: [] }` 형태를 기대
+- `stock_data_service.get_stock_data()` 97번째 줄: `result` dict 대신 `stored_data` 리스트 반환
+- 가격 표시가 `$` (달러) — 한국 주식은 `₩` (원화) 사용
+- Dashboard 카드에서 가격이 `$N/A`로 표시
+
+작업:
+1. `stock_data_service.get_stock_data()` 반환값 통일: `{ symbol, name, prices: [...] }`
+2. `/stocks/{symbol}/prices` 응답 포맷 수정: `{ success, data: { symbol, name, prices } }`
+3. 프론트엔드 가격 포맷 함수: `$` → `₩`, 천 단위 콤마
+4. `LiveStockCard.tsx` 가격 표시 로직 수정
+5. `StockDetail.tsx` 차트 데이터 바인딩 수정
+
+수정 파일:
+
+| 파일 | 변경 내용 |
+|------|----------|
+| `backend/app/services/stock_data_service.py` | `get_stock_data()` 반환값 `{ symbol, name, prices }` 형태로 통일 |
+| `backend/app/api/stocks.py` | `/prices` 응답에 symbol, name 포함 |
+| `frontend/src/components/LiveStockCard.tsx` | `$` → `₩`, 가격 포맷 함수 적용 |
+| `frontend/src/pages/StockDetail.tsx` | 원화 표시, 차트 데이터 바인딩 확인 |
+| `frontend/src/pages/Dashboard.tsx` | 원화 표시 |
+
+verify:
+- 브라우저 Dashboard에서 종목 카드에 실제 가격 표시 (₩ 단위)
+- StockDetail 페이지에서 차트 렌더링 확인
+- API 응답 형태: `{ success: true, data: { symbol, name, prices: [...] } }`
+
+---
+
+### Step 13: AI 분석 실제 데이터 연동
+**대상**: `AIMarketOverview.tsx`, `AIStockAnalysis.tsx`, `ai_analysis.py` (API), `prediction_model.py`
+**의존성**: Step 11 (지표 데이터), Step 12 (API 응답 정상화)
+
+문제:
+- `AIMarketOverview`, `AIStockAnalysis` 컴포넌트가 랜덤/더미 데이터 표시
+- AI 분석 API가 실제 예측 모델 결과 대신 목업 데이터 반환
+- sklearn 모델 버전 불일치 경고 (1.7.1 → 1.8.0)
+
+작업:
+1. AI 분석 API 엔드포인트가 실제 `PredictionModel` 결과 반환하도록 수정
+2. 시장 개요: 등록된 전 종목의 스코어링 결과 집계
+3. 종목별 AI 분석: RF 예측 + 기술적 지표 종합 분석 반환
+4. sklearn 모델 재학습 또는 버전 호환 처리
+5. 프론트엔드 컴포넌트가 실제 API 데이터 표시하도록 연결
+
+수정 파일:
+
+| 파일 | 변경 내용 |
+|------|----------|
+| `backend/app/api/ai_analysis.py` | 더미 데이터 → 실제 PredictionModel/ScoringEngine 결과 연동 |
+| `backend/app/services/prediction_model.py` | sklearn 호환 처리, 모델 재학습 로직 |
+| `frontend/src/components/AIMarketOverview.tsx` | API 데이터 바인딩 확인 |
+| `frontend/src/components/AIStockAnalysis.tsx` | API 데이터 바인딩 확인 |
+
+verify:
+- Dashboard AI 분석 카드에 실제 시장 분석 데이터 표시
+- StockDetail AI 분석 탭에 해당 종목의 예측 결과 표시
+- 콘솔에 sklearn 경고 없음
+
+---
+
+### Step 14: 거래 UI 완성
+**대상**: `Trading.tsx`, `Dashboard.tsx`
+**의존성**: Step 11 (종목 데이터), Step 12 (가격 표시)
+
+문제:
+- 매수/매도 주문 폼 없음 (API는 존재)
+- 자동매매 규칙 생성 폼 없음 (토글만 동작)
+- 백테스트 결과에 수익률 차트 없음 (테이블만 존재)
+- Dashboard 버튼 (AI 분석, 가상 거래 등)에 클릭 핸들러 없음
+
+작업:
+1. Overview 탭: 매수/매도 주문 폼 추가
+   - 종목 검색/선택, 수량 입력, 가격 표시
+   - BUY/SELL 버튼 + React Query mutation
+2. Backtest 탭: Recharts `LineChart`로 수익률 곡선 시각화
+   - equity_curve 데이터 바인딩
+   - trade_details에서 매수/매도 마커
+3. Rules 탭: 규칙 생성 모달/폼
+   - 종목 선택, 매수/매도 스코어 임계값, 예산 비율
+4. Dashboard: 버튼 핸들러 연결 (navigate)
+
+수정 파일:
+
+| 파일 | 변경 내용 |
+|------|----------|
+| `frontend/src/pages/Trading.tsx` | 주문 폼, 백테스트 차트, 규칙 생성 폼 추가 |
+| `frontend/src/pages/Dashboard.tsx` | 버튼 클릭 핸들러 연결 |
+
+verify:
+- Trading Overview에서 매수 주문 → 포지션 목록에 표시
+- Backtest 실행 → 수익률 차트 렌더링
+- Rules에서 새 규칙 생성 → 목록에 표시
+- Dashboard 버튼 클릭 시 해당 페이지 이동
+
+---
+
+### Step 15: 통합 테스트 + 안정화
+**대상**: 전체
+**의존성**: Step 11~14
+
+작업:
+1. E2E 플로우 테스트:
+   - 종목 등록 → 가격 확인 → 스코어링 → 매수 → 포지션 확인 → 매도 → 잔고 확인
+   - 백테스트 실행 → 결과 차트 확인
+   - 자동매매 규칙 등록 → 활성화 → 실행 확인
+2. 에러 핸들링:
+   - API 실패 시 프론트엔드 에러 메시지 표시 (빈 화면 방지)
+   - toast 알림 (주문 성공/실패, 스코어링 완료 등)
+3. 빌드 확인:
+   - `npm run build` TypeScript 에러 없음
+   - `npm run lint` 경고 최소화
+   - 백엔드 서버 기동 시 에러 없음
+
+verify:
+- 전체 플로우 브라우저에서 수동 테스트 통과
+- `npm run build` 성공
+- 백엔드 로그에 에러 없음
+
+---
+
 ## 검증 방법
 
 ### 빌드 확인
@@ -251,13 +419,16 @@ cd frontend && npm run build && npm run dev
 ```
 
 ### API 테스트 (Swagger UI)
-1. 계좌 생성 → 매수 → 포지션 확인 → 매도 → 잔고 확인
-2. 스코어링 실행 → 순위 조회
-3. 백테스팅 실행 → 결과 조회
-4. 자동매매 규칙 등록 → 활성화 → 실행 로그 확인
+1. 종목 등록 → 주식 목록 확인 → 가격 데이터 확인 → 기술적 지표 확인
+2. 계좌 생성 → 매수 → 포지션 확인 → 매도 → 잔고 확인
+3. 스코어링 실행 → 순위 조회
+4. 백테스팅 실행 → 결과 조회
+5. 자동매매 규칙 등록 → 활성화 → 실행 로그 확인
 
 ### 브라우저 확인
-- `/trading` — 대시보드 렌더링, 주문 폼 동작
-- `/scores` — 스코어 테이블 렌더링
-- `/backtest` — 차트 렌더링, 성과 지표 표시
-- `/auto-trading` — 규칙 관리, 토글 동작
+- `/` — Dashboard: AI 분석 카드, 종목 카드에 실제 가격 (₩)
+- `/stocks/{symbol}` — 가격 차트, 기술적 지표, AI 분석
+- `/trading` — 계좌 현황, 주문 폼, 포지션, 거래 내역
+- `/trading` (Scores 탭) — 스코어 테이블, BUY/SELL/HOLD 신호
+- `/trading` (Backtest 탭) — 수익률 차트, 성과 지표
+- `/trading` (Rules 탭) — 규칙 생성, 활성화 토글
