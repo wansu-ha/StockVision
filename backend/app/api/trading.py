@@ -16,6 +16,7 @@ from app.models.auto_trading import AutoTradingRule
 from app.services.trading_engine import TradingEngine
 from app.services.scoring_engine import ScoringEngine
 from app.services.backtest_engine import BacktestEngine
+from app.services.auto_trade_scheduler import get_auto_scheduler
 
 router = APIRouter(prefix="/trading", tags=["trading"])
 
@@ -335,6 +336,11 @@ async def create_rule(req: RuleCreate, db: Session = Depends(get_db)):
     db.add(rule)
     db.commit()
     db.refresh(rule)
+
+    scheduler = get_auto_scheduler()
+    if scheduler._started:
+        scheduler.reload_rules()
+
     return {
         "success": True,
         "data": _rule_to_dict(rule),
@@ -361,6 +367,11 @@ async def update_rule(rule_id: int, req: RuleUpdate, db: Session = Depends(get_d
 
     db.commit()
     db.refresh(rule)
+
+    scheduler = get_auto_scheduler()
+    if scheduler._started:
+        scheduler.reload_rules()
+
     return {"success": True, "data": _rule_to_dict(rule), "count": 1}
 
 @router.delete("/rules/{rule_id}")
@@ -371,6 +382,11 @@ async def delete_rule(rule_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="규칙을 찾을 수 없습니다")
     db.delete(rule)
     db.commit()
+
+    scheduler = get_auto_scheduler()
+    if scheduler._started:
+        scheduler.reload_rules()
+
     return {"success": True, "data": {"id": rule_id, "deleted": True}, "count": 1}
 
 
