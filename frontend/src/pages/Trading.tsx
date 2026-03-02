@@ -28,6 +28,9 @@ import type { Stock } from '../types'
 
 type TabKey = 'overview' | 'scores' | 'backtest' | 'rules'
 
+const errMsg = (err: unknown, fallback: string) =>
+  (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? fallback
+
 const Trading = () => {
   const queryClient = useQueryClient()
   const showToast = useToastStore((s) => s.showToast)
@@ -101,7 +104,7 @@ const Trading = () => {
       queryClient.invalidateQueries({ queryKey: ['trading-accounts'] })
       showToast('계좌가 생성되었습니다.', 'success')
     },
-    onError: () => showToast('계좌 생성에 실패했습니다.', 'error'),
+    onError: (err) => showToast(errMsg(err, '계좌 생성에 실패했습니다.'), 'error'),
   })
 
   // 스코어링 실행
@@ -112,7 +115,7 @@ const Trading = () => {
       const count = data?.data?.length ?? 0
       showToast(`스코어링 완료: ${count}개 종목`, 'success')
     },
-    onError: () => showToast('스코어링 실행에 실패했습니다.', 'error'),
+    onError: (err) => showToast(errMsg(err, '스코어링 실행에 실패했습니다.'), 'error'),
   })
 
   // 백테스팅 실행
@@ -126,7 +129,7 @@ const Trading = () => {
       const msg = ret != null ? `백테스팅 완료: 수익률 ${ret}%` : '백테스팅이 완료되었습니다.'
       showToast(msg, 'success')
     },
-    onError: () => showToast('백테스팅 실행에 실패했습니다.', 'error'),
+    onError: (err) => showToast(errMsg(err, '백테스팅 실행에 실패했습니다.'), 'error'),
   })
 
   // 규칙 토글
@@ -154,7 +157,7 @@ const Trading = () => {
       const msg = t ? `${t.symbol} ${t.trade_type === 'BUY' ? '매수' : '매도'} 주문 완료` : '주문이 완료되었습니다.'
       showToast(msg, 'success')
     },
-    onError: () => showToast('주문 실행에 실패했습니다.', 'error'),
+    onError: (err) => showToast(errMsg(err, '주문 실행에 실패했습니다.'), 'error'),
   })
 
   // 규칙 생성
@@ -164,7 +167,7 @@ const Trading = () => {
       queryClient.invalidateQueries({ queryKey: ['trading-rules'] })
       showToast('자동매매 규칙이 생성되었습니다.', 'success')
     },
-    onError: () => showToast('규칙 생성에 실패했습니다.', 'error'),
+    onError: (err) => showToast(errMsg(err, '규칙 생성에 실패했습니다.'), 'error'),
   })
 
   const summary: AccountSummary | null = summaryData?.data ?? null

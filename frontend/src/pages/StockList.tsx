@@ -33,20 +33,20 @@ const StockList = () => {
 
   // 섹터 목록 추출
   const sectors = useMemo(() => {
-    const sectorSet = new Set(stocks.map(stock => stock.sector))
+    const sectorSet = new Set(stocks.map(stock => stock.sector).filter(Boolean))
     return Array.from(sectorSet).sort()
   }, [stocks])
 
   // 필터링 및 정렬된 주식 목록
   const filteredAndSortedStocks = useMemo(() => {
     const filtered = stocks.filter(stock => {
-      const matchesSearch = !searchTerm || 
+      const matchesSearch = !searchTerm ||
         stock.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
         stock.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        stock.sector.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        stock.industry.toLowerCase().includes(searchTerm.toLowerCase())
-      
-      const matchesSector = selectedSector === 'all' || stock.sector === selectedSector
+        (stock.sector?.toLowerCase() ?? '').includes(searchTerm.toLowerCase()) ||
+        (stock.industry?.toLowerCase() ?? '').includes(searchTerm.toLowerCase())
+
+      const matchesSector = selectedSector === 'all' || (stock.sector ?? '') === selectedSector
       
       return matchesSearch && matchesSector
     })
