@@ -189,11 +189,11 @@ const AIStockAnalysis: React.FC<AIStockAnalysisProps> = ({ symbol }) => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="p-3 bg-blue-50 rounded-lg">
               <div className="text-sm text-blue-700 mb-1">지지선</div>
-              <div className="text-lg font-bold text-blue-900">${analysis.technical_analysis?.support_level || 'N/A'}</div>
+              <div className="text-lg font-bold text-blue-900">{analysis.technical_analysis?.support_level != null ? analysis.technical_analysis.support_level.toLocaleString('ko-KR') + '원' : 'N/A'}</div>
             </div>
             <div className="p-3 bg-red-50 rounded-lg">
               <div className="text-sm text-red-700 mb-1">저항선</div>
-              <div className="text-lg font-bold text-red-900">${analysis.technical_analysis?.resistance_level || 'N/A'}</div>
+              <div className="text-lg font-bold text-red-900">{analysis.technical_analysis?.resistance_level != null ? analysis.technical_analysis.resistance_level.toLocaleString('ko-KR') + '원' : 'N/A'}</div>
             </div>
           </div>
         </div>
@@ -305,7 +305,7 @@ const AIStockAnalysis: React.FC<AIStockAnalysisProps> = ({ symbol }) => {
             
             <div className="text-center p-3 bg-gray-50 rounded-lg">
               <div className="text-sm text-gray-600 mb-1">목표가 합의</div>
-              <div className="text-lg font-bold text-gray-900">${analysis.sentiment_analysis?.price_target_consensus || 'N/A'}</div>
+              <div className="text-lg font-bold text-gray-900">{analysis.sentiment_analysis?.price_target_consensus != null ? analysis.sentiment_analysis.price_target_consensus.toLocaleString('ko-KR') + '원' : 'N/A'}</div>
             </div>
             
             <div className="text-center p-3 bg-gray-50 rounded-lg">
@@ -330,26 +330,26 @@ const AIStockAnalysis: React.FC<AIStockAnalysisProps> = ({ symbol }) => {
             <div className="space-y-3">
               <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
                 <span className="text-sm text-green-700">단기 목표</span>
-                <span className="font-bold text-green-900">${analysis.price_targets?.short_term || 'N/A'}</span>
+                <span className="font-bold text-green-900">{analysis.price_targets?.short_term != null ? analysis.price_targets.short_term.toLocaleString('ko-KR') + '원' : 'N/A'}</span>
               </div>
               <div className="flex justify-between items-center p-3 bg-yellow-50 rounded-lg">
                 <span className="text-sm text-yellow-700">중기 목표</span>
-                <span className="font-bold text-yellow-900">${analysis.price_targets?.medium_term || 'N/A'}</span>
+                <span className="font-bold text-yellow-900">{analysis.price_targets?.medium_term != null ? analysis.price_targets.medium_term.toLocaleString('ko-KR') + '원' : 'N/A'}</span>
               </div>
               <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
                 <span className="text-sm text-blue-700">장기 목표</span>
-                <span className="font-bold text-blue-900">${analysis.price_targets?.long_term || 'N/A'}</span>
+                <span className="font-bold text-blue-900">{analysis.price_targets?.long_term != null ? analysis.price_targets.long_term.toLocaleString('ko-KR') + '원' : 'N/A'}</span>
               </div>
             </div>
             
             <div className="mt-4 grid grid-cols-2 gap-3">
               <div className="text-center p-3 bg-green-50 rounded-lg">
                 <div className="text-sm text-green-700 mb-1">상승 잠재력</div>
-                <div className="text-lg font-bold text-green-900">+{analysis.price_targets?.short_term ? Math.round(((analysis.price_targets.short_term - 150) / 150) * 100) : 'N/A'}%</div>
+                <div className="text-lg font-bold text-green-900">+{analysis.price_targets?.upside_potential ?? 'N/A'}%</div>
               </div>
               <div className="text-center p-3 bg-red-50 rounded-lg">
                 <div className="text-sm text-red-700 mb-1">하락 리스크</div>
-                <div className="text-lg font-bold text-red-900">-{analysis.price_targets?.short_term ? Math.round(((150 - analysis.price_targets.short_term) / 150) * 100) : 'N/A'}%</div>
+                <div className="text-lg font-bold text-red-900">-{analysis.price_targets?.downside_risk ?? 'N/A'}%</div>
               </div>
             </div>
           </div>

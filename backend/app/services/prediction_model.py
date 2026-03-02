@@ -101,7 +101,7 @@ class PredictionModel:
             features['month'] = df.index.month
             
             # NaN 값 처리
-            features = features.fillna(method='ffill').fillna(0)
+            features = features.ffill().fillna(0)
             
             # 타겟 변수 (다음 날 종가)
             target = df['close'].shift(-1)
@@ -175,11 +175,13 @@ class PredictionModel:
         try:
             model_filename = f"{self.model_path}/stock_{stock_id}_model.pkl"
             scaler_filename = f"{self.model_path}/stock_{stock_id}_scaler.pkl"
-            
+
             if not (os.path.exists(model_filename) and os.path.exists(scaler_filename)):
                 logger.warning(f"저장된 모델 없음: {stock_id}")
                 return False
-            
+
+            import warnings
+            warnings.filterwarnings('ignore', category=UserWarning)
             self.model = joblib.load(model_filename)
             self.scaler = joblib.load(scaler_filename)
             

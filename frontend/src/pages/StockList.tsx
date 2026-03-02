@@ -33,20 +33,20 @@ const StockList = () => {
 
   // 섹터 목록 추출
   const sectors = useMemo(() => {
-    const sectorSet = new Set(stocks.map(stock => stock.sector))
+    const sectorSet = new Set(stocks.map(stock => stock.sector).filter(Boolean))
     return Array.from(sectorSet).sort()
   }, [stocks])
 
   // 필터링 및 정렬된 주식 목록
   const filteredAndSortedStocks = useMemo(() => {
     const filtered = stocks.filter(stock => {
-      const matchesSearch = !searchTerm || 
+      const matchesSearch = !searchTerm ||
         stock.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
         stock.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        stock.sector.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        stock.industry.toLowerCase().includes(searchTerm.toLowerCase())
-      
-      const matchesSector = selectedSector === 'all' || stock.sector === selectedSector
+        (stock.sector?.toLowerCase() ?? '').includes(searchTerm.toLowerCase()) ||
+        (stock.industry?.toLowerCase() ?? '').includes(searchTerm.toLowerCase())
+
+      const matchesSector = selectedSector === 'all' || (stock.sector ?? '') === selectedSector
       
       return matchesSearch && matchesSector
     })
@@ -162,9 +162,8 @@ const StockList = () => {
                        setSelectedSector(selected || 'all')
                      }}
                    >
-                    <DropdownItem key="all">모든 섹터</DropdownItem>
-                    {sectors.map((sector) => (
-                      <DropdownItem key={sector}>{sector}</DropdownItem>
+                    {['all', ...sectors].map((sector) => (
+                      <DropdownItem key={sector}>{sector === 'all' ? '모든 섹터' : sector}</DropdownItem>
                     ))}
                   </DropdownMenu>
                 </Dropdown>
@@ -267,7 +266,7 @@ const StockList = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-medium text-gray-900">
-                            {stock.market_cap ? `$${(stock.market_cap / 1e9).toFixed(1)}B` : 'N/A'}
+                            {stock.market_cap ? (stock.market_cap / 1e8 >= 10000 ? (stock.market_cap / 1e12).toFixed(1) + '조' : (stock.market_cap / 1e8).toFixed(0) + '억') : 'N/A'}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">

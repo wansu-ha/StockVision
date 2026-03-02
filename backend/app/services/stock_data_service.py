@@ -94,7 +94,7 @@ class StockDataService:
         self.price_cache.put(cache_key, result, self.price_cache_ttl)
         
         logger.info(f"가격 데이터 캐시 저장 완료: {symbol} ({len(stored_data)}개)")
-        return stored_data  # prices 리스트만 반환
+        return result
     
     def _get_stored_stock_data(self, symbol: str, days: int) -> List[Dict]:
         """DB에서 저장된 주식 데이터 조회"""
@@ -115,8 +115,8 @@ class StockDataService:
                 {
                     'date': price.date.isoformat() if price.date else None,
                     'open': price.open,
-                            'high': price.high,
-        'low': price.low,
+                    'high': price.high,
+                    'low': price.low,
                     'close': price.close,
                     'volume': price.volume,
                     'adjusted_close': price.adjusted_close if hasattr(price, 'adjusted_close') else None

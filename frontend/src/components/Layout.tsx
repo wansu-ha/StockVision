@@ -9,7 +9,8 @@ const Layout = ({ children }: LayoutProps) => {
   const location = useLocation()
 
   const isActive = (path: string) => {
-    return location.pathname === path
+    if (path === '/') return location.pathname === '/'
+    return location.pathname.startsWith(path)
   }
 
   return (
@@ -43,12 +44,22 @@ const Layout = ({ children }: LayoutProps) => {
               <Link
                 to="/stocks"
                 className={`px-6 py-3 rounded-2xl text-sm font-semibold transition-all duration-200 ${
-                  isActive('/stocks') 
-                    ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg' 
+                  isActive('/stocks')
+                    ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                 }`}
               >
                 주식 목록
+              </Link>
+              <Link
+                to="/trading"
+                className={`px-6 py-3 rounded-2xl text-sm font-semibold transition-all duration-200 ${
+                  isActive('/trading')
+                    ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                }`}
+              >
+                가상 거래
               </Link>
             </div>
           </div>

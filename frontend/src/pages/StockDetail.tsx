@@ -121,11 +121,11 @@ const StockDetail = () => {
     if (currentPrice === null) return { color: 'default', icon: MinusIcon, text: 'N/A' }
     
     if (priceChange > 0) {
-      return { color: 'success', icon: ArrowUpIcon, text: `+$${priceChange.toFixed(2)}` }
+      return { color: 'success', icon: ArrowUpIcon, text: `+${priceChange.toLocaleString('ko-KR')}` }
     } else if (priceChange < 0) {
-      return { color: 'danger', icon: ArrowDownIcon, text: `-$${Math.abs(priceChange).toFixed(2)}` }
+      return { color: 'danger', icon: ArrowDownIcon, text: `${priceChange.toLocaleString('ko-KR')}` }
     } else {
-      return { color: 'default', icon: MinusIcon, text: '$0.00' }
+      return { color: 'default', icon: MinusIcon, text: '0' }
     }
   }
 
@@ -171,7 +171,7 @@ const StockDetail = () => {
                     <Chip size="sm" variant="flat" color="secondary">{stock.industry}</Chip>
                     {stock.market_cap && (
                       <Chip size="sm" variant="flat" color="success">
-                        ${(stock.market_cap / 1e9).toFixed(1)}B
+                        {stock.market_cap / 1e8 >= 10000 ? (stock.market_cap / 1e12).toFixed(1) + '조' : (stock.market_cap / 1e8).toFixed(0) + '억'}
                       </Chip>
                     )}
                   </div>
@@ -181,7 +181,7 @@ const StockDetail = () => {
               {/* 실시간 가격 정보 */}
               <div className="text-right">
                 <div className="text-5xl font-bold text-gray-900 mb-2">
-                  ${currentPrice?.toFixed(2) || 'N/A'}
+                  {currentPrice !== null ? currentPrice.toLocaleString('ko-KR') + '원' : 'N/A'}
                 </div>
                 <div className="flex items-center justify-center lg:justify-end space-x-2 mb-2">
                   <IconComponent className={`w-5 h-5 text-${priceDisplay.color}`} />
@@ -193,7 +193,7 @@ const StockDetail = () => {
                   </span>
                 </div>
                 <div className="text-sm text-gray-500">
-                  거래량: {volume ? (volume / 1000000).toFixed(1) + 'M' : 'N/A'}
+                  거래량: {volume ? volume.toLocaleString('ko-KR') : 'N/A'}
                 </div>
               </div>
             </div>
@@ -288,12 +288,9 @@ const StockDetail = () => {
                       <div key={index} className="flex items-center justify-between text-sm">
                         <span className="text-gray-600">{price.date}</span>
                         <div className="flex items-center space-x-4">
-                          <span className="text-gray-900">${price.close.toFixed(2)}</span>
+                          <span className="text-gray-900">{price.close.toLocaleString('ko-KR')}원</span>
                           <span className="text-gray-500">
-                            {price.volume > 1000000 
-                              ? (price.volume / 1000000).toFixed(1) + 'M'
-                              : (price.volume / 1000).toFixed(0) + 'K'
-                            }
+                            {price.volume.toLocaleString('ko-KR')}
                           </span>
                         </div>
                       </div>
@@ -344,15 +341,12 @@ const StockDetail = () => {
                       return (
                         <tr key={index} className="hover:bg-gray-50">
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{price.date}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${price.open.toFixed(2)}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${price.high.toFixed(2)}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${price.low.toFixed(2)}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${price.close.toFixed(2)}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{price.open.toLocaleString('ko-KR')}원</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{price.high.toLocaleString('ko-KR')}원</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{price.low.toLocaleString('ko-KR')}원</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{price.close.toLocaleString('ko-KR')}원</td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {price.volume > 1000000 
-                              ? (price.volume / 1000000).toFixed(1) + 'M'
-                              : (price.volume / 1000).toFixed(0) + 'K'
-                            }
+                            {price.volume.toLocaleString('ko-KR')}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm">
                             <span className={`font-medium ${isPositive ? 'text-green-600' : 'text-red-600'}`}>

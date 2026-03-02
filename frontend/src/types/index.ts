@@ -136,6 +136,8 @@ export interface StockAnalysis {
     short_term: number
     medium_term: number
     long_term: number
+    upside_potential?: number
+    downside_risk?: number
   }
   holding_period: {
     recommended_period: string

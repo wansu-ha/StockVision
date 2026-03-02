@@ -283,6 +283,9 @@ app.openapi = custom_openapi
 app.include_router(stocks.router, prefix="/api/v1", tags=["stocks"])
 app.include_router(ai_analysis_router, prefix="/api/v1/ai-analysis", tags=["ai-analysis"])
 
+from app.api.trading import router as trading_router
+app.include_router(trading_router, prefix="/api/v1", tags=["trading"])
+
 # 로그 API 라우터 등록
 from app.api import logs
 app.include_router(logs.router, prefix="/api/v1/logs", tags=["logs"])
@@ -303,20 +306,35 @@ async def startup_event():
         cache_scheduler.setup_jobs()
         cache_scheduler.start()
         
-        print("✅ 캐시 스케줄러 시작됨")
-        
-    except Exception as e:
-        print(f"❌ 캐시 스케줄러 시작 실패: {e}")
+        print("[OK] 캐시 스케줄러 시작됨")
 
-# 기본 스케줄링을 위한 주기적 체크 (APScheduler가 없을 때)
-# 성능 모니터링 미들웨어는 CORS 미들웨어 이후에 정의됨
+    except Exception as e:
+        print(f"[ERROR] 캐시 스케줄러 시작 실패: {e}")
+
+    # 자동매매 스케줄러 시작
+    try:
+        from app.services.auto_trade_scheduler import get_auto_scheduler
+        auto_scheduler = get_auto_scheduler()
+        auto_scheduler.start()
+        print("[OK] 자동매매 스케줄러 시작됨")
+    except Exception as e:
+        print(f"[ERROR] 자동매매 스케줄러 시작 실패: {e}")
 
 @app.on_event("shutdown")
 async def shutdown_event():
     global cache_scheduler
     if cache_scheduler:
         cache_scheduler.stop()
-        print("🛑 캐시 스케줄러 중지됨")
+        print("[OK] 캐시 스케줄러 중지됨")
+
+    # 자동매매 스케줄러 중지
+    try:
+        from app.services.auto_trade_scheduler import get_auto_scheduler
+        auto_scheduler = get_auto_scheduler()
+        auto_scheduler.stop()
+        print("[OK] 자동매매 스케줄러 중지됨")
+    except Exception:
+        pass
 
 # 테스트 엔드포인트
 @app.get("/test")
