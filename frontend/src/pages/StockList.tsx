@@ -162,9 +162,8 @@ const StockList = () => {
                        setSelectedSector(selected || 'all')
                      }}
                    >
-                    <DropdownItem key="all">모든 섹터</DropdownItem>
-                    {sectors.map((sector) => (
-                      <DropdownItem key={sector}>{sector}</DropdownItem>
+                    {['all', ...sectors].map((sector) => (
+                      <DropdownItem key={sector}>{sector === 'all' ? '모든 섹터' : sector}</DropdownItem>
                     ))}
                   </DropdownMenu>
                 </Dropdown>

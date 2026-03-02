@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useToastStore } from '../stores/toastStore'
 import {
   Card, CardBody, CardHeader, Button, Input, Chip,
 } from '@heroui/react'
@@ -29,11 +30,12 @@ type TabKey = 'overview' | 'scores' | 'backtest' | 'rules'
 
 const Trading = () => {
   const queryClient = useQueryClient()
+  const showToast = useToastStore((s) => s.showToast)
   const [activeTab, setActiveTab] = useState<TabKey>('overview')
-  const [selectedAccountId, _setSelectedAccountId] = useState<number | null>(null)
+  const [selectedAccountId] = useState<number | null>(null)
 
   // 계좌 목록
-  const { data: accountsData, isLoading: accountsLoading } = useQuery({
+  const { data: accountsData, isLoading: accountsLoading, isError: accountsError } = useQuery({
     queryKey: ['trading-accounts'],
     queryFn: tradingApi.getAccounts,
     staleTime: 30_000,
@@ -95,13 +97,22 @@ const Trading = () => {
   // 계좌 생성
   const createAccountMutation = useMutation({
     mutationFn: tradingApi.createAccount,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['trading-accounts'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['trading-accounts'] })
+      showToast('계좌가 생성되었습니다.', 'success')
+    },
+    onError: () => showToast('계좌 생성에 실패했습니다.', 'error'),
   })
 
   // 스코어링 실행
   const calculateScoresMutation = useMutation({
     mutationFn: tradingApi.calculateScores,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['scores'] }),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['scores'] })
+      const count = data?.data?.length ?? 0
+      showToast(`스코어링 완료: ${count}개 종목`, 'success')
+    },
+    onError: () => showToast('스코어링 실행에 실패했습니다.', 'error'),
   })
 
   // 백테스팅 실행
@@ -109,7 +120,13 @@ const Trading = () => {
   const [btEndDate, setBtEndDate] = useState('2025-12-31')
   const runBacktestMutation = useMutation({
     mutationFn: tradingApi.runBacktest,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['backtest-results'] }),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['backtest-results'] })
+      const ret = data?.data?.total_return
+      const msg = ret != null ? `백테스팅 완료: 수익률 ${ret}%` : '백테스팅이 완료되었습니다.'
+      showToast(msg, 'success')
+    },
+    onError: () => showToast('백테스팅 실행에 실패했습니다.', 'error'),
   })
 
   // 규칙 토글
@@ -129,17 +146,25 @@ const Trading = () => {
   // 주문 실행
   const placeOrderMutation = useMutation({
     mutationFn: tradingApi.placeOrder,
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['positions', accountId] })
       queryClient.invalidateQueries({ queryKey: ['trades', accountId] })
       queryClient.invalidateQueries({ queryKey: ['account-summary', accountId] })
+      const t = data?.data
+      const msg = t ? `${t.symbol} ${t.trade_type === 'BUY' ? '매수' : '매도'} 주문 완료` : '주문이 완료되었습니다.'
+      showToast(msg, 'success')
     },
+    onError: () => showToast('주문 실행에 실패했습니다.', 'error'),
   })
 
   // 규칙 생성
   const createRuleMutation = useMutation({
     mutationFn: tradingApi.createRule,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['trading-rules'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['trading-rules'] })
+      showToast('자동매매 규칙이 생성되었습니다.', 'success')
+    },
+    onError: () => showToast('규칙 생성에 실패했습니다.', 'error'),
   })
 
   const summary: AccountSummary | null = summaryData?.data ?? null
@@ -159,6 +184,21 @@ const Trading = () => {
             <BanknotesIcon className="w-6 h-6 text-white" />
           </div>
           <p className="text-gray-700 text-xl font-medium">거래 데이터를 불러오는 중...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // 백엔드 연결 실패
+  if (accountsError) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <div className="w-16 h-16 bg-red-100 rounded-2xl mx-auto mb-6 flex items-center justify-center">
+            <BanknotesIcon className="w-8 h-8 text-red-500" />
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">서버에 연결할 수 없습니다</h2>
+          <p className="text-gray-500 text-sm">백엔드 서버가 실행 중인지 확인하세요. (http://localhost:8000)</p>
         </div>
       </div>
     )
