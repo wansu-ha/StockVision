@@ -14,12 +14,16 @@ import {
   PlusIcon,
   BeakerIcon,
   BoltIcon,
+  ShoppingCartIcon,
 } from '@heroicons/react/24/outline'
-import { tradingApi } from '../services/api'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { tradingApi, stockApi } from '../services/api'
 import type {
   AccountSummary, VirtualPosition, VirtualTrade,
   StockScore, BacktestResultSummary, AutoTradingRule,
+  PlaceOrderRequest, CreateRuleRequest, BacktestResult,
 } from '../types/trading'
+import type { Stock } from '../types'
 
 type TabKey = 'overview' | 'scores' | 'backtest' | 'rules'
 
@@ -115,12 +119,36 @@ const Trading = () => {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['trading-rules'] }),
   })
 
+  // 종목 목록 (주문 폼용)
+  const { data: stocksQueryData } = useQuery({
+    queryKey: ['stocks'],
+    queryFn: stockApi.getStocks,
+    staleTime: 60_000,
+  })
+
+  // 주문 실행
+  const placeOrderMutation = useMutation({
+    mutationFn: tradingApi.placeOrder,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['positions', accountId] })
+      queryClient.invalidateQueries({ queryKey: ['trades', accountId] })
+      queryClient.invalidateQueries({ queryKey: ['account-summary', accountId] })
+    },
+  })
+
+  // 규칙 생성
+  const createRuleMutation = useMutation({
+    mutationFn: tradingApi.createRule,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['trading-rules'] }),
+  })
+
   const summary: AccountSummary | null = summaryData?.data ?? null
   const positions: VirtualPosition[] = positionsData?.data ?? []
   const trades: VirtualTrade[] = tradesData?.data ?? []
   const scores: StockScore[] = scoresData?.data ?? []
   const backtestResults: BacktestResultSummary[] = backtestData?.data ?? []
   const rules: AutoTradingRule[] = rulesData?.data ?? []
+  const allStocks: Stock[] = stocksQueryData?.data ?? []
 
   // 로딩 상태
   if (accountsLoading) {
@@ -221,6 +249,10 @@ const Trading = () => {
             summary={summary}
             positions={positions}
             trades={trades}
+            accountId={accountId}
+            stocks={allStocks}
+            onPlaceOrder={(req) => placeOrderMutation.mutate(req)}
+            isOrdering={placeOrderMutation.isPending}
           />
         )}
         {activeTab === 'scores' && (
@@ -239,12 +271,16 @@ const Trading = () => {
             onEndDateChange={setBtEndDate}
             onRun={() => runBacktestMutation.mutate({ start_date: btStartDate, end_date: btEndDate })}
             isRunning={runBacktestMutation.isPending}
+            latestResult={runBacktestMutation.data?.data ?? null}
           />
         )}
         {activeTab === 'rules' && (
           <RulesTab
             rules={rules}
             onToggle={(ruleId, isActive) => toggleRuleMutation.mutate({ ruleId, isActive })}
+            accountId={accountId}
+            onCreateRule={(data) => createRuleMutation.mutate(data)}
+            isCreating={createRuleMutation.isPending}
           />
         )}
       </div>
@@ -258,11 +294,36 @@ function OverviewTab({
   summary,
   positions,
   trades,
+  accountId,
+  stocks,
+  onPlaceOrder,
+  isOrdering,
 }: {
   summary: AccountSummary | null
   positions: VirtualPosition[]
   trades: VirtualTrade[]
+  accountId: number | null
+  stocks: Stock[]
+  onPlaceOrder: (req: PlaceOrderRequest) => void
+  isOrdering: boolean
 }) {
+  const [orderSymbol, setOrderSymbol] = useState('')
+  const [orderQty, setOrderQty] = useState('10')
+  const [orderPrice, setOrderPrice] = useState('')
+
+  const handleOrder = (type: 'BUY' | 'SELL') => {
+    const selectedStock = stocks.find(s => s.symbol === orderSymbol)
+    if (!selectedStock || !accountId || !orderQty || !orderPrice) return
+    onPlaceOrder({
+      account_id: accountId,
+      stock_id: selectedStock.id,
+      symbol: orderSymbol,
+      trade_type: type,
+      quantity: parseInt(orderQty),
+      price: parseFloat(orderPrice),
+    })
+  }
+
   if (!summary) {
     return <p className="text-gray-500">계좌 데이터를 불러오는 중...</p>
   }
@@ -300,6 +361,72 @@ function OverviewTab({
           color="amber"
         />
       </div>
+
+      {/* 주문 폼 */}
+      <Card className="shadow-lg">
+        <CardHeader className="p-6 pb-4">
+          <div className="flex items-center gap-2">
+            <ShoppingCartIcon className="w-5 h-5 text-gray-600" />
+            <h2 className="text-lg font-bold text-gray-900">주문 실행</h2>
+          </div>
+        </CardHeader>
+        <CardBody className="px-6 pb-6 pt-0">
+          <div className="flex items-end gap-4 flex-wrap">
+            <div>
+              <label className="text-sm text-gray-600 mb-1 block">종목</label>
+              <select
+                value={orderSymbol}
+                onChange={(e) => setOrderSymbol(e.target.value)}
+                className="border border-gray-200 rounded-xl px-3 py-2 text-sm min-w-[160px] bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+              >
+                <option value="">종목 선택</option>
+                {stocks.map(s => (
+                  <option key={s.id} value={s.symbol}>{s.symbol} - {s.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-sm text-gray-600 mb-1 block">가격 (원)</label>
+              <Input
+                type="number"
+                value={orderPrice}
+                onChange={(e) => setOrderPrice(e.target.value)}
+                placeholder="0"
+                size="sm"
+                classNames={{ base: 'w-36' }}
+              />
+            </div>
+            <div>
+              <label className="text-sm text-gray-600 mb-1 block">수량</label>
+              <Input
+                type="number"
+                value={orderQty}
+                onChange={(e) => setOrderQty(e.target.value)}
+                min="1"
+                size="sm"
+                classNames={{ base: 'w-24' }}
+              />
+            </div>
+            <Button
+              color="primary"
+              onPress={() => handleOrder('BUY')}
+              isLoading={isOrdering}
+              isDisabled={!orderSymbol || !orderPrice || !orderQty}
+            >
+              매수
+            </Button>
+            <Button
+              color="danger"
+              variant="flat"
+              onPress={() => handleOrder('SELL')}
+              isLoading={isOrdering}
+              isDisabled={!orderSymbol || !orderPrice || !orderQty}
+            >
+              매도
+            </Button>
+          </div>
+        </CardBody>
+      </Card>
 
       {/* 보유 포지션 */}
       <Card className="shadow-lg">
@@ -488,6 +615,7 @@ function BacktestTab({
   onEndDateChange,
   onRun,
   isRunning,
+  latestResult,
 }: {
   results: BacktestResultSummary[]
   startDate: string
@@ -496,7 +624,23 @@ function BacktestTab({
   onEndDateChange: (v: string) => void
   onRun: () => void
   isRunning: boolean
+  latestResult: BacktestResult | null
 }) {
+  const equityCurve = (() => {
+    if (!latestResult?.trade_details?.length) return []
+    const sorted = [...latestResult.trade_details].sort((a, b) => a.date.localeCompare(b.date))
+    let balance = latestResult.initial_balance
+    const pts: { date: string; balance: number }[] = [
+      { date: latestResult.start_date.slice(0, 10), balance },
+    ]
+    for (const t of sorted) {
+      balance += (t.realized_pnl ?? 0)
+      pts.push({ date: t.date.slice(0, 10), balance })
+    }
+    pts.push({ date: latestResult.end_date.slice(0, 10), balance: latestResult.final_balance })
+    return pts
+  })()
+
   return (
     <div className="space-y-6">
       {/* 실행 폼 */}
@@ -535,6 +679,35 @@ function BacktestTab({
           </div>
         </CardBody>
       </Card>
+
+      {/* 수익률 차트 */}
+      {equityCurve.length > 1 && (
+        <Card className="shadow-lg">
+          <CardHeader className="p-6 pb-4">
+            <div className="flex items-center justify-between w-full">
+              <h2 className="text-lg font-bold text-gray-900">수익률 곡선</h2>
+              <span className={`text-sm font-semibold ${latestResult!.total_return >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {latestResult!.total_return >= 0 ? '+' : ''}{latestResult!.total_return}%
+              </span>
+            </div>
+          </CardHeader>
+          <CardBody className="px-6 pb-6 pt-0">
+            <ResponsiveContainer width="100%" height={240}>
+              <LineChart data={equityCurve}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="date" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
+                <YAxis
+                  tickFormatter={(v) => `${(v / 10000).toFixed(0)}만`}
+                  tick={{ fontSize: 11 }}
+                  width={60}
+                />
+                <Tooltip formatter={(value: number) => [`${value.toLocaleString('ko-KR')}원`, '자산']} />
+                <Line type="monotone" dataKey="balance" stroke="#3b82f6" strokeWidth={2} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </CardBody>
+        </Card>
+      )}
 
       {/* 결과 목록 */}
       <Card className="shadow-lg">
@@ -587,22 +760,122 @@ function BacktestTab({
 function RulesTab({
   rules,
   onToggle,
+  accountId,
+  onCreateRule,
+  isCreating,
 }: {
   rules: AutoTradingRule[]
   onToggle: (ruleId: number, isActive: boolean) => void
+  accountId: number | null
+  onCreateRule: (data: CreateRuleRequest) => void
+  isCreating: boolean
 }) {
+  const [showForm, setShowForm] = useState(false)
+  const [ruleName, setRuleName] = useState('')
+  const [buyThreshold, setBuyThreshold] = useState('70')
+  const [maxPositions, setMaxPositions] = useState('5')
+  const [budgetRatio, setBudgetRatio] = useState('20')
+
+  const handleCreateRule = () => {
+    if (!ruleName) return
+    onCreateRule({
+      name: ruleName,
+      account_id: accountId ?? undefined,
+      buy_score_threshold: parseFloat(buyThreshold),
+      max_position_count: parseInt(maxPositions),
+      budget_ratio: parseFloat(budgetRatio) / 100,
+    })
+    setRuleName('')
+    setShowForm(false)
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold text-gray-900">자동매매 규칙</h2>
+        <Button
+          color="primary"
+          size="sm"
+          startContent={<PlusIcon className="w-4 h-4" />}
+          onPress={() => setShowForm(!showForm)}
+        >
+          규칙 추가
+        </Button>
       </div>
+
+      {showForm && (
+        <Card className="shadow-lg border-2 border-blue-100">
+          <CardHeader className="p-6 pb-4">
+            <h3 className="text-base font-bold text-gray-900">새 규칙 생성</h3>
+          </CardHeader>
+          <CardBody className="px-6 pb-6 pt-0">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm text-gray-600 mb-1 block">규칙 이름</label>
+                <Input
+                  value={ruleName}
+                  onChange={(e) => setRuleName(e.target.value)}
+                  placeholder="예: 공격적 매수 전략"
+                  size="sm"
+                />
+              </div>
+              <div>
+                <label className="text-sm text-gray-600 mb-1 block">매수 기준점 (0~100)</label>
+                <Input
+                  type="number"
+                  value={buyThreshold}
+                  onChange={(e) => setBuyThreshold(e.target.value)}
+                  min="0"
+                  max="100"
+                  size="sm"
+                />
+              </div>
+              <div>
+                <label className="text-sm text-gray-600 mb-1 block">최대 종목 수</label>
+                <Input
+                  type="number"
+                  value={maxPositions}
+                  onChange={(e) => setMaxPositions(e.target.value)}
+                  min="1"
+                  size="sm"
+                />
+              </div>
+              <div>
+                <label className="text-sm text-gray-600 mb-1 block">예산 비율 (%)</label>
+                <Input
+                  type="number"
+                  value={budgetRatio}
+                  onChange={(e) => setBudgetRatio(e.target.value)}
+                  min="1"
+                  max="100"
+                  size="sm"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-4">
+              <Button variant="flat" size="sm" onPress={() => setShowForm(false)}>
+                취소
+              </Button>
+              <Button
+                color="primary"
+                size="sm"
+                onPress={handleCreateRule}
+                isLoading={isCreating}
+                isDisabled={!ruleName}
+              >
+                생성
+              </Button>
+            </div>
+          </CardBody>
+        </Card>
+      )}
 
       {rules.length === 0 ? (
         <Card className="shadow-lg">
           <CardBody className="py-16 text-center">
             <BoltIcon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
             <p className="text-gray-400">등록된 규칙이 없습니다</p>
-            <p className="text-gray-400 text-sm mt-1">API를 통해 규칙을 등록할 수 있습니다</p>
+            <p className="text-gray-400 text-sm mt-1">위 버튼으로 첫 규칙을 추가하세요</p>
           </CardBody>
         </Card>
       ) : (
