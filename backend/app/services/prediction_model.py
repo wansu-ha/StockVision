@@ -26,17 +26,20 @@ class PredictionModel:
         if not os.path.exists(self.model_path):
             os.makedirs(self.model_path)
     
-    def prepare_features(self, stock_id: int, days: int = 365) -> Tuple[pd.DataFrame, pd.Series]:
+    def prepare_features(self, stock_id: int, days: int = 365, as_of_date: Optional[datetime] = None) -> Tuple[pd.DataFrame, pd.Series]:
         """예측을 위한 특성 데이터 준비"""
         try:
             # 가격 데이터 조회
-            end_date = datetime.now()
+            end_date = as_of_date or datetime.now()
             start_date = end_date - timedelta(days=days)
-            
-            prices = self.session.query(StockPrice).filter(
+
+            q = self.session.query(StockPrice).filter(
                 StockPrice.stock_id == stock_id,
-                StockPrice.date >= start_date
-            ).order_by(StockPrice.date).all()
+                StockPrice.date >= start_date,
+            )
+            if as_of_date is not None:
+                q = q.filter(StockPrice.date <= as_of_date)
+            prices = q.order_by(StockPrice.date).all()
             
             if not prices:
                 return pd.DataFrame(), pd.Series()
@@ -58,10 +61,13 @@ class PredictionModel:
             df.sort_index(inplace=True)
             
             # 기술적 지표 조회
-            indicators = self.session.query(TechnicalIndicator).filter(
+            iq = self.session.query(TechnicalIndicator).filter(
                 TechnicalIndicator.stock_id == stock_id,
-                TechnicalIndicator.date >= start_date
-            ).order_by(TechnicalIndicator.date).all()
+                TechnicalIndicator.date >= start_date,
+            )
+            if as_of_date is not None:
+                iq = iq.filter(TechnicalIndicator.date <= as_of_date)
+            indicators = iq.order_by(TechnicalIndicator.date).all()
             
             # 지표 데이터를 DataFrame으로 변환
             indicator_data = {}
@@ -192,32 +198,33 @@ class PredictionModel:
             logger.error(f"모델 로드 실패 {stock_id}: {str(e)}")
             return False
     
-    def predict_next_day(self, stock_id: int) -> Optional[Dict]:
+    def predict_next_day(self, stock_id: int, as_of_date: Optional[datetime] = None) -> Optional[Dict]:
         """다음 날 주가 예측"""
         try:
             # 모델 로드
             if not self.load_model(stock_id):
                 return None
-            
+
             # 최신 특성 데이터 준비
-            features, _ = self.prepare_features(stock_id, days=30)
-            
+            features, _ = self.prepare_features(stock_id, days=30, as_of_date=as_of_date)
+
             if features.empty:
                 return None
-            
+
             # 가장 최근 특성 사용
             latest_features = features.iloc[-1:].values
-            
+
             # 특성 스케일링
             scaled_features = self.scaler.transform(latest_features)
-            
+
             # 예측
             prediction = self.model.predict(scaled_features)[0]
-            
-            # 현재 가격 조회
-            current_price = self.session.query(StockPrice).filter(
-                StockPrice.stock_id == stock_id
-            ).order_by(StockPrice.date.desc()).first()
+
+            # 현재 가격 조회 (as_of_date 이하 최신)
+            q = self.session.query(StockPrice).filter(StockPrice.stock_id == stock_id)
+            if as_of_date is not None:
+                q = q.filter(StockPrice.date <= as_of_date)
+            current_price = q.order_by(StockPrice.date.desc()).first()
             
             if not current_price:
                 return None

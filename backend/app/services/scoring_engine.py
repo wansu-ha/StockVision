@@ -115,8 +115,11 @@ class ScoringEngine:
 
     # ── 통합 스코어 계산 ──
 
-    def score_stock(self, stock_id: int, symbol: str) -> Optional[dict]:
+    def score_stock(self, stock_id: int, symbol: str, as_of_date: Optional[datetime] = None) -> Optional[dict]:
         """단일 종목 스코어링
+
+        Args:
+            as_of_date: 기준 날짜. None이면 전체 최신 데이터(실시간). 백테스팅 시 해당 날짜 이하 데이터만 사용.
 
         Returns:
             {
@@ -127,7 +130,7 @@ class ScoringEngine:
         """
         try:
             # 기술적 지표 계산
-            indicators = self.indicator_calc.calculate_all_indicators(stock_id)
+            indicators = self.indicator_calc.calculate_all_indicators(stock_id, as_of_date=as_of_date)
             if not indicators:
                 logger.warning(f"지표 데이터 없음: {symbol}")
                 return None
@@ -144,7 +147,7 @@ class ScoringEngine:
             ema_50_val = indicators.get("ema_50", pd.Series()).dropna()
 
             # 최신 종가
-            prices_df = self.indicator_calc.get_stock_prices(stock_id)
+            prices_df = self.indicator_calc.get_stock_prices(stock_id, as_of_date=as_of_date)
             if prices_df.empty:
                 return None
             current_price = prices_df["close"].iloc[-1]
@@ -169,7 +172,7 @@ class ScoringEngine:
             )
 
             # RF 예측 스코어
-            prediction = self.prediction_model.predict_next_day(stock_id)
+            prediction = self.prediction_model.predict_next_day(stock_id, as_of_date=as_of_date)
             pred_change_pct = prediction["price_change_percent"] if prediction else 0.0
             pred_s = self._prediction_score(pred_change_pct)
 

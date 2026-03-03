@@ -129,7 +129,7 @@ class BacktestEngine:
                 for sid in list(positions.keys()):
                     if sid not in stock_prices or date not in stock_prices[sid].index:
                         continue
-                    score_data = scorer.score_stock(sid, stock_symbols[sid])
+                    score_data = scorer.score_stock(sid, stock_symbols[sid], as_of_date=date)
                     if score_data and score_data["total_score"] <= sell_threshold:
                         price = stock_prices[sid].loc[date, "close"]
                         qty = positions[sid]["qty"]
@@ -163,7 +163,7 @@ class BacktestEngine:
                             continue
                         if sid not in stock_prices or date not in stock_prices[sid].index:
                             continue
-                        score_data = scorer.score_stock(sid, symbol)
+                        score_data = scorer.score_stock(sid, symbol, as_of_date=date)
                         if score_data and score_data["total_score"] >= buy_threshold:
                             candidates.append((sid, score_data["total_score"]))
 
