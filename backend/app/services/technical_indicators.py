@@ -53,16 +53,19 @@ class TechnicalIndicatorCalculator:
             'lower': lower_band
         }
     
-    def get_stock_prices(self, stock_id: int, days: int = 365) -> pd.DataFrame:
+    def get_stock_prices(self, stock_id: int, days: int = 365, as_of_date: Optional[datetime] = None) -> pd.DataFrame:
         """데이터베이스에서 주식 가격 데이터 조회"""
         try:
-            end_date = datetime.now()
+            end_date = as_of_date or datetime.now()
             start_date = end_date.replace(year=end_date.year - 1)
-            
-            prices = self.session.query(StockPrice).filter(
+
+            q = self.session.query(StockPrice).filter(
                 StockPrice.stock_id == stock_id,
-                StockPrice.date >= start_date
-            ).order_by(StockPrice.date).all()
+                StockPrice.date >= start_date,
+            )
+            if as_of_date is not None:
+                q = q.filter(StockPrice.date <= as_of_date)
+            prices = q.order_by(StockPrice.date).all()
             
             if not prices:
                 return pd.DataFrame()
@@ -85,9 +88,9 @@ class TechnicalIndicatorCalculator:
             logger.error(f"가격 데이터 조회 실패 {stock_id}: {str(e)}")
             return pd.DataFrame()
     
-    def calculate_all_indicators(self, stock_id: int) -> Dict[str, pd.DataFrame]:
+    def calculate_all_indicators(self, stock_id: int, as_of_date: Optional[datetime] = None) -> Dict[str, pd.DataFrame]:
         """모든 기술적 지표 계산"""
-        prices_df = self.get_stock_prices(stock_id)
+        prices_df = self.get_stock_prices(stock_id, as_of_date=as_of_date)
         if prices_df.empty:
             return {}
         
