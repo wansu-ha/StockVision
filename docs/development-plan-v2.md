@@ -1,6 +1,6 @@
 # StockVision 개발 계획서 v2
 
-> 작성일: 2026-03-04 | 아키텍처: `docs/architecture.md` 기준
+> 작성일: 2026-03-05 | 아키텍처: `docs/architecture.md` 기준 (3프로세스)
 >
 > Phase 1-2 (가상 거래, ML 예측)는 완료. 이 문서는 Phase 3 이후 계획.
 
@@ -8,7 +8,7 @@
 
 ## 개발 단위 (Spec 단위)
 
-아키텍처 문서의 4 프로세스를 기준으로 개발 단위를 나눈다.
+아키텍처 문서의 3 프로세스를 기준으로 개발 단위를 나눈다.
 각 단위마다 `spec/{name}/spec.md` 생성 후 구현.
 
 ---
@@ -41,7 +41,7 @@
 - 전략 규칙 캐시 (평문 JSON 파일)
 - 설정 파일 (config.json)
 - 체결 로그 DB (SQLite, logs.db)
-- API 서버 직접 통신 (컨텍스트/하트비트/템플릿/WS 알림)
+- 클라우드 서버 직접 통신 (컨텍스트/하트비트/템플릿/WS 알림)
 - 자동 로그인 (Refresh Token으로 PC 재부팅 후 복구)
 - PyInstaller .exe 번들
 
@@ -59,7 +59,7 @@
 - 규칙 평가 (조건 + 컨텍스트 + 시세 → True/False)
 - 신호 관리 (NEW → SENT → FILLED, 중복 방지)
 - 주문 전 가격 검증 (키움 REST 직접 조회 vs 수신 시세 비교)
-- 컨텍스트 캐시 (로컬 서버가 API 서버에서 직접 fetch)
+- 컨텍스트 캐시 (로컬 서버가 클라우드 서버에서 직접 fetch)
 - 규칙 캐시 (프론트 sync 또는 WS push, JSON 파일에서 로드)
 
 **의존**: Unit 1 (키움 REST), Unit 2 (로컬 서버 코어)
@@ -68,41 +68,29 @@
 
 ---
 
-### Unit 4: API 서버
+### Unit 4: 클라우드 서버
 
-**범위**: 클라우드 웹 서버
+**범위**: 인증 + 규칙 + 시세 수집 + AI 분석 + 어드민 (단일 서버)
 
 - 사용자 인증 (회원가입, 이메일 인증, 로그인, JWT + Refresh Token)
 - 전략 규칙 CRUD (DB 저장, 조회, 수정, 삭제)
-- AI 컨텍스트 API (데이터 서버에서 가져와 제공)
+- 서비스 키움 키로 시세 수집/저장 (WS, 히스토리컬)
+- AI 컨텍스트 계산 (시세 기반 지표)
+- AI 분석 (Claude API → 감성 점수, 뉴스 요약)
 - 하트비트 수신 (익명 통계)
 - 버전 체크 API
+- 어드민 API (유저, 통계, 키, 템플릿, 수집 상태)
 
-**의존**: 없음 (기존 `backend/` 코드 활용)
-**산출**: `backend/app/api/` 업데이트
-**spec**: `spec/api-server/spec.md`
+**의존**: Unit 1의 키움 REST 클라이언트 (sv_core 패키지로 재사용)
+**산출**: `cloud_server/` (기존 `backend/` 코드 리팩토링)
+**spec**: `spec/cloud-server/spec.md`
 
-> 기존 Phase 1-2의 auth, stocks, ai_analysis 코드를 정리/확장.
-> 기존 spec (auth, context-cloud 등)과 병합 가능.
-
----
-
-### Unit 5: 데이터 서버
-
-**범위**: 시세 수집/저장 서비스
-
-- 서비스 키움 키로 시세 수신 (WS)
-- 시세 데이터 DB 저장 (히스토리컬)
-- API 서버에서 접근 가능한 내부 API
-- 외부 직접 접근 차단
-
-**의존**: Unit 1의 키움 REST 클라이언트 (재사용)
-**산출**: `data_server/` 또는 `backend/app/services/market_data/`
-**spec**: `spec/data-server/spec.md`
+> 기존 `spec/api-server/` + `spec/data-server/` 병합.
+> Phase 1-2의 auth, stocks, ai_analysis 코드를 정리/확장.
 
 ---
 
-### Unit 6: 프론트엔드
+### Unit 5: 프론트엔드
 
 **범위**: React SPA 전체
 
@@ -114,7 +102,7 @@
 - localhost WS (실시간 시세 + 체결)
 - JWT 전달 (로그인 후 → localhost) + 규칙 sync (저장 후 → localhost)
 
-**의존**: Unit 2 (localhost API), Unit 4 (API 서버)
+**의존**: Unit 2 (localhost API), Unit 4 (클라우드 서버)
 **산출**: `frontend/src/` 업데이트
 **spec**: `spec/frontend/spec.md`
 
@@ -122,23 +110,23 @@
 
 ---
 
-### Unit 7: 어드민 페이지
+### Unit 6: 어드민 페이지
 
 **범위**: 관리자 UI
 
 - 유저 목록/관리
 - 접속 통계 (하트비트 기반)
-- 시세 데이터 모니터링 (데이터 서버 상태)
+- 시세 데이터 모니터링 (수집 상태)
 - 서비스 키움 키 관리
 - 전략 템플릿 관리 (디폴트 양식)
 
-**의존**: Unit 4 (API 서버), Unit 5 (데이터 서버)
+**의존**: Unit 4 (클라우드 서버)
 **산출**: `frontend/src/pages/admin/` 업데이트
 **spec**: `spec/admin/spec.md`
 
 ---
 
-### Unit 8: 약관/법무
+### Unit 7: 약관/법무
 
 **범위**: 서비스 약관 작성
 
@@ -159,27 +147,26 @@
 ```
 Unit 1: 키움 REST API ──┐
 Unit 2: 로컬 서버 코어 ──┼──→ Unit 3: 전략 엔진
-Unit 4: API 서버 ────────┘
+Unit 4: 클라우드 서버 ───┘
 ```
 
-- Unit 1, 2, 4는 독립적 → 병렬 개발 가능
+- Unit 1, 2는 독립적 → 병렬 개발 가능
+- Unit 4는 Unit 1의 sv_core 패키지 재사용 (시세 수집) → Unit 1 이후 또는 병렬
 - Unit 3은 1+2 완료 후
 
 ### Phase 3-B: 연결
 
 ```
-Unit 5: 데이터 서버 (Unit 1 재사용)
-Unit 6: 프론트엔드 (Unit 2 + Unit 4 필요)
-Unit 8: 약관
+Unit 5: 프론트엔드 (Unit 2 + Unit 4 필요)
+Unit 7: 약관
 ```
 
-- Unit 5는 Unit 1의 키움 클라이언트 재사용
-- Unit 6은 localhost + API 서버 둘 다 필요
+- Unit 5는 localhost + 클라우드 서버 둘 다 필요
 
 ### Phase 3-C: 마무리
 
 ```
-Unit 7: 어드민 (Unit 4 + Unit 5 필요)
+Unit 6: 어드민 (Unit 4 필요)
 통합 테스트
 모의투자 E2E 테스트
 ```
@@ -192,12 +179,11 @@ Unit 7: 어드민 (Unit 4 + Unit 5 필요)
 Unit 1 (키움 REST) ─────────┐
                              ├──→ Unit 3 (전략 엔진)
 Unit 2 (로컬 서버 코어) ─────┤
-                             └──→ Unit 6 (프론트엔드)
-Unit 4 (API 서버) ──────────────→ Unit 6 (프론트엔드)
-                             ┌──→ Unit 7 (어드민)
-Unit 5 (데이터 서버) ────────┘
+                             └──→ Unit 5 (프론트엔드)
+Unit 4 (클라우드 서버) ─────────→ Unit 5 (프론트엔드)
+                             └──→ Unit 6 (어드민)
 
-Unit 8 (약관) ── 독립 (아키텍처 확정 후 언제든)
+Unit 7 (약관) ── 독립 (아키텍처 확정 후 언제든)
 ```
 
 ---
@@ -209,18 +195,20 @@ Unit 8 (약관) ── 독립 (아키텍처 확정 후 언제든)
 | `spec/kiwoom-integration/` | Unit 1 | v3 재작성 (REST API) |
 | `spec/local-bridge/` | Unit 2 | 업데이트 |
 | `spec/execution-engine/` | Unit 3 | 업데이트 |
+| `spec/api-server/` | Unit 4 (클라우드 서버) | **SUPERSEDED** — cloud-server에 병합 |
+| `spec/data-server/` | Unit 4 (클라우드 서버) | **SUPERSEDED** — cloud-server에 병합 |
 | `spec/auth/` | Unit 4에 포함 | 병합 |
 | `spec/context-cloud/` | Unit 4에 포함 | 병합 |
-| `spec/strategy-builder/` | Unit 6에 포함 | 병합 |
-| `spec/user-dashboard/` | Unit 6에 포함 | 병합 |
-| `spec/notification/` | Unit 6에 포함 | 병합 |
-| `spec/onboarding/` | Unit 6에 포함 | 병합 |
-| `spec/portfolio/` | Unit 6에 포함 | 병합 |
-| `spec/execution-log/` | Unit 6에 포함 | 병합 |
-| `spec/strategy-template/` | Unit 7에 포함 | 병합 |
-| `spec/admin-dashboard/` | Unit 7에 포함 | 병합 |
+| `spec/data-source/` | Unit 4 참고 | 참고 |
+| `spec/strategy-builder/` | Unit 5에 포함 | 병합 |
+| `spec/user-dashboard/` | Unit 5에 포함 | 병합 |
+| `spec/notification/` | Unit 5에 포함 | 병합 |
+| `spec/onboarding/` | Unit 5에 포함 | 병합 |
+| `spec/portfolio/` | Unit 5에 포함 | 병합 |
+| `spec/execution-log/` | Unit 5에 포함 | 병합 |
+| `spec/strategy-template/` | Unit 6에 포함 | 병합 |
+| `spec/admin-dashboard/` | Unit 6에 포함 | 병합 |
 | `spec/koscom-integration/` | 미래 (v3+) | 보류 유지 |
-| `spec/data-source/` | Unit 5 참고 | 참고 |
 
 ---
 
@@ -229,8 +217,9 @@ Unit 8 (약관) ── 독립 (아키텍처 확정 후 언제든)
 | Unit | 버전 | 내용 |
 |------|------|------|
 | 자동 업데이트 | v2 | 로컬 서버 .exe 자동 업데이트 |
-| 백테스팅 | v2 | 데이터 서버 히스토리 활용 |
+| 백테스팅 | v2 | 클라우드 서버 히스토리 활용 |
 | 커뮤니티 | v2-3 | 전략 공유, 수익 인증, 포크 |
-| LLM 서버 | v3+ | 시장 분석, AI 컨텍스트 생성 |
 | 코스콤 연동 | v3+ | 정식 시세 라이선스 |
 | 크로스 플랫폼 | v3+ | Mac/Linux 지원 |
+
+> LLM 서버는 별도 Unit 불필요 — Claude API(HTTP 호출)로 클라우드 서버 내 ai_analysis 모듈에서 처리.
