@@ -1,3 +1,4 @@
+import time
 import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
@@ -74,46 +75,62 @@ class DataCollector:
         return stocks_data
     
     async def collect_stock_prices(self, symbol: str, days: int = 365) -> pd.DataFrame:
-        """주식 가격 데이터 수집 (Semaphore로 동시 호출 제한)"""
-        try:
-            yf_symbol = to_yfinance_symbol(symbol)
-            db_symbol = to_db_symbol(symbol)
+        """주식 가격 데이터 수집 (재시도 3회 지수 백오프)"""
+        yf_symbol = to_yfinance_symbol(symbol)
+        db_symbol = to_db_symbol(symbol)
 
-            # API 제한 확인
-            can_request, status = rate_limit_monitor.can_make_request()
-            if not can_request:
-                logger.warning(f"야후 파이낸스 API 제한 초과: {status['status']}")
-                return pd.DataFrame()
-
-            ticker = yf.Ticker(yf_symbol)
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=days)
-
-            df = ticker.history(start=start_date, end=end_date)
-
-            if df.empty:
-                logger.warning(f"가격 데이터 없음: {yf_symbol}")
-                return pd.DataFrame()
-
-            # 컬럼명 정규화
-            df.columns = [col.lower() for col in df.columns]
-            df.reset_index(inplace=True)
-
-            # Date 컬럼 정규화 (대소문자 + 타임존 제거)
-            if 'Date' in df.columns:
-                df.rename(columns={'Date': 'date'}, inplace=True)
-            if 'date' in df.columns and hasattr(df['date'].dt, 'tz') and df['date'].dt.tz is not None:
-                df['date'] = df['date'].dt.tz_localize(None)
-
-            # API 호출 기록
-            rate_limit_monitor.record_request(db_symbol, "price_data")
-            api_logger_instance.increment_yahoo_calls(db_symbol, "price_data")
-            logger.info(f"가격 데이터 수집 완료: {db_symbol} ({len(df)}개)")
-            return df
-
-        except Exception as e:
-            logger.error(f"가격 데이터 수집 실패 {symbol}: {str(e)}")
+        # API 제한 확인
+        can_request, status = rate_limit_monitor.can_make_request()
+        if not can_request:
+            logger.warning(f"야후 파이낸스 API 제한 초과: {status['status']}")
             return pd.DataFrame()
+
+        last_exc = None
+        for attempt in range(1, 4):  # 최대 3회 시도
+            try:
+                ticker = yf.Ticker(yf_symbol)
+                end_date = datetime.now()
+                start_date = end_date - timedelta(days=days)
+
+                df = ticker.history(start=start_date, end=end_date)
+
+                if df.empty:
+                    logger.warning(f"가격 데이터 없음: {yf_symbol}")
+                    return pd.DataFrame()
+
+                # 컬럼명 정규화
+                df.columns = [col.lower() for col in df.columns]
+                df.reset_index(inplace=True)
+
+                # Date 컬럼 정규화 (대소문자 + 타임존 제거)
+                if 'Date' in df.columns:
+                    df.rename(columns={'Date': 'date'}, inplace=True)
+                if 'date' in df.columns and hasattr(df['date'].dt, 'tz') and df['date'].dt.tz is not None:
+                    df['date'] = df['date'].dt.tz_localize(None)
+
+                # 결측 일자 탐지
+                if 'date' in df.columns and len(df) > 1:
+                    date_series = pd.to_datetime(df['date'])
+                    biz_days = pd.bdate_range(date_series.min(), date_series.max())
+                    missing = len(biz_days) - len(df)
+                    if missing > 0:
+                        logger.warning(f"결측 거래일 {missing}개 감지: {db_symbol}")
+
+                # API 호출 기록
+                rate_limit_monitor.record_request(db_symbol, "price_data")
+                api_logger_instance.increment_yahoo_calls(db_symbol, "price_data")
+                logger.info(f"가격 데이터 수집 완료: {db_symbol} ({len(df)}개)")
+                return df
+
+            except Exception as e:
+                last_exc = e
+                if attempt < 3:
+                    wait = 2 ** attempt  # 2s, 4s
+                    logger.warning(f"가격 수집 오류 (시도 {attempt}/3) {db_symbol}: {e} — {wait}초 후 재시도")
+                    time.sleep(wait)
+
+        logger.error(f"가격 데이터 수집 최종 실패 {symbol}: {last_exc}")
+        return pd.DataFrame()
     
     def save_stock_to_db(self, stock_data: Dict) -> Optional[Stock]:
         """주식 정보를 데이터베이스에 저장"""
