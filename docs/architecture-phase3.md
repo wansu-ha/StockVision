@@ -1,6 +1,19 @@
-# StockVision Phase 3 아키텍처
+# StockVision Phase 3 아키텍처 (SUPERSEDED)
 
-> 작성일: 2026-03-04 | 상태: 확정 | 담당: 전체
+> 작성일: 2026-03-04 | 상태: ~~확정~~ **SUPERSEDED** | 담당: 전체
+>
+> ⚠️ **이 문서는 COM/HTS 기반 아키텍처입니다.**
+> 2026-03-04 키움 REST API 전환 결정으로 **`docs/architecture.md`가 최신 정본**입니다.
+>
+> 여전히 유효한 부분:
+> - 인증 모델 (JWT + Refresh Token + 서버사이드 AES-256-GCM) → §4
+> - WS 메시지 프로토콜 (부분 유효) → §7
+> - 보안 원칙 → §12
+>
+> 폐기된 부분:
+> - COM API / HTS 의존 → REST API로 전환
+> - 로컬 서버 단일 실행 코어 → 4 프로세스 분리
+> - 클라우드 최소 역할 → API 서버 + 데이터 서버로 확장
 
 ---
 

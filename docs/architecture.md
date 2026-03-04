@@ -1,343 +1,488 @@
-# 🧭 StockVision 아키텍처 설계(개선안)
+# StockVision 아키텍처
 
-## 🎯 목표와 제약
-- 목표: 예측(ML) + 가상 투자(거래/백테스트)로 전략을 안전하게 검증 후 실제 투자 전 성숙도 확보
-- 제약: 초기 1인 개발, 8주 MVP, 외부 유료 API 최소화, 운영 복잡도 억제
-- 원칙: MVP 우선(일봉→분봉), 단순 체결 모델→현실성 고도화, 배치→실시간 단계적 전환
-
-## 🚩 MVP 범위(현실적)
-- 데이터: 일봉 OHLCV(1~5년), 관심 종목 소수(<=50)
-- 분석: RSI/EMA/MACD 등 기본 지표 + 간단 신호 결합
-- 모델: 베이스라인(RandomForest/LogReg)부터, LSTM은 후순위
-- 거래: 가상 거래(시장가/지정가 on close), 고정 수수료·슬리피지, 포지션 1종류(롱)
-- 백테스트: 바-클로즈 체결, 일봉 단위, 성과지표(Sharpe/MDD/승률/PF)
-- 프론트: 대시보드/주식 상세/가상 거래 3페이지 + 최소 UI
+> 최종 갱신: 2026-03-04 | Phase 3 아키텍처 재설계 반영
 
 ---
 
-## 🧩 모듈 경계(도메인 중심)
-- 데이터 수집(ingestion): 외부 API → `stocks`, `stock_prices` 저장, 기본 검증/보정
-- 지표/신호(engineering): `technical_indicators`, `signals` 생성
-- 예측(ml-serving): 특징 집계 → 모델 추론 → `predictions` 저장
-- 거래(trading): 주문/체결/포지션/계정/리스크 → `virtual_*` 테이블 갱신
-- 백테스트(backtest): 전략 실행 → 성과 집계 → `backtest_results`
-- API: 조회/명령의 얇은 계층(FastAPI)
-- UI: 페이지별 서비스 모듈(React + React Query)
+## 1. 시스템 개요
 
-### 디렉터리 요약(백엔드)
-```
-backend/app/
-├── api/                  # REST 엔드포인트
-├── core/                 # 설정/DB/캐시
-├── models/               # SQLAlchemy 모델
-├── services/             # 도메인 서비스(수집/지표/ML/거래/백테스트)
-├── trading/              # 엔진(주문/체결/리스크/사이징)
-├── ml/                   # 피처/모델/서빙
-└── utils/                # 공통 유틸
-```
-
----
-
-## 🗃️ 데이터/도메인 모델(핵심)
-- Stock(id, symbol, name, exchange, sector)
-- Bar(OHLCV, date, unique(stock_id,date))
-- IndicatorSnapshot(stock_id, date, rsi_14, ema_x, macd...)
-- Signal(stock_id, date, type, score, meta)
-- Prediction(stock_id, prediction_date, target_date, y_hat, confidence, model_type)
-- Account(account_id, balance, pnl, rules)
-- Order(order_id, account_id, stock_id, side, qty, type, limit_price, status, ts)
-- Fill(fill_id, order_id, price, qty, fee, slippage)
-- Position(account_id, stock_id, qty, avg_price, unrealized_pnl)
-- Trade(가상 체결 집계: side, qty, price, fee, pnl, ts)
-- BacktestRun(id, strategy_name, window, params, metrics, created_at)
-
-인덱스 원칙: `(stock_id,date)` 복합 인덱스, 빈번 조회 필드에 적절한 보조 인덱스
-
----
-
-## 🔌 API 계약(MVP)
-- GET `/health` → `{ status: "ok" }`
-- GET `/stocks/{symbol}/bars?interval=1d&limit=500` → OHLCV
-- GET `/stocks/{symbol}/indicators?date_from&date_to` → 지표 시계열
-- GET `/signals/{symbol}?date_from&date_to` → 신호 시계열
-- GET `/predictions/{symbol}?horizon=7` → 최근 예측 결과
-- POST `/vt/accounts` → 가상계정 생성 `{ initial_balance }`
-- GET `/vt/accounts/{id}` → 계정/잔고/PNL
-- POST `/vt/orders` → `{ account_id, symbol, side:BUY|SELL, qty, type:MARKET|LIMIT, limit_price? }`
-- GET `/vt/positions?account_id=...` → 보유 포지션
-- GET `/vt/trades?account_id=...` → 체결 내역
-- POST `/backtests/run` → `{ strategy, symbols, start_date, end_date, params }`
-- GET `/backtests/{id}` → 결과/지표/에쿼티커브
-
-응답은 표준화된 ISO-8601, 금액/수량은 소수 제한, 통화/소수점 스케일 명시
-
----
-
-## 📈 지표/신호 설계
-- 지표: SMA/EMA/RSI/MACD/BBANDS, 결측 보간 금지(빈칸 유지)
-- 신호 생성: 규칙 기반(예: RSI<30 & EMA 상향) + 예측 기반(score 가중)
-- 신호 스코어: [-1,1] 범위(매도~매수), 임계값 히스테리시스 적용(채터링 방지)
-
----
-
-## 🤖 모델 서빙(MVP)
-- 특징: 과거 N일 집계(수익률, 변동성, 지표), 미래 1~5일 수익률 예측
-- 베이스라인: RandomForest/LogisticRegression
-- 데이터 누수 방지: 시계열 분리(TimeSeriesSplit), 최근 구간 홀드아웃
-- 저장: `predictions`에 y_hat, confidence, feature_meta
-- 추론 주기: 일 1회(장 마감 후 배치)
-
----
-
-## 💹 거래 엔진 설계(MVP)
-- 체결 정책: Market on Close(그날 종가±슬리피지), Limit는 종가 기준 충족 시 체결
-- 수수료: `max(고정, 비율*체결금액)` 단순 모델
-- 슬리피지: `k * 종가 * 평균스프레드비`(k 기본 1.0)
-- 포지션 사이징: 고정 위험(Risk %) 또는 ATR 기반 포지션 크기
-- 리스크 가드레일:
-  - 일 손실 한도 도달 시 당일 추가 진입 금지
-  - 종목/섹터 편중 한도
-  - 연속 손실 N회 시 전략 일시 중지
-- 상태 머신: NEW → PARTIAL_FILLED → FILLED/CANCELLED
-
----
-
-## 🔁 백테스트 엔진 설계(MVP)
-- 시간 축: 일봉 바 시퀀스, 바-클로즈에서만 의사결정/체결
-- 주문/체결: 거래 엔진 동일 로직 재사용
-- 비용/슬리피지: 거래 엔진과 동일 파라미터
-- 결과 산출: 에쿼티커브, 거래별 PnL, 지표(Sharpe/Sortino/MDD/PF/승률/손익비/Turnover)
-- 시드/재현성: 랜덤 요소 고정
-
----
-
-## 🪪 설정/환경
-- `.env`: DB_URL, DATA_PROVIDER, FEE_RATE, SLIPPAGE_K, RISK_LIMIT_DAILY 등
-- Feature Flags: `USE_PREDICTION`, `USE_RULE_SIGNALS`, `ALLOW_SHORT`, `INTRADAY_MODE`
-- 프로필: `local`, `staging`, `prod`(파라미터/리소스 차등)
-
----
-
-## 👀 관측/운영
-- 로깅: 주문/체결/에러/리스크 위반 이벤트 구조화 로그(JSON)
-- 메트릭: 요청 지연, 체결 비율, 승률, MDD, 일손익, 신호정확도, 데이터 신선도
-- 트레이싱: 백테스트 실행/거래 사이클 단위 스팬(선택)
-- 알림: 심각 에러/리스크 위반 시 Slack/Webhook
-
----
-
-## 🔐 보안(초기)
-- 로컬/개인 프로젝트 기준: 인증 생략 가능
-- 원격 배포 시: JWT + CORS 최소 설정, Rate Limit, 입력 검증
-
----
-
-## ⚙️ 성능 예산
-- API P95 < 200ms(캐시된 조회)
-- 백테스트 1전략·1종목·5년 일봉 < 5s 목표
-- 일별 일괄 작업(수집/지표/예측) < 10m
-
----
-
-## 🗺️ 단계적 로드맵(정제)
-1) 주 1
-- FastAPI 스캐폴딩, 일봉 수집(yfinance), 지표 계산, 기본 API(health/bars/indicators)
-- 경량 백테스터 스켈레톤(바-클로즈)
-
-2) 주 2
-- 규칙 기반 신호 + RF 베이스라인 예측 저장
-- 백테스트 성과지표 산출, 가상계정/주문/포지션 기본
-
-3) 주 3
-- 가상 거래 UI(계정/주문/포지션/내역), 대시보드 연결
-- 리스크 규칙(일손실/편중/연속손실) 적용
-
-4) 주 4
-- 자동 실행 스케줄(장 마감 후), 전략 파라미터 관리, 리포트 자동 생성
-
-5) 이후
-- 분봉/실시간, LSTM/GRU, WebSocket, Celery, 전략 최적화
-
----
-
-## 📜 샘플 페이로드
-```json
-// POST /vt/orders
-{
-  "account_id": 1,
-  "symbol": "AAPL",
-  "side": "BUY",
-  "qty": 50,
-  "type": "MARKET"
-}
-```
-```json
-// GET /backtests/{id}
-{
-  "id": 42,
-  "strategy": "rsi_ema_combo",
-  "period": { "start": "2021-01-01", "end": "2024-12-31" },
-  "metrics": { "sharpe": 1.1, "mdd": 0.18, "win_rate": 0.54, "pf": 1.35 },
-  "equity_curve": [{ "date": "2021-01-01", "equity": 10000000 }, ...]
-}
-```
-
----
-
-## ✅ 품질 게이트
-- 데이터 누수 유닛 테스트(시계열 분리 보장)
-- 체결/수수료/슬리피지 일관성 테스트(백테스트=가상거래)
-- 전략·파라미터 변경 시 회귀 테스트(주요 KPI 하락 경고)
-
----
-
-## 🚀 Phase 3: 로컬 브릿지 + 시스템매매 (키움 실전 연동)
-
-### 목표
-사용자가 설치파일 하나로 로컬 실행 환경을 구축하고,
-클라우드 웹 UI에서 전략을 설정하면 로컬 PC에서 키움 API로 자동 체결되는 시스템.
+AI 기반 주식 예측 + 시스템매매 자동화 플랫폼.
+사용자가 정의한 규칙을 사용자의 PC에서 자동 실행한다.
 
 **법적 포지션**: 시스템매매 (투자일임·투자자문 아님)
-- 사용자가 직접 규칙 정의 → 시스템이 실행
-- AI/시스템이 독자 판단으로 종목 선정 금지
+- 사용자가 직접 규칙 정의 → 사용자 PC에서 실행
+- 우리 서버가 매매 판단/명령을 내리지 않음
+- AI/LLM은 데이터 제공자(컨텍스트 변수) 역할만
 
 ---
 
-### 아키텍처 다이어그램
+## 2. 프로세스 아키텍처
 
-```
-Cloud (stockvision.app)                 Local PC (Windows)
-┌──────────────────────────┐           ┌─────────────────────────────────┐
-│  React 앱 (정적 호스팅)  │ ◀─ WS ──▶│  FastAPI 로컬 서버              │
-│  컨텍스트 API            │ ◀─ HTTP──▶│  localhost:8765                 │
-│  전략 템플릿 API         │           │  ├── 키움 COM API 실행 레이어   │
-│  버전 체크 API           │           │  ├── config.json (자동저장)     │
-│  하트비트 수신           │ ◀─ ping ──│  ├── logs.db (체결·오류 기록)   │
-└──────────────────────────┘           │  └── 전략 규칙 평가 엔진        │
-                                       └─────────────────────────────────┘
-```
+### 2.1 현재 (v1)
 
-**흐름 설명**
-1. 사용자: 브라우저로 `stockvision.app` 접속 → React 앱 로딩
-2. React 앱: `ws://localhost:8765/ws` 연결 시도 (브라우저 localhost 예외 허용)
-3. 설정 변경: React 앱 → HTTP POST → 로컬 서버 → `config.json` 자동 저장 (debounce 500ms)
-4. 전략 실행: 로컬 서버가 키움 COM API 호출 → 체결 결과 → WS로 React 앱에 push
-5. 하트비트: 로컬 서버 → cloud `/api/heartbeat` (5분마다 익명 UUID + 버전)
+| # | 프로세스 | 위치 | 역할 |
+|---|---------|------|------|
+| 1 | **프론트엔드** | 정적 호스팅 | React SPA |
+| 2 | **API 서버** | 클라우드 | 인증, 규칙 저장, 어드민 |
+| 3 | **데이터 서버** | 클라우드 | 시세 수집/저장 |
+| 4 | **로컬 서버** | 사용자 PC | 엔진 + 키움 주문 + 로그 (프로젝트 핵심) |
+
+### 2.2 미래 (+1 프로세스)
+
+| # | 프로세스 | 비고 |
+|---|---------|------|
+| 5 | **LLM 서버** | 시장 분석, AI 컨텍스트 생성 (데이터 서버와 별도) |
 
 ---
 
-### 설치 모델
+## 3. 전체 데이터 흐름
 
-| 항목 | 내용 |
+```
+[프론트엔드] (사용자 브라우저) — 순수 UI
+ ├── HTTPS ──→ [API 서버]
+ │              ├ 인증 (JWT)
+ │              ├ 규칙 CRUD
+ │              └ 어드민
+ │
+ └── localhost ──→ [로컬 서버]
+                    ├ JWT 전달 (로그인 직후 1회)
+                    ├ 규칙 sync (규칙 저장 직후)
+                    ├ API Key 등록
+                    ├ 로그 조회
+                    └ WS: 실시간 시세 + 체결 알림
+
+[로컬 서버] (사용자 PC) — 자립 동작
+ ├── HTTPS ──→ [API 서버]
+ │              ├ 컨텍스트 fetch (스케줄 폴링)
+ │              ├ 하트비트 전송 (주기적)
+ │              ├ 템플릿 목록 fetch
+ │              ├ JWT 자동 갱신 (Refresh Token)
+ │              └ WS: 규칙 변경 push, 컨텍스트 갱신 알림
+ │
+ ├── 키움 WS (유저 키) ──→ 실시간 시세 수신
+ └── 키움 REST (유저 키) ──→ 주문 실행
+
+[데이터 서버] (클라우드) — 내부 전용
+ └── 키움 WS (서비스 키) ──→ openapi.kiwoom.com
+     시세 수집/저장 (내부 사용, 유저 재배포 아님)
+```
+
+### 3.1 주문 흐름 (핵심)
+
+```
+1. 로컬 서버: 키움 WS로 시세 수신 (유저 키)
+2. 로컬 서버: 전략 엔진이 규칙 평가 → "매수" 판단
+3. 로컬 서버: 키움 REST로 현재가 직접 재확인 (가격 검증)
+4. 가격 일치 → 키움 REST로 주문 실행 / 불일치 → 거부 + 로그
+5. 로컬 서버: 체결 결과 → 로컬 로그 저장 (SQLite)
+6. 프론트엔드: 체결 알림 수신 (localhost WS)
+7. 프론트엔드 → API 서버: 성공/실패만 보고 (금액 미포함)
+```
+
+**가격 검증 이유**: 클라우드가 시세를 가공한다는 의혹 방지 + 오주문 방지.
+로컬 서버가 유저 키움 계정으로 직접 확인한 가격만 신뢰.
+
+### 3.2 규칙 동기화 흐름
+
+```
+방법 A (브라우저 경유): 규칙 수정 시
+  [프론트엔드] → API 서버에 저장 → localhost에 sync
+
+방법 B (WS push): 브라우저 없이
+  [API 서버] → WS push "규칙 변경됨" → [로컬 서버] 자동 fetch
+```
+
+- 규칙은 API 서버 DB에 원본, 로컬 서버에 JSON 캐시
+- 브라우저 꺼져 있어도 WS push로 규칙 자동 반영
+- WS 연결 끊김 시 캐시된 규칙으로 계속 실행
+
+---
+
+## 4. 각 프로세스 상세
+
+### 4.1 프론트엔드
+
+React SPA. 정적 호스팅 (Vercel, Nginx 등). **순수 UI**.
+
+**연결**:
+- API 서버 HTTPS: 인증, 규칙 CRUD, 어드민
+- localhost HTTP: JWT 전달, 규칙 sync, API Key 등록, 로그 조회
+- localhost WS: 실시간 시세, 체결 내역
+
+**역할**:
+- 최초 로그인 → JWT를 localhost에 전달 (이후 로컬 서버 자립)
+- 전략 규칙 CRUD → 저장 후 localhost에 sync
+- 실시간 시세 + 체결 모니터링
+- 실행 로그 열람
+- 설정 (API Key 등록, 모드 전환)
+- 어드민 (관리자만)
+
+### 4.2 API 서버
+
+FastAPI. 얇은 웹 서버.
+
+**역할**:
+- 사용자 인증 (이메일 + JWT)
+- 전략 규칙 CRUD (저장소)
+- AI 컨텍스트 중계 (데이터 서버/미래 LLM 서버에서)
+- 어드민 (유저 관리, 시스템 통계, 서비스 키 관리)
+- 하트비트 수신 (익명 통계)
+- 커뮤니티 전략 공유 (미래)
+
+**보유 데이터**:
+- 사용자 계정 (이메일 — 최소 수집)
+- 전략 규칙 (조건/지표 — 개인정보 아님)
+- 하트비트 (익명 UUID + 버전)
+
+**보유하지 않는 데이터**:
+- 키움 API Key/Secret
+- 체결 내역, 잔고, 수익률
+- 어떤 종목을 거래하는지
+
+### 4.3 데이터 서버
+
+시세 수집/저장 서비스. API 서버 뒤에 위치 (외부 직접 접근 불가).
+
+**역할**:
+- 서비스 키움 키로 시세 수신/저장
+- 히스토리컬 데이터 축적 (미래 백테스팅, LLM 학습 재료)
+- API 서버가 접근하여 데이터 조회
+
+**서비스 키움 키**: 우리 소유. 어드민 페이지에서 등록/관리.
+시세는 공개 정보이나, **유저에게 재배포하지 않음** (내부 분석용).
+유저 시세는 각자의 키움 키로 로컬에서 직접 수신.
+
+**시세 재배포 제한**: 키움 제5조③ 시세 중계 금지.
+상용화 시 코스콤 정식 라이선스로 전환 예정.
+
+### 4.4 로컬 서버 (프로젝트 핵심)
+
+사용자 PC에서 실행되는 FastAPI 서버. **프로젝트의 정수**.
+
+**역할**:
+- 키움 시세 수신 (유저 키, WS)
+- 전략 엔진 (규칙 평가 → 주문 판단)
+- 주문 전 가격 검증 (키움 REST 직접 확인)
+- 키움 주문 실행 (유저 키, REST)
+- 실행 로그 저장 (SQLite)
+- API 서버 직접 통신 (JWT 사용):
+  - AI 컨텍스트 자동 fetch (스케줄)
+  - 하트비트 전송 (주기적)
+  - 템플릿 목록 fetch
+  - WS: 규칙 변경/컨텍스트 갱신 알림 수신
+  - JWT 자동 갱신 (Refresh Token → Credential Manager)
+- 규칙 캐시 (JSON 파일)
+- 수익 리포트 생성 (커뮤니티 공유 시, 유저 선택)
+
+**배포**: 단일 .exe (PyInstaller 번들)
+**시스템 트레이**: 백그라운드 실행, 아이콘 색상으로 상태 표시
+**자동 로그인**: Refresh Token이 Credential Manager에 저장되어 PC 재부팅 후 자동 복구
+
+### 4.5 LLM 서버 (미래)
+
+데이터 서버와 별도 프로세스. GPU 연산, 스케일링 요구 다름.
+
+**역할**:
+- 데이터 서버의 시세 + 외부 데이터 (뉴스 등) 분석
+- AI 컨텍스트 생성 (감성 점수, 리스크 지표 등)
+- API 서버 뒤에 위치 (외부 직접 접근 불가)
+
+---
+
+## 5. 데이터 위치 및 법적 근거
+
+| 데이터 | 위치 | 법적 근거 |
+|--------|------|----------|
+| 키움 API Key/Secret | 로컬 (Credential Manager) | 키움 약관 제3자 위임 금지 |
+| Refresh Token | 로컬 (Credential Manager) | 자동 로그인, 자격 증명 |
+| 전략 규칙 (캐시) | 로컬 (JSON 파일) | API 서버 DB에도 평문 저장, 공유/백업 편의 |
+| 실행 로그 (체결가, 수량, 잔고) | 로컬 (SQLite) | 개인 금융정보, OS 레벨 보호 |
+| 설정 (모드 등) | 로컬 (config.json) | — |
+| 전략 규칙 (원본) | 클라우드 DB | 개인정보 아님 (조건/지표) |
+| 사용자 계정 | 클라우드 DB | 이메일만 최소 수집 |
+| 시세 데이터 | 클라우드 (데이터 서버) | 공개 정보 (내부 사용) |
+
+### 5.1 로컬 저장 구조
+
+```
+%APPDATA%\StockVision\
+├── strategies.json     # 전략 규칙 캐시 (평문 JSON)
+├── config.json         # 모드, UI 설정
+├── logs.db             # SQLite — 체결 로그, 오류 로그 (암호화 안 함)
+└── Windows Credential Manager:
+    ├── StockVision/app_key          # 키움 API Key
+    ├── StockVision/app_secret       # 키움 API Secret
+    └── StockVision/refresh_token    # JWT Refresh Token (자동 로그인)
+```
+
+### 5.2 키 분리
+
+| 키 | 소유 | 위치 | 용도 |
+|----|------|------|------|
+| 서비스 키 | 우리 (운영자) | 클라우드 데이터 서버 | 시세 수집 (내부) |
+| 유저 키 | 각 사용자 | 로컬 PC | 시세 수신 + 주문 실행 |
+
+### 5.3 개인정보 원칙
+
+- 우리 클라우드에 **개인 금융정보 미보유**
+- 체결 내역, 잔고, 수익률 → 로컬에만 존재
+- **"공유하지 않으면 우리도 모른다"** 가 구조적으로 보장됨
+- 커뮤니티 수익 공유 → 유저 자발적 업로드 (로컬에서 계산 → 유저가 공개 선택)
+- 공유 데이터 활용: 이용약관에 명시 (서비스 개선, 통계, AI 학습)
+
+---
+
+## 6. 보안 모델
+
+### 6.1 인증
+
+| 구간 | 방식 |
 |------|------|
-| 배포 형태 | 단일 `.exe` (PyInstaller 번들) |
-| 포함 요소 | FastAPI 서버 + 의존성 + 기본 config.json 템플릿 |
-| 제외 요소 | React 앱 (cloud 호스팅, exe에 포함 안 함) |
-| 설치 후 | 실행하면 백그라운드에서 localhost:8765 서버 시작 |
-| 업데이트 | 로컬 서버가 cloud `/api/version` 폴링 → 신버전 알림 |
+| 프론트 ↔ API 서버 | 이메일 + JWT (1h) + Refresh Token (7~30d) |
+| 프론트 ↔ 로컬 서버 | localhost (인증 불필요, 외부 접근 불가) |
+| 로컬 서버 ↔ API 서버 | JWT (프론트에서 전달받음, Refresh Token으로 자동 갱신) |
+| 로컬 서버 → 키움 | OAuth Bearer Token (24h, 유저 키로 발급) |
+| 데이터 서버 → 키움 | OAuth Bearer Token (24h, 서비스 키로 발급) |
 
----
+**로컬 서버 자동 로그인**: Refresh Token을 Credential Manager에 보관.
+PC 재부팅 시 Refresh Token으로 새 JWT 자동 발급 → 브라우저 없이 복구.
+Refresh Token 만료 시에만 브라우저 재로그인 필요.
 
-### 데이터 저장 모델
+### 6.2 암호화
 
-```
-로컬 PC (%APPDATA%\StockVision\)
-├── token.dat           # Refresh Token (OS 파일 권한 보호)
-├── local_secrets.json  # 계좌번호만 (평문, 절대 클라우드 업로드 금지)
-├── logs.db (SQLite)    # 체결 로그, 오류 로그, 전략 실행 이력
-└── kiwoom_cache/       # 당일 시세 캐시 (선택)
-
-Cloud DB
-├── users               # 이메일, password_hash (Argon2id), email_verified
-├── refresh_tokens      # SHA-256(token), 30일 TTL, Rotation
-├── config_blobs        # 서버사이드 AES-256-GCM 암호화 blob
-└── heartbeat           # UUID, 버전, OS, 타임스탬프만 (개인정보 없음)
-```
-
-**자동 저장 규칙**
-- 설정 변경 → 500ms debounce → `PUT /api/v1/config` (평문 JSON 전송)
-- 서버가 AES-256-GCM 암호화 후 `config_blobs`에 저장
-- 저장 버튼 없음, 사용자가 저장을 신경 쓸 필요 없음
-- 앱 재시작 시 `GET /api/v1/config` → 서버 복호화 → 설정 로드
-
----
-
-### 클라우드 역할 (최소)
-
-| API | 용도 |
-|-----|------|
-| `POST /api/auth/register` | 회원가입 (이메일 인증 메일 발송) |
-| `POST /api/auth/login` | 이메일+비밀번호 로그인 → JWT (24h) + Refresh Token (30d) |
-| `POST /api/auth/refresh` | Refresh Token → 새 JWT + 새 Refresh Token (Rotation) |
-| `POST /api/auth/logout` | Refresh Token 무효화 |
-| `GET /api/version` | 최신 버전 번호 반환 |
-| `GET /api/context` | 서버에서 계산한 시장 컨텍스트 변수 (RSI, 변동성 등) |
-| `GET /api/templates` | 전략 템플릿 목록 |
-| `POST /api/heartbeat` | 익명 UUID + 버전 수신 (서비스 현황 파악용) |
-| `PUT /api/v1/config` | 설정 업로드 (서버가 AES-256-GCM 암호화 후 저장) |
-| `GET /api/v1/config` | 설정 다운로드 (서버가 복호화 후 평문 JSON 반환) |
-
-클라우드는 **API 키, 체결 내역, 계좌번호, 프로파일 평문 저장 금지** (G5 제5조② 준수)
-
----
-
-### 인증 모델
-
-**클라우드 Auth** (이메일 + 비밀번호) + **서버사이드 AES-256-GCM 설정 암호화**
-
-| 구분 | 인증 여부 | 역할 |
-|------|:--------:|------|
-| 클라우드 (stockvision.app) | ✅ 필요 | 이메일+비밀번호(Argon2id) → JWT 발급, 프로파일 식별 |
-| 로컬 서버 (localhost:8765) | ❌ 불필요 | localhost-only 수신, 외부 접근 불가 |
-
-**설정 암호화 (서버사이드):**
-- 서버가 `CONFIG_ENCRYPTION_KEY` (AES-256-GCM)로 설정 blob 암호화/복호화
-- 클라이언트는 평문 JSON 송수신 — 암호화 로직 없음
-- DB 직접 접근 시에도 CONFIG_ENCRYPTION_KEY 없으면 복호화 불가
-- 비밀번호 재설정 시 설정 데이터에 영향 없음 (서버 키로 암호화)
-- 법적 근거: [개인정보보호법 제29조](https://www.law.go.kr/법령/개인정보보호법), 안전성확보조치기준 §10
-
-**키움 인증:** 영웅문 HTS에 위임 (ID/PW/공동인증서는 우리 앱 미보관)
-
----
-
-### Phase 3 스펙 목록
-
-| 스펙 | 파일 | 상태 |
-|------|------|------|
-| 로컬 브릿지 서버 | `spec/local-bridge/spec.md` | 초안 완료 |
-| 키움 API 연동 | `spec/kiwoom-integration/spec.md` | 초안 완료 |
-| 전략 빌더 UI | `spec/strategy-builder/spec.md` | 초안 완료 |
-| 컨텍스트 클라우드 | `spec/context-cloud/spec.md` | 초안 완료 |
-| 실행 엔진 | `spec/execution-engine/spec.md` | 초안 완료 |
-| 사용자 대시보드 | `spec/user-dashboard/spec.md` | 초안 완료 |
-| 포트폴리오 | `spec/portfolio/spec.md` | 초안 완료 |
-| 체결 로그 | `spec/execution-log/spec.md` | 초안 완료 |
-| 알림 | `spec/notification/spec.md` | 초안 완료 |
-| 온보딩 | `spec/onboarding/spec.md` | 초안 완료 |
-| 전략 템플릿 | `spec/strategy-template/spec.md` | 초안 완료 |
-| 관리자 대시보드 | `spec/admin-dashboard/spec.md` | 초안 완료 |
-
----
-
-### Phase 3 스펙 목록 (auth 추가)
-
-| 스펙 | 파일 | 상태 |
-|------|------|------|
-| **인증** | `spec/auth/spec.md` | ✅ 업데이트 완료 |
-
-### 보류/미래 계획
-
-| 항목 | 이유 |
+| 대상 | 방식 |
 |------|------|
-| 코스콤 연동 | 로컬 모델 전환으로 우선순위 하락, Phase 4+ |
-| 클라우드 VM 전략 실행 | 미래 계획 (멀티 사용자 확장 시) |
-| 수익화 모델 | 미래 계획 |
+| API Key/Secret | Windows Credential Manager (DPAPI) |
+| Refresh Token | Windows Credential Manager (DPAPI) |
+| 전략 규칙 캐시 | 평문 JSON (클라우드 DB에도 평문, 암호화 불필요) |
+| 체결 로그 | 평문 SQLite (OS 레벨 보호 위임) |
+| 클라우드 설정 blob | AES-256-GCM (서버사이드) |
+| 비밀번호 | Argon2id 해싱 |
 
 ---
 
-### 📋 미완료 리서치 항목
+## 7. 신호등 시스템
 
-- [ ] **개인정보 제외 수집 가능 영역 조사** — 개인정보보호법 기준, 익명 UUID 하트비트·집계 통계·오류 로그 수집의 법적 허용 범위 확인
-  - 파일: `docs/research/data-privacy-research.md` (미작성)
-  - 우선순위: Phase 3 배포 전 필수
+### 7.1 프론트엔드 (3개)
+
+| 신호등 | 확인 방법 |
+|--------|----------|
+| 🟢🔴 API 서버 | 프론트가 직접 health check |
+| 🟢🔴 키움 프록시 (로컬) | API 서버가 하트비트로 판단, 또는 프론트가 localhost 직접 확인 |
+| 🟢🔴 키움 API | 로컬 서버가 토큰 유효성/마지막 호출 상태 보고 |
+
+### 7.2 트레이 아이콘
+
+```
+아이콘 색상 = 전체 상태 요약
+  🟢 초록 = 전부 정상 (API 서버 + 키움 + 엔진)
+  🟡 노랑 = 부분 연결 (키움 미연결, JWT 만료 등)
+  🔴 빨강 = 오류 또는 전체 미연결
+
+더블클릭: 브라우저에서 대시보드 열기
+
+호버 툴팁: "StockVision - 🟢 정상 | 엔진: 가동 | 규칙: 5 | 체결: 3"
+
+우클릭 메뉴:
+  ┌──────────────────────────┐
+  │ StockVision v1.0         │  (비활성)
+  │ 🟢 정상 운영 중            │  (상태 텍스트)
+  ├──────────────────────────┤
+  │ 대시보드 열기              │  → webbrowser.open(frontend)
+  │ 엔진 시작/중지             │  → 토글
+  ├──────────────────────────┤
+  │ 오늘 체결: 3건             │  (비활성)
+  │ 활성 규칙: 5개             │  (비활성)
+  ├──────────────────────────┤
+  │ 종료                      │
+  └──────────────────────────┘
+
+트레이 = 상태 확인 + 최소 제어
+브라우저 = 전략 설정, 로그, 관리 등 모든 복잡한 UI
+```
+
+---
+
+## 8. 통신 프로토콜
+
+### 8.1 프론트엔드 → API 서버 (HTTPS)
+
+```
+POST /api/v1/auth/register      회원가입
+POST /api/v1/auth/login         로그인 → JWT + Refresh Token
+POST /api/v1/auth/refresh       토큰 갱신
+GET  /api/v1/rules              내 전략 규칙 조회
+POST /api/v1/rules              규칙 생성
+PUT  /api/v1/rules/:id          규칙 수정
+DEL  /api/v1/rules/:id          규칙 삭제
+GET  /api/v1/admin/*            어드민 (role=admin)
+```
+
+### 8.2 프론트엔드 → 로컬 서버 (localhost)
+
+```
+POST /api/auth/token            JWT + Refresh Token 전달 (로그인 직후)
+POST /api/config/kiwoom         API Key 등록
+GET  /api/config                설정 조회
+PATCH /api/config               설정 변경
+POST /api/rules/sync            규칙 동기화 (규칙 저장 직후)
+GET  /api/status                서버 + 키움 + 엔진 상태
+GET  /api/logs                  체결 로그 조회
+POST /api/strategy/start        전략 엔진 시작
+POST /api/strategy/stop         전략 엔진 중지
+WS   /ws                       실시간 시세 + 체결 이벤트
+```
+
+### 8.3 로컬 서버 → API 서버 (HTTPS, JWT 인증)
+
+```
+GET  /api/v1/context            AI 컨텍스트 fetch (스케줄)
+POST /api/v1/heartbeat          하트비트 전송 (주기적)
+GET  /api/v1/templates          전략 템플릿 목록 fetch
+POST /api/v1/auth/refresh       JWT 자동 갱신
+WS   /ws                       규칙 변경 push, 컨텍스트 갱신 알림, 시스템 공지
+```
+
+---
+
+## 9. 어드민 페이지
+
+### 볼 수 있는 것
+
+| 정보 | 소스 |
+|------|------|
+| 유저 목록 (이메일/닉네임) | API 서버 DB |
+| 접속 상태 (온/오프) | 하트비트 |
+| 저장된 규칙 내용 | API 서버 DB |
+| 시세 데이터 | 데이터 서버 |
+| 시스템 상태 | 서버 모니터링 |
+| 서비스 키움 키 관리 | 데이터 서버 설정 |
+
+### 볼 수 없는 것
+
+- 체결 내역, 잔고, 수익률 (로컬에만 존재)
+- 거래량, 거래 종목 (로컬에만 존재)
+
+---
+
+## 10. 온보딩 플로우
+
+```
+1. stockvision.app 회원가입 (이메일 인증)
+2. 키움증권 계좌 개설 (없으면)
+3. 키움 홈페이지에서 REST API 신청 → App Key/Secret 발급
+4. 로컬 서버 설치 (.exe 실행)
+5. 웹 대시보드에서 App Key/Secret 입력 → localhost로 전달 → Credential Manager 저장
+6. 완료 — HTS 설치 불필요
+```
+
+---
+
+## 11. 에러 처리
+
+| 상황 | 처리 |
+|------|------|
+| API 서버 장애 | 로컬 서버 캐시된 규칙으로 계속 실행 |
+| 키움 토큰 만료 | 로컬 서버 자동 갱신, 실패 시 트레이 알림 |
+| 키움 API 장애 | 주문 재시도 3회 → 실패 시 로그 + 알림 |
+| 주문 가격 불일치 | 주문 거부 + 로그 기록 (가격 검증) |
+| 로컬 서버 재시작 | Refresh Token으로 자동 로그인, JSON에서 규칙 복원 |
+| WS 연결 끊김 | 자동 재연결 (1s → 5s → 30s 백오프) |
+
+---
+
+## 12. 로드맵
+
+### v1 (현재 목표)
+
+- 로컬 서버 (엔진 + 키움 REST + 로그 + 트레이)
+- API 서버 (인증 + 규칙 CRUD + 어드민 기본)
+- 데이터 서버 (시세 수집/저장)
+- 프론트엔드 (규칙 관리 + 시세 + 신호등 + 체결)
+- 모의투자 모드 (키움 모의투자 API)
+- 약관 (이용약관, 개인정보처리방침, 투자 면책)
+
+### v2 (확장)
+
+- 자동 업데이트 (로컬 서버)
+- 백테스팅 (데이터 서버 히스토리 활용)
+- 알림 확장 (이메일, 푸시)
+- 커뮤니티 전략 공유 + 수익 인증
+
+### v3+ (상용화)
+
+- LLM 서버 (시장 분석, AI 컨텍스트)
+- 코스콤 연동 (정식 시세 라이선스)
+- 복수 증권사 지원 (한투, KB 등)
+- 크로스 플랫폼 (Mac/Linux)
+- 과금 모델
+- 키움 약관 해소 시 → 프록시 제거, 클라우드 직접 주문
+
+---
+
+## 13. Phase 1-2 기술 상세 (기존)
+
+> Phase 1-2에서 구축한 백엔드 기술 상세는 여전히 유효함.
+> 클라우드 API 서버 (`backend/`)의 기반 기술.
+
+### 데이터/도메인 모델
+
+- Stock(id, symbol, name, exchange, sector)
+- Bar(OHLCV, date)
+- IndicatorSnapshot(rsi_14, ema, macd...)
+- Signal(type, score)
+- Prediction(y_hat, confidence, model_type)
+- Account, Order, Fill, Position, Trade (가상 거래)
+- BacktestRun(strategy, params, metrics)
+
+### ML 모델
+
+- 베이스라인: RandomForest/LogisticRegression
+- 특징: 과거 N일 집계 (수익률, 변동성, 지표)
+- 추론 주기: 일 1회 (장 마감 후)
+- 데이터 누수 방지: TimeSeriesSplit
+
+### 지표/신호
+
+- SMA/EMA/RSI/MACD/BBANDS
+- 신호 스코어: [-1,1] 범위, 히스테리시스 적용
+
+### 가상 거래 엔진
+
+- 체결: Market on Close, Limit 종가 기준
+- 수수료: max(고정, 비율*체결금액)
+- 리스크: 일손실 한도, 종목 편중, 연속 손실 제한
+
+### 성능 예산
+
+- API P95 < 200ms
+- 백테스트 1전략·1종목·5년 < 5s
+- 일별 배치 < 10m
+
+---
+
+## 14. 약관 요구사항
+
+### 이용약관
+
+- 서비스 성격: 시스템매매 도구 (투자자문/일임 아님)
+- 투자 손실 면책: 사용자 규칙에 의한 매매 결과는 사용자 책임
+- 커뮤니티 데이터 활용: 공유된 전략/수익 데이터는 서비스 개선, 통계, AI 학습에 활용 가능
+- 서비스 중단: 클라우드 장애 시 로컬 서버는 캐시 기반 독립 동작
+
+### 개인정보처리방침
+
+- 수집 항목: 이메일 (최소 수집)
+- 미수집: 금융정보, 거래내역, 계좌정보
+- 로컬 저장 데이터는 수집/전송 대상 아님
+- 하트비트: 익명 UUID + 버전 (개인정보 아님)
+
+### 키움 약관 준수
+
+- 제3자 위임 금지: API Key는 사용자 PC에만 저장
+- 제5조③ 시세 중계 금지: 서비스 키 시세는 내부 분석용, 유저 재배포 안 함
+- 유저 시세는 각자 키움 키로 직접 수신
+
+---
+
+**마지막 갱신**: 2026-03-04
