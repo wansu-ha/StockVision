@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { rulesApi, TradingRule, Condition, RuleBody } from '../services/rules'
+import { rulesApi } from '../services/rules'
+import type { TradingRule, Condition, RuleBody } from '../services/rules'
 import ConditionRow from '../components/ConditionRow'
 import RuleList from '../components/RuleList'
 

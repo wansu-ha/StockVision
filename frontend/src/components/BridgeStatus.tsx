@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { dashboardApi, DashboardData } from '../services/dashboard'
+import { dashboardApi } from '../services/dashboard'
+import type { DashboardData } from '../services/dashboard'
 
 export default function BridgeStatus() {
   const { data, isError } = useQuery({

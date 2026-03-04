@@ -1,4 +1,4 @@
-import { Condition, Variable } from '../services/rules'
+import type { Condition, Variable } from '../services/rules'
 
 function isMet(current: number, op: string, value: number): boolean {
   switch (op) {

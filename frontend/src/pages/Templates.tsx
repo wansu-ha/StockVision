@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { templatesApi, StrategyTemplate } from '../services/templates'
+import { templatesApi } from '../services/templates'
+import type { StrategyTemplate } from '../services/templates'
 import TemplateCard from '../components/TemplateCard'
 
 export default function Templates() {

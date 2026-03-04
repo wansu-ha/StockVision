@@ -1,4 +1,4 @@
-import { StrategyTemplate } from '../services/templates'
+import type { StrategyTemplate } from '../services/templates'
 
 interface Props {
   template: StrategyTemplate

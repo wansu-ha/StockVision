@@ -1,4 +1,4 @@
-import { TradingRule } from '../services/rules'
+import type { TradingRule } from '../services/rules'
 
 interface Props {
   rules: TradingRule[]

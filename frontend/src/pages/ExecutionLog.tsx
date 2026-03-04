@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { logsApi, ExecutionLog } from '../services/logs'
+import { logsApi } from '../services/logs'
+import type { ExecutionLog as ExecutionLogEntry } from '../services/logs'
 
 const STATUS_STYLE: Record<string, string> = {
   FILLED:  'bg-green-100 text-green-800',
@@ -59,7 +60,7 @@ export default function ExecutionLog() {
     refetchInterval: 10_000,
   })
 
-  const logs: ExecutionLog[] = data?.data ?? []
+  const logs: ExecutionLogEntry[] = data?.data ?? []
   const sum = summary?.data
 
   return (
