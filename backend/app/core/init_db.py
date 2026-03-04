@@ -1,5 +1,6 @@
 from app.core.database import engine, Base
 from app.models import Stock, StockPrice, TechnicalIndicator, VirtualAccount, VirtualTrade, VirtualPosition, AutoTradingRule, BacktestResult
+from app.models.auth import User, RefreshToken, EmailVerificationToken, PasswordResetToken, ConfigBlob  # noqa: F401
 
 def init_db():
     """데이터베이스 테이블 생성"""

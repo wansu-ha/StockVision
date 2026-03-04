@@ -290,6 +290,22 @@ app.include_router(trading_router, prefix="/api/v1", tags=["trading"])
 from app.api import logs
 app.include_router(logs.router, prefix="/api/v1/logs", tags=["logs"])
 
+# 인증 + 설정 라우터 등록
+from app.api.auth import router as auth_router
+from app.api.config import router as config_router
+from app.api.context import router as context_router
+from app.api.portfolio import router as portfolio_router
+from app.api.onboarding import router as onboarding_router
+from app.api.templates import router as templates_router
+from app.api.admin import router as admin_router
+app.include_router(auth_router)
+app.include_router(config_router)
+app.include_router(context_router)
+app.include_router(portfolio_router)
+app.include_router(onboarding_router)
+app.include_router(templates_router)
+app.include_router(admin_router)
+
 # 캐시 스케줄러 초기화 및 시작
 @app.on_event("startup")
 async def startup_event():

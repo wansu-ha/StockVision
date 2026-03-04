@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
+import NotificationCenter from './NotificationCenter'
+import { useLocalBridgeWS } from '../hooks/useLocalBridgeWS'
 
 interface LayoutProps {
   children: ReactNode
@@ -7,6 +9,7 @@ interface LayoutProps {
 
 const Layout = ({ children }: LayoutProps) => {
   const location = useLocation()
+  useLocalBridgeWS()
 
   const isActive = (path: string) => {
     if (path === '/') return location.pathname === '/'
@@ -31,6 +34,7 @@ const Layout = ({ children }: LayoutProps) => {
             </div>
             
             <div className="flex items-center space-x-2">
+              <NotificationCenter />
               <Link
                 to="/"
                 className={`px-6 py-3 rounded-2xl text-sm font-semibold transition-all duration-200 ${
@@ -60,6 +64,36 @@ const Layout = ({ children }: LayoutProps) => {
                 }`}
               >
                 가상 거래
+              </Link>
+              <Link
+                to="/strategy"
+                className={`px-6 py-3 rounded-2xl text-sm font-semibold transition-all duration-200 ${
+                  isActive('/strategy')
+                    ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                }`}
+              >
+                전략
+              </Link>
+              <Link
+                to="/portfolio"
+                className={`px-6 py-3 rounded-2xl text-sm font-semibold transition-all duration-200 ${
+                  isActive('/portfolio')
+                    ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                }`}
+              >
+                포트폴리오
+              </Link>
+              <Link
+                to="/logs"
+                className={`px-6 py-3 rounded-2xl text-sm font-semibold transition-all duration-200 ${
+                  isActive('/logs')
+                    ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                }`}
+              >
+                실행 로그
               </Link>
             </div>
           </div>

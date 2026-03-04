@@ -13,6 +13,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { Card, CardBody, CardHeader, Chip, Button } from '@heroui/react'
 import { stockApi } from '../services/api'
+import BridgeStatus from '../components/BridgeStatus'
 import StockSearch from '../components/StockSearch'
 import LiveStockCard from '../components/LiveStockCard'
 import AIMarketOverview from '../components/AIMarketOverview'
@@ -102,6 +103,10 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+      {/* 브릿지 상태 */}
+      <div className="bg-white border-b border-gray-100 px-6 py-2 flex justify-end">
+        <BridgeStatus />
+      </div>
       {/* Hero Header */}
       <div className="bg-white shadow-lg border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
