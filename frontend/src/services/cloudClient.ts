@@ -34,7 +34,7 @@ client.interceptors.response.use(
       const rt = localStorage.getItem(RT_KEY)
       if (rt) {
         try {
-          const { data } = await axios.post(`${CLOUD_URL}/api/auth/refresh`, { refresh_token: rt })
+          const { data } = await axios.post(`${CLOUD_URL}/api/v1/auth/refresh`, { refresh_token: rt })
           const newJwt = data.data?.jwt ?? data.jwt
           const newRt = data.data?.refresh_token ?? data.refresh_token
           if (!newJwt || !newRt) throw new Error('Invalid refresh response')
@@ -53,36 +53,36 @@ client.interceptors.response.use(
   },
 )
 
-/** 인증 — /api/auth/ */
+/** 인증 — /api/v1/auth/ */
 export const cloudAuth = {
   register: (email: string, password: string, nickname?: string) =>
-    client.post('/api/auth/register', { email, password, nickname }).then((r) => r.data),
+    client.post('/api/v1/auth/register', { email, password, nickname }).then((r) => r.data),
   login: (email: string, password: string) =>
-    client.post('/api/auth/login', { email, password }).then((r) => r.data),
+    client.post('/api/v1/auth/login', { email, password }).then((r) => r.data),
   refresh: (refreshToken: string) =>
-    client.post('/api/auth/refresh', { refresh_token: refreshToken }).then((r) => r.data),
+    client.post('/api/v1/auth/refresh', { refresh_token: refreshToken }).then((r) => r.data),
   verifyEmail: (email: string, code: string) =>
-    client.post('/api/auth/verify-email', { email, code }).then((r) => r.data),
+    client.post('/api/v1/auth/verify-email', { email, code }).then((r) => r.data),
   updateProfile: (nickname: string) =>
-    client.patch('/api/auth/profile', { nickname }).then((r) => r.data),
+    client.patch('/api/v1/auth/profile', { nickname }).then((r) => r.data),
 }
 
-/** 규칙 CRUD — /api/v1/trading/rules */
+/** 규칙 CRUD — /api/v1/rules */
 export const cloudRules = {
   list: () =>
-    client.get<{ data: Rule[] }>('/api/v1/trading/rules').then((r) => r.data.data ?? r.data),
+    client.get<{ data: Rule[] }>('/api/v1/rules').then((r) => r.data.data ?? r.data),
   create: (payload: CreateRulePayload) =>
-    client.post<{ data: Rule }>('/api/v1/trading/rules', payload).then((r) => r.data.data ?? r.data),
+    client.post<{ data: Rule }>('/api/v1/rules', payload).then((r) => r.data.data ?? r.data),
   update: (id: number, payload: UpdateRulePayload) =>
-    client.patch<{ data: Rule }>(`/api/v1/trading/rules/${id}`, payload).then((r) => r.data.data ?? r.data),
+    client.patch<{ data: Rule }>(`/api/v1/rules/${id}`, payload).then((r) => r.data.data ?? r.data),
   remove: (id: number) =>
-    client.delete(`/api/v1/trading/rules/${id}`).then((r) => r.data),
+    client.delete(`/api/v1/rules/${id}`).then((r) => r.data),
 }
 
-/** 시장 컨텍스트 — /api/context */
+/** 시장 컨텍스트 — /api/v1/context */
 export const cloudContext = {
   get: () =>
-    client.get<{ data: MarketContextData }>('/api/context').then((r) => r.data.data ?? r.data),
+    client.get<{ data: MarketContextData }>('/api/v1/context').then((r) => r.data.data ?? r.data),
 }
 
 /** 헬스 체크 — /health */
