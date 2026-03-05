@@ -1,94 +1,140 @@
-"""
-WebSocket 라우터: React ↔ 로컬 서버 실시간 통신
+"""WebSocket 라우터.
 
-수신 타입 (React → 로컬):
-  strategy_toggle  { rule_id, is_active }
-  config_update    { key, value }
-  jwt_unlock       { jwt }
+WS /ws — 실시간 가격/주문/잔고 스트림
 
-송신 타입 (로컬 → React):
-  execution_result { ... }
-  kiwoom_status    { connected, mode }
-  alert            { level, message }
-  config_loaded    {}
+클라이언트가 연결하면 ConnectionManager에 등록되어
+브로드캐스트 메시지를 수신할 수 있다.
+
+메시지 형식:
+  {
+    "type": "price_update" | "execution" | "status_change" | "system",
+    "data": { ... }
+  }
+
+type 값 규칙:
+  - price_update : 호가/현재가 갱신 이벤트 (QuoteEvent)
+  - execution    : 주문 체결 이벤트
+  - status_change: 주문 상태 변경 이벤트
+  - system       : 서버 시스템 메시지 (연결, 에러 등)
+
+side 값: "buy" | "sell" (소문자)
 """
+from __future__ import annotations
+
+import asyncio
 import json
 import logging
-from typing import Set
+from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 logger = logging.getLogger(__name__)
-router = APIRouter(tags=["ws"])
 
-_clients: Set[WebSocket] = set()
+router = APIRouter()
+
+# WS 메시지 타입 상수 — 브로드캐스트 시 이 상수를 사용한다
+WS_TYPE_PRICE_UPDATE = "price_update"    # 호가/현재가 갱신 (QuoteEvent)
+WS_TYPE_EXECUTION = "execution"          # 체결 이벤트
+WS_TYPE_STATUS_CHANGE = "status_change"  # 주문 상태 변경
 
 
-async def broadcast(message: dict) -> None:
-    """연결된 모든 React 클라이언트에 메시지 전송"""
-    dead = set()
-    for ws in _clients:
-        try:
-            await ws.send_text(json.dumps(message, ensure_ascii=False))
-        except Exception:
-            dead.add(ws)
-    _clients.difference_update(dead)
+class ConnectionManager:
+    """WebSocket 연결 관리자.
+
+    연결된 모든 클라이언트에 메시지를 브로드캐스트한다.
+    """
+
+    def __init__(self) -> None:
+        self._connections: list[WebSocket] = []
+
+    async def connect(self, ws: WebSocket) -> None:
+        """클라이언트 연결을 수락하고 목록에 추가한다."""
+        await ws.accept()
+        self._connections.append(ws)
+        logger.info("WebSocket 클라이언트 연결: %s (총 %d개)", id(ws), len(self._connections))
+
+    def disconnect(self, ws: WebSocket) -> None:
+        """클라이언트 연결을 목록에서 제거한다."""
+        if ws in self._connections:
+            self._connections.remove(ws)
+        logger.info("WebSocket 클라이언트 해제: %s (총 %d개)", id(ws), len(self._connections))
+
+    async def broadcast(self, message: dict[str, Any]) -> None:
+        """모든 연결된 클라이언트에 메시지를 전송한다.
+
+        전송 실패한 클라이언트는 목록에서 제거한다.
+        """
+        if not self._connections:
+            return
+
+        text = json.dumps(message, ensure_ascii=False)
+        broken: list[WebSocket] = []
+
+        for ws in list(self._connections):
+            try:
+                await ws.send_text(text)
+            except Exception as e:
+                logger.debug("브로드캐스트 실패 (클라이언트 제거): %s", e)
+                broken.append(ws)
+
+        for ws in broken:
+            self.disconnect(ws)
+
+    def connection_count(self) -> int:
+        """현재 연결된 클라이언트 수를 반환한다."""
+        return len(self._connections)
+
+
+# 전역 연결 관리자 (앱 전체에서 공유)
+manager = ConnectionManager()
+
+
+def get_connection_manager() -> ConnectionManager:
+    """전역 ConnectionManager 인스턴스를 반환한다."""
+    return manager
 
 
 @router.websocket("/ws")
-async def websocket_endpoint(ws: WebSocket):
-    await ws.accept()
-    _clients.add(ws)
-    logger.info(f"WS 연결: {ws.client} (총 {len(_clients)}개)")
+async def websocket_endpoint(ws: WebSocket) -> None:
+    """WebSocket 엔드포인트.
 
+    연결 즉시 welcome 메시지를 전송하고,
+    클라이언트 메시지를 수신하여 에코/처리한다.
+    """
+    await manager.connect(ws)
     try:
+        # 연결 확인 메시지
+        await ws.send_json(
+            {
+                "type": "system",
+                "data": {
+                    "message": "StockVision 로컬 서버에 연결되었습니다.",
+                    "connections": manager.connection_count(),
+                },
+            }
+        )
+
+        # 메시지 수신 루프
         while True:
-            raw = await ws.receive_text()
             try:
+                raw = await asyncio.wait_for(ws.receive_text(), timeout=60.0)
                 msg = json.loads(raw)
-            except json.JSONDecodeError:
-                continue
+                msg_type = msg.get("type", "unknown")
 
-            msg_type = msg.get("type")
-            data = msg.get("data", {})
+                # ping 처리
+                if msg_type == "ping":
+                    await ws.send_json({"type": "pong", "data": {}})
+                else:
+                    # 기타 메시지는 로깅만 (추후 확장)
+                    logger.debug("WebSocket 수신: %s", msg_type)
 
-            if msg_type == "jwt_unlock":
-                await _handle_jwt_unlock(data.get("jwt", ""))
-            elif msg_type == "strategy_toggle":
-                await _handle_strategy_toggle(data)
-            elif msg_type == "config_update":
-                await _handle_config_update(data)
-            else:
-                logger.warning(f"알 수 없는 WS 메시지 타입: {msg_type}")
+            except asyncio.TimeoutError:
+                # 60초 동안 메시지 없으면 ping 전송
+                await ws.send_json({"type": "ping", "data": {}})
 
     except WebSocketDisconnect:
-        logger.info(f"WS 연결 해제: {ws.client}")
-    finally:
-        _clients.discard(ws)
-
-
-async def _handle_jwt_unlock(jwt: str) -> None:
-    from cloud.auth_client import AuthClient
-    from storage.config_manager import ConfigManager
-    from main import config_manager
-
-    try:
-        auth = AuthClient()
-        cloud_config = auth.get_config(jwt)
-        config_manager.load(cloud_config, jwt=jwt)
-        await broadcast({"type": "config_loaded", "data": {}})
-        logger.info("JWT unlock 완료 — 설정 로드됨")
+        logger.info("WebSocket 클라이언트 정상 해제")
     except Exception as e:
-        await broadcast({"type": "alert", "data": {"level": "error", "message": f"설정 로드 실패: {e}"}})
-
-
-async def _handle_strategy_toggle(data: dict) -> None:
-    from main import config_manager
-    rule_id   = data.get("rule_id")
-    is_active = data.get("is_active", False)
-    config_manager.set_rule_active(rule_id, is_active)
-
-
-async def _handle_config_update(data: dict) -> None:
-    from main import config_manager
-    config_manager.update(data)
+        logger.error("WebSocket 오류: %s", e)
+    finally:
+        manager.disconnect(ws)

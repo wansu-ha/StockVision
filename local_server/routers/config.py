@@ -1,133 +1,94 @@
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+"""설정 라우터.
 
-router = APIRouter(prefix="/api", tags=["config"])
+GET  /api/config          — 현재 설정 조회 (민감 정보 마스킹)
+PATCH /api/config         — 설정 변경 후 저장
+POST /api/config/kiwoom   — 키움 API Key + 계좌번호를 keyring에 저장
+"""
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+from fastapi import APIRouter, HTTPException, status
+from pydantic import BaseModel, Field
+
+from local_server.storage.config_store import read_config, update_config
+from local_server.storage.credential import (
+    has_credential,
+    KEY_APP_KEY,
+    save_api_keys,
+    save_account_no,
+)
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
 
 
-class UnlockBody(BaseModel):
-    jwt: str
+class ConfigUpdateRequest(BaseModel):
+    """설정 업데이트 요청 바디 (부분 업데이트 지원)."""
+
+    updates: dict[str, Any]
 
 
-@router.get("/config")
-def get_config():
-    from storage.config_manager import get_config_manager
-    return {"success": True, "data": get_config_manager().get_all()}
+class KiwoomConfigRequest(BaseModel):
+    """키움 API Key 등록 요청 바디."""
+
+    app_key: str = Field(..., description="키움 앱 키")
+    app_secret: str = Field(..., description="키움 앱 시크릿")
+    account_no: str = Field(..., description="키움 계좌번호 (예: 12345678901)")
 
 
-@router.patch("/config")
-def patch_config(patch: dict):
-    from storage.config_manager import get_config_manager
-    get_config_manager().update(patch)
-    return {"success": True}
+@router.get(
+    "",
+    summary="현재 설정 조회",
+)
+async def get_configuration() -> dict[str, Any]:
+    """현재 서버 설정을 반환한다. 민감 정보(API Key 등)는 마스킹된다."""
+    config_data = read_config()
+    return {"success": True, "data": config_data, "count": 1}
 
 
-@router.post("/config/unlock")
-async def unlock(body: UnlockBody):
-    """React 로그인 후 JWT 전달 → 설정 로드"""
-    from cloud.auth_client import AuthClient
-    from storage.config_manager import get_config_manager
-    from routers.ws import broadcast
+@router.patch(
+    "",
+    summary="설정 변경",
+)
+async def patch_configuration(body: ConfigUpdateRequest) -> dict[str, Any]:
+    """설정을 부분 업데이트하고 저장한다.
 
+    중첩 딕셔너리를 그대로 전달하면 해당 키만 업데이트된다.
+    예: { "updates": { "cloud": { "url": "https://..." } } }
+    """
+    updated = update_config(body.updates)
+    logger.info("설정 변경: %s", list(body.updates.keys()))
+    return {"success": True, "data": updated, "count": 1}
+
+
+@router.post(
+    "/kiwoom",
+    summary="키움 API Key 및 계좌번호 등록",
+)
+async def register_kiwoom_config(body: KiwoomConfigRequest) -> dict[str, Any]:
+    """키움 앱 키, 앱 시크릿, 계좌번호를 keyring에 저장한다.
+
+    이 정보는 BrokerAdapter.connect() 호출 및 주문 발행에 사용된다.
+    저장 성공 여부만 반환하며, 실제 키움 인증(토큰 발급)은 별도로 수행된다.
+    """
     try:
-        auth = AuthClient()
-        cloud_config = auth.get_config(body.jwt)
-        get_config_manager().load(cloud_config, jwt=body.jwt)
-        await broadcast({"type": "config_loaded", "data": {}})
-        return {"success": True}
+        save_api_keys(body.app_key, body.app_secret)
+        save_account_no(body.account_no)
+        logger.info("키움 API Key 및 계좌번호 등록 완료")
+        return {
+            "success": True,
+            "data": {
+                "message": "키움 API Key가 등록되었습니다.",
+                "has_key": has_credential(KEY_APP_KEY),
+            },
+            "count": 1,
+        }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# ── 규칙 CRUD ────────────────────────────────────────────────
-
-class RuleBody(BaseModel):
-    name:       str
-    stock_code: str
-    side:       str
-    conditions: list
-    quantity:   int
-    is_active:  bool = True
-
-
-@router.get("/rules")
-def get_rules():
-    from storage.config_manager import get_config_manager
-    rules = get_config_manager().get("rules", [])
-    return {"success": True, "data": rules, "count": len(rules)}
-
-
-@router.post("/rules")
-def create_rule(body: RuleBody):
-    from storage.config_manager import get_config_manager
-    cm = get_config_manager()
-    rules = list(cm.get("rules", []))
-    new_id = max((r.get("id", 0) for r in rules), default=0) + 1
-    rule = {"id": new_id, **body.model_dump()}
-    rules.append(rule)
-    cm.update({"rules": rules})
-    return {"success": True, "data": rule}
-
-
-@router.put("/rules/{rule_id}")
-def update_rule(rule_id: int, body: RuleBody):
-    from storage.config_manager import get_config_manager
-    cm = get_config_manager()
-    rules = list(cm.get("rules", []))
-    for i, r in enumerate(rules):
-        if r.get("id") == rule_id:
-            rules[i] = {"id": rule_id, **body.model_dump()}
-            cm.update({"rules": rules})
-            return {"success": True, "data": rules[i]}
-    raise HTTPException(status_code=404, detail="규칙 없음")
-
-
-@router.delete("/rules/{rule_id}")
-def delete_rule(rule_id: int):
-    from storage.config_manager import get_config_manager
-    cm = get_config_manager()
-    rules = [r for r in cm.get("rules", []) if r.get("id") != rule_id]
-    cm.update({"rules": rules})
-    return {"success": True}
-
-
-@router.patch("/rules/{rule_id}/toggle")
-def toggle_rule(rule_id: int):
-    from storage.config_manager import get_config_manager
-    cm = get_config_manager()
-    rules = list(cm.get("rules", []))
-    for r in rules:
-        if r.get("id") == rule_id:
-            r["is_active"] = not r.get("is_active", True)
-            cm.update({"rules": rules})
-            return {"success": True, "data": {"is_active": r["is_active"]}}
-    raise HTTPException(status_code=404, detail="규칙 없음")
-
-
-# ── 변수 목록 API ────────────────────────────────────────────
-
-_OPERATORS = [">", "<", ">=", "<=", "=="]
-_MARKET_VARS = [
-    "kospi_rsi_14", "kospi_20d_volatility",
-    "kosdaq_rsi_14", "market_trend",
-]
-_PRICE_VARS = ["price"]
-
-
-@router.get("/variables")
-def get_variables():
-    from cloud.context import get_context
-    ctx_market = get_context().get("market", {})
-    # 현재 값 포함
-    market = [
-        {"key": k, "label": k, "current": ctx_market.get(k)}
-        for k in _MARKET_VARS
-    ]
-    price = [{"key": k, "label": k, "current": None} for k in _PRICE_VARS]
-    return {
-        "success": True,
-        "data": {
-            "market":    market,
-            "price":     price,
-            "operators": _OPERATORS,
-        },
-    }
+        logger.error("키움 API Key 저장 실패: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"API Key 저장 실패: {e}",
+        ) from e

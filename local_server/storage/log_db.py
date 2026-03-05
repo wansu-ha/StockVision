@@ -1,131 +1,153 @@
-"""
-실행 로그 SQLite DB (logs.db)
+"""체결/에러 로그 SQLite 저장소.
 
-- 자동매매 실행 이력 저장
-- 체결 시 filled_price / filled_qty 업데이트
-- 날짜 범위 / rule_id 필터 조회
+SQLite(logs.db)에 구조화된 로그를 저장하고 조회한다.
+비동기 I/O를 위해 aiosqlite를 사용한다.
 """
+from __future__ import annotations
+
+import json
 import logging
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
-_DB_PATH = Path(__file__).parent.parent / "logs.db"
+# 기본 DB 파일 경로
+DEFAULT_LOG_DB_PATH = Path.home() / ".stockvision" / "logs.db"
+
+# 로그 종류 상수
+LOG_TYPE_FILL = "FILL"         # 체결
+LOG_TYPE_ORDER = "ORDER"       # 주문
+LOG_TYPE_ERROR = "ERROR"       # 에러
+LOG_TYPE_SYSTEM = "SYSTEM"     # 시스템 이벤트
+LOG_TYPE_STRATEGY = "STRATEGY" # 전략 엔진 이벤트
+
+# DDL
+_CREATE_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS logs (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts        TEXT    NOT NULL,
+    log_type  TEXT    NOT NULL,
+    symbol    TEXT,
+    message   TEXT    NOT NULL,
+    meta      TEXT    DEFAULT '{}'
+);
+
+CREATE INDEX IF NOT EXISTS idx_logs_ts ON logs(ts);
+CREATE INDEX IF NOT EXISTS idx_logs_type ON logs(log_type);
+"""
 
 
-def _conn() -> sqlite3.Connection:
-    conn = sqlite3.connect(_DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+class LogDB:
+    """SQLite 로그 저장소 (동기 버전)."""
 
+    def __init__(self, db_path: Path | None = None) -> None:
+        self._path = db_path or DEFAULT_LOG_DB_PATH
+        self._init_db()
 
-def init_db() -> None:
-    with _conn() as c:
-        c.execute("""
-            CREATE TABLE IF NOT EXISTS execution_logs (
-                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
-                rule_id            INTEGER NOT NULL,
-                rule_name          TEXT,
-                symbol             TEXT NOT NULL,
-                side               TEXT NOT NULL,
-                quantity           INTEGER NOT NULL,
-                order_no           TEXT,
-                filled_price       REAL,
-                filled_qty         INTEGER,
-                status             TEXT NOT NULL,
-                condition_snapshot TEXT,
-                message            TEXT,
-                created_at         TEXT NOT NULL
+    def _init_db(self) -> None:
+        """DB 초기화 및 테이블 생성."""
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        with sqlite3.connect(str(self._path)) as conn:
+            conn.executescript(_CREATE_TABLE_SQL)
+        logger.debug("로그 DB 초기화: %s", self._path)
+
+    def write(
+        self,
+        log_type: str,
+        message: str,
+        symbol: str | None = None,
+        meta: dict[str, Any] | None = None,
+    ) -> int:
+        """로그를 기록하고 생성된 ID를 반환한다.
+
+        Args:
+            log_type: 로그 종류 (LOG_TYPE_* 상수 사용 권장)
+            message: 로그 메시지
+            symbol: 관련 종목 코드 (없으면 None)
+            meta: 추가 메타데이터 (JSON 직렬화 가능한 딕셔너리)
+
+        Returns:
+            생성된 로그 레코드 ID
+        """
+        ts = datetime.now(timezone.utc).isoformat()
+        meta_json = json.dumps(meta or {}, ensure_ascii=False)
+
+        with sqlite3.connect(str(self._path)) as conn:
+            cursor = conn.execute(
+                "INSERT INTO logs (ts, log_type, symbol, message, meta) VALUES (?, ?, ?, ?, ?)",
+                (ts, log_type, symbol, message, meta_json),
             )
-        """)
-        # 구버전 컬럼 마이그레이션 (stock_code → symbol)
-        try:
-            c.execute("ALTER TABLE execution_logs ADD COLUMN symbol TEXT")
-        except sqlite3.OperationalError:
-            pass
-        try:
-            c.execute("ALTER TABLE execution_logs ADD COLUMN order_no TEXT")
-        except sqlite3.OperationalError:
-            pass
-        try:
-            c.execute("ALTER TABLE execution_logs ADD COLUMN filled_price REAL")
-        except sqlite3.OperationalError:
-            pass
-        try:
-            c.execute("ALTER TABLE execution_logs ADD COLUMN filled_qty INTEGER")
-        except sqlite3.OperationalError:
-            pass
-        try:
-            c.execute("ALTER TABLE execution_logs ADD COLUMN condition_snapshot TEXT")
-        except sqlite3.OperationalError:
-            pass
+            return cursor.lastrowid  # type: ignore[return-value]
+
+    def query(
+        self,
+        log_type: str | None = None,
+        symbol: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """로그를 조회한다.
+
+        Args:
+            log_type: 필터할 로그 종류 (None이면 전체)
+            symbol: 필터할 종목 코드 (None이면 전체)
+            limit: 최대 조회 수
+            offset: 건너뛸 수
+
+        Returns:
+            (로그 목록, 전체 건수) 튜플
+        """
+        conditions: list[str] = []
+        params: list[Any] = []
+
+        if log_type:
+            conditions.append("log_type = ?")
+            params.append(log_type)
+        if symbol:
+            conditions.append("symbol = ?")
+            params.append(symbol)
+
+        where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+
+        with sqlite3.connect(str(self._path)) as conn:
+            conn.row_factory = sqlite3.Row
+
+            # 전체 건수
+            count_row = conn.execute(
+                f"SELECT COUNT(*) FROM logs {where}", params
+            ).fetchone()
+            total = count_row[0] if count_row else 0
+
+            # 데이터 조회
+            rows = conn.execute(
+                f"SELECT * FROM logs {where} ORDER BY id DESC LIMIT ? OFFSET ?",
+                params + [limit, offset],
+            ).fetchall()
+
+        items = [
+            {
+                "id": row["id"],
+                "ts": row["ts"],
+                "log_type": row["log_type"],
+                "symbol": row["symbol"],
+                "message": row["message"],
+                "meta": json.loads(row["meta"] or "{}"),
+            }
+            for row in rows
+        ]
+        return items, total
 
 
-def log_execution(rule_id: int, rule_name: str, side: str,
-                  stock_code: str, quantity: int, status: str,
-                  message: str = "",
-                  order_no: str = "",
-                  condition_snapshot: str = "") -> None:
-    with _conn() as c:
-        c.execute(
-            """INSERT INTO execution_logs
-               (rule_id, rule_name, symbol, side, quantity, order_no,
-                status, condition_snapshot, message, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (rule_id, rule_name, stock_code, side, quantity, order_no or None,
-             status, condition_snapshot or None, message,
-             datetime.utcnow().isoformat()),
-        )
+# 전역 싱글턴
+_log_db_instance: LogDB | None = None
 
 
-def log_fill(order_no: str, filled_price: float, filled_qty: int) -> None:
-    """체결 콜백에서 호출 — filled_price/filled_qty 업데이트"""
-    with _conn() as c:
-        c.execute(
-            """UPDATE execution_logs
-               SET filled_price = ?, filled_qty = ?, status = 'FILLED'
-               WHERE order_no = ? AND status = 'SENT'""",
-            (filled_price, filled_qty, order_no),
-        )
-
-
-def query_logs(rule_id: int | None = None,
-               date_from: str | None = None,
-               date_to: str | None = None,
-               limit: int = 100,
-               offset: int = 0) -> list[dict]:
-    """실행 로그 조회 (최신순)"""
-    conditions = []
-    params: list = []
-
-    if rule_id is not None:
-        conditions.append("rule_id = ?")
-        params.append(rule_id)
-    if date_from:
-        conditions.append("created_at >= ?")
-        params.append(date_from)
-    if date_to:
-        conditions.append("created_at <= ?")
-        params.append(date_to)
-
-    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
-    params.extend([limit, offset])
-
-    with _conn() as c:
-        rows = c.execute(
-            f"SELECT * FROM execution_logs {where} ORDER BY id DESC LIMIT ? OFFSET ?",
-            params,
-        ).fetchall()
-        return [dict(row) for row in rows]
-
-
-def query_summary_today() -> dict:
-    """오늘 실행 수 / 체결 수 / 오류 수"""
-    today = datetime.utcnow().date().isoformat()
-    with _conn() as c:
-        total  = c.execute("SELECT COUNT(*) FROM execution_logs WHERE created_at >= ?", (today,)).fetchone()[0]
-        filled = c.execute("SELECT COUNT(*) FROM execution_logs WHERE created_at >= ? AND status = 'FILLED'", (today,)).fetchone()[0]
-        failed = c.execute("SELECT COUNT(*) FROM execution_logs WHERE created_at >= ? AND status IN ('FAILED','ERROR')", (today,)).fetchone()[0]
-    return {"total": total, "filled": filled, "failed": failed}
+def get_log_db() -> LogDB:
+    """전역 로그 DB 인스턴스를 반환한다."""
+    global _log_db_instance
+    if _log_db_instance is None:
+        _log_db_instance = LogDB()
+    return _log_db_instance
