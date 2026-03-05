@@ -125,7 +125,7 @@ def create_app() -> FastAPI:
     @app.get("/health", tags=["헬스체크"])
     async def health_check() -> dict:
         """서버 헬스체크 엔드포인트."""
-        return {"status": "ok"}
+        return {"status": "ok", "version": app.version}
 
     return app
 
@@ -150,7 +150,7 @@ if __name__ == "__main__":
     uvicorn.run(
         "local_server.main:app",
         host=cfg.get("server.host", "127.0.0.1"),
-        port=cfg.get("server.port", 8765),
+        port=cfg.get("server.port"),
         reload=False,
         log_level="info",
     )

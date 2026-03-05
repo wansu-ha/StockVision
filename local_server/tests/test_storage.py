@@ -21,7 +21,7 @@ class TestConfig:
         """설정 파일이 없으면 기본값으로 초기화된다."""
         from local_server.config import Config
         cfg = Config(config_path=tmp_path / "config.json")
-        assert cfg.get("server.port") == 8765
+        assert cfg.get("server.port") == 4020
         assert cfg.get("sleep_prevent") is True
 
     def test_get_nested_key(self, tmp_path: Path) -> None:

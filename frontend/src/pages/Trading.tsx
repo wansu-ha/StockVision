@@ -201,7 +201,7 @@ const Trading = () => {
             <BanknotesIcon className="w-8 h-8 text-red-500" />
           </div>
           <h2 className="text-xl font-bold text-gray-900 mb-2">서버에 연결할 수 없습니다</h2>
-          <p className="text-gray-500 text-sm">백엔드 서버가 실행 중인지 확인하세요. (http://localhost:8000)</p>
+          <p className="text-gray-500 text-sm">백엔드 서버가 실행 중인지 확인하세요.</p>
         </div>
       </div>
     )

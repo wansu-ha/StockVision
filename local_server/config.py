@@ -18,19 +18,17 @@ DEFAULT_CONFIG_PATH = Path.home() / ".stockvision" / "config.json"
 DEFAULT_CONFIG: dict[str, Any] = {
     "server": {
         "host": "127.0.0.1",
-        "port": 8765,
+        "port": 4020,
     },
     "cloud": {
         "url": "",           # 클라우드 서버 URL (비어있으면 클라우드 연동 비활성화)
         "heartbeat_interval": 30,  # 하트비트 전송 간격 (초)
     },
     "kiwoom": {
-        "account_no": "",    # 키움 계좌번호
-        "app_key": "",       # 앱 키 (keyring에 저장하므로 여기엔 빈 값)
-        "app_secret": "",    # 앱 시크릿
+        "account_no": "",    # 키움 계좌번호 (앱 키/시크릿은 keyring 전용)
     },
     "cors": {
-        "origins": ["http://localhost:5173", "http://localhost:3000"],
+        "origins": ["http://localhost:5173"],
     },
     "sleep_prevent": True,   # Windows 수면 방지 활성화 여부
     "log_level": "INFO",
@@ -75,8 +73,8 @@ class Config:
 
     def get(self, key: str, default: Any = None) -> Any:
         """점 표기법으로 설정값을 가져온다 (예: 'server.port')."""
-        parts = key.split(".")
         current: Any = self._data
+        parts = key.split(".")
         for part in parts:
             if not isinstance(current, dict):
                 return default

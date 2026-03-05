@@ -1,6 +1,7 @@
 import axios from 'axios'
 
-const BASE = 'http://localhost:8000/api/auth'
+const CLOUD_URL = import.meta.env.VITE_CLOUD_API_URL || 'http://localhost:4010'
+const BASE = `${CLOUD_URL}/api/v1/auth`
 
 export interface LoginResponse {
   success: boolean

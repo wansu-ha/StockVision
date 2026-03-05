@@ -1,7 +1,7 @@
 /** 신호등 3개: 클라우드, 로컬, 키움 상태 표시 */
 import { useState, useEffect, useRef } from 'react'
 import { cloudHealth } from '../services/cloudClient'
-import { localStatus } from '../services/localClient'
+import { localStatus, localHealth } from '../services/localClient'
 import type { ServerStatus, TrafficLightColor } from '../types/ui'
 import { useAlertStore } from '../stores/alertStore'
 
@@ -24,6 +24,7 @@ export default function TrafficLightStatus() {
     kiwoom: 'yellow',
   })
   const prevRef = useRef<ServerStatus>(status)
+  const localVersionRef = useRef<string | null>(null)
   const addAlert = useAlertStore((s) => s.add)
 
   useEffect(() => {
@@ -32,8 +33,19 @@ export default function TrafficLightStatus() {
     async function poll() {
       const cloudOk = await cloudHealth.check()
       const localRes = await localStatus.get()
+      const localHp = await localHealth.check()
 
       if (!mounted) return
+
+      // 로컬 서버 버전 변경 감지 → 자동 새로고침
+      if (localHp?.version) {
+        if (localVersionRef.current && localVersionRef.current !== localHp.version) {
+          addAlert('로컬 서버가 업데이트되었습니다. 새로고침합니다.', 'info')
+          setTimeout(() => window.location.reload(), 1500)
+          return
+        }
+        localVersionRef.current = localHp.version
+      }
 
       const next: ServerStatus = {
         cloud: cloudOk ? 'green' : 'red',

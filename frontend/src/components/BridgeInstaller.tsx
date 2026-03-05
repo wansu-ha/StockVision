@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 
+const LOCAL_URL = import.meta.env.VITE_LOCAL_API_URL || 'http://localhost:4020'
+const WS_URL = LOCAL_URL.replace(/^http/, 'ws') + '/ws'
+
 interface Props {
   onConnected: () => void
 }
@@ -14,7 +17,7 @@ export default function BridgeInstaller({ onConnected }: Props) {
     let currentWs: WebSocket | null = null
 
     const check = () => {
-      currentWs = new WebSocket('ws://127.0.0.1:8765/ws')
+      currentWs = new WebSocket(WS_URL)
       const ws = currentWs
       ws.onopen = () => {
         ws.close()

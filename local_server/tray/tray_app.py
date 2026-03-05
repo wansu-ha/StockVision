@@ -57,7 +57,7 @@ def _on_open_status(icon: Any, item: Any) -> None:
     """트레이 메뉴 '상태 확인' 클릭 핸들러."""
     from local_server.config import get_config
     cfg = get_config()
-    port = cfg.get("server.port", 8765)
+    port = cfg.get("server.port")
     url = f"http://127.0.0.1:{port}/api/status"
     webbrowser.open(url)
     logger.info("브라우저로 상태 페이지 열기: %s", url)

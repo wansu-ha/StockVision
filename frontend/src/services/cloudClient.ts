@@ -6,7 +6,7 @@ import axios from 'axios'
 import type { Rule, CreateRulePayload, UpdateRulePayload } from '../types/strategy'
 import type { MarketContextData } from '../types/dashboard'
 
-const CLOUD_URL = import.meta.env.VITE_CLOUD_API_URL || 'http://localhost:8000'
+const CLOUD_URL = import.meta.env.VITE_CLOUD_API_URL || 'http://localhost:4010'
 const JWT_KEY = 'sv_jwt'
 const RT_KEY = 'sv_rt'
 
@@ -61,6 +61,8 @@ export const cloudAuth = {
     client.post('/api/v1/auth/login', { email, password }).then((r) => r.data),
   refresh: (refreshToken: string) =>
     client.post('/api/v1/auth/refresh', { refresh_token: refreshToken }).then((r) => r.data),
+  logout: (refreshToken: string) =>
+    client.post('/api/v1/auth/logout', { refresh_token: refreshToken }).then((r) => r.data),
   verifyEmail: (email: string, code: string) =>
     client.post('/api/v1/auth/verify-email', { email, code }).then((r) => r.data),
   updateProfile: (nickname: string) =>

@@ -2,6 +2,9 @@ import { useEffect, useRef } from 'react'
 import { create } from 'zustand'
 import { useToastStore } from '../stores/toastStore'
 
+const LOCAL_URL = import.meta.env.VITE_LOCAL_API_URL || 'http://localhost:4020'
+const WS_URL = LOCAL_URL.replace(/^http/, 'ws') + '/ws'
+
 // ── 알림 스토어 ──────────────────────────────────────────────
 
 export interface Notification {
@@ -50,7 +53,7 @@ export function useLocalBridgeWS() {
     let timeout: ReturnType<typeof setTimeout>
 
     function connect() {
-      const ws = new WebSocket('ws://127.0.0.1:8765/ws')
+      const ws = new WebSocket(WS_URL)
       wsRef.current = ws
 
       ws.onmessage = (ev) => {

@@ -42,7 +42,7 @@ class Settings:
     SMTP_FROM: str = os.environ.get("SMTP_FROM", "noreply@stockvision.com")
 
     # 클라우드 서버 공개 URL (이메일 링크용)
-    CLOUD_URL: str = os.environ.get("CLOUD_URL", "http://localhost:8001")
+    CLOUD_URL: str = os.environ.get("CLOUD_URL", "http://localhost:4010")
 
     # AI (Claude API)
     ANTHROPIC_API_KEY: str = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -59,7 +59,6 @@ class Settings:
     # CORS 허용 오리진
     CORS_ORIGINS: list[str] = [
         "http://localhost:5173",   # Vite 개발 서버
-        "http://localhost:3000",   # React 개발 서버
     ]
 
     # Rate Limiting (in-memory, 프로덕션은 Redis)

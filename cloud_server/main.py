@@ -3,7 +3,7 @@
 
 Phase 3 Unit 4 — 인증, 규칙 CRUD, 시세 수집, AI 컨텍스트, 어드민.
 
-실행: python -m uvicorn cloud_server.main:app --reload --port 8001
+실행: python -m uvicorn cloud_server.main:app --reload --port 4010
 """
 import logging
 import time
@@ -138,4 +138,6 @@ async def root():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    from urllib.parse import urlparse
+    port = urlparse(settings.CLOUD_URL).port or 4010
+    uvicorn.run(app, host="0.0.0.0", port=port)

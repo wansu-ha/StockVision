@@ -1,4 +1,4 @@
-/** localhost HTTP 클라이언트 (로컬 서버 :8765).
+/** localhost HTTP 클라이언트 (로컬 서버 :4020).
  *
  * JWT 전달, 규칙 sync, 상태 조회, 로그 조회 등.
  */
@@ -6,7 +6,7 @@ import axios, { type AxiosInstance } from 'axios'
 import type { LogFilter, ExecutionLog } from '../types/log'
 import type { LocalConfig } from '../types/settings'
 
-const LOCAL_URL = import.meta.env.VITE_LOCAL_API_URL || 'http://localhost:8765'
+const LOCAL_URL = import.meta.env.VITE_LOCAL_API_URL || 'http://localhost:4020'
 
 const client: AxiosInstance = axios.create({
   baseURL: `${LOCAL_URL}/api`,
@@ -56,6 +56,14 @@ export const localLogs = {
 export const localEngine = {
   start: () => client.post('/strategy/start').then((r) => r.data).catch(() => null),
   stop: () => client.post('/strategy/stop').then((r) => r.data).catch(() => null),
+}
+
+/** 헬스 체크 (버전 포함) */
+export const localHealth = {
+  check: () =>
+    axios.get<{ status: string; version: string }>(`${LOCAL_URL}/health`, { timeout: 3000 })
+      .then((r) => r.data)
+      .catch(() => null),
 }
 
 export default client

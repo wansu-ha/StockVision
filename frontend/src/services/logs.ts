@@ -1,6 +1,7 @@
 import axios from 'axios'
 
-const local = axios.create({ baseURL: 'http://127.0.0.1:8765', timeout: 5000 })
+const LOCAL_URL = import.meta.env.VITE_LOCAL_API_URL || 'http://localhost:4020'
+const local = axios.create({ baseURL: LOCAL_URL, timeout: 5000 })
 
 export interface ExecutionLog {
   id: number
