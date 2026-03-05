@@ -94,19 +94,17 @@ class TestAuthRouter:
         with patch("keyring.set_password"), patch("keyring.get_password", return_value=None):
             resp = client.post(
                 "/api/auth/token",
-                json={"app_key": "test_key", "app_secret": "test_secret"},
+                json={"access_token": "test_access_jwt", "refresh_token": "test_refresh_jwt"},
             )
         assert resp.status_code == 200
         body = resp.json()
         assert body["success"] is True
-        assert "token" in body["data"]
 
     def test_auth_status(self, client: TestClient) -> None:
         resp = client.get("/api/auth/status")
         assert resp.status_code == 200
         body = resp.json()
-        assert "has_api_key" in body["data"]
-        assert "has_token" in body["data"]
+        assert "has_cloud_token" in body["data"]
 
     def test_logout(self, client: TestClient) -> None:
         with patch("keyring.delete_password"):

@@ -18,14 +18,14 @@ if _ROOT not in sys.path:
 
 def run(coro):
     """asyncio 코루틴을 동기적으로 실행한다."""
-    return asyncio.get_event_loop().run_until_complete(coro)
+    return asyncio.run(coro)
 
 
-def test_pass(name: str) -> None:
+def _pass(name: str) -> None:
     print(f"  [PASS] {name}")
 
 
-def test_fail(name: str, reason: str) -> None:
+def _fail(name: str, reason: str) -> None:
     print(f"  [FAIL] {name}: {reason}")
     raise AssertionError(f"{name}: {reason}")
 
@@ -44,21 +44,21 @@ def test_models():
     # Enum 값 확인
     assert OrderSide.BUY == "BUY"
     assert OrderSide.SELL == "SELL"
-    test_pass("OrderSide enum 값 확인")
+    _pass("OrderSide enum 값 확인")
 
     assert OrderType.MARKET == "MARKET"
     assert OrderType.LIMIT == "LIMIT"
-    test_pass("OrderType enum 값 확인")
+    _pass("OrderType enum 값 확인")
 
     assert OrderStatus.FILLED == "FILLED"
     assert OrderStatus.CANCELLED == "CANCELLED"
-    test_pass("OrderStatus enum 값 확인")
+    _pass("OrderStatus enum 값 확인")
 
     assert ErrorCategory.TRANSIENT == "TRANSIENT"
     assert ErrorCategory.PERMANENT == "PERMANENT"
     assert ErrorCategory.AUTH == "AUTH"
     assert ErrorCategory.RATE_LIMIT == "RATE_LIMIT"
-    test_pass("ErrorCategory enum 값 확인")
+    _pass("ErrorCategory enum 값 확인")
 
     # OrderResult 생성
     order = OrderResult(
@@ -73,7 +73,7 @@ def test_models():
     )
     assert order.filled_qty == 0
     assert order.raw == {}
-    test_pass("OrderResult 기본값 확인")
+    _pass("OrderResult 기본값 확인")
 
     # BalanceResult 생성
     balance = BalanceResult(
@@ -81,7 +81,7 @@ def test_models():
         total_eval=Decimal("10000000"),
     )
     assert balance.positions == []
-    test_pass("BalanceResult 기본값 확인")
+    _pass("BalanceResult 기본값 확인")
 
     # QuoteEvent 생성
     quote = QuoteEvent(
@@ -91,7 +91,7 @@ def test_models():
     )
     assert quote.bid_price is None
     assert quote.timestamp is None
-    test_pass("QuoteEvent 기본값 확인")
+    _pass("QuoteEvent 기본값 확인")
 
 
 # ──────────────────────────────────────────────────────────────
@@ -105,9 +105,9 @@ def test_broker_adapter_abc():
     # 추상 클래스 직접 인스턴스화 불가 확인
     try:
         BrokerAdapter()  # type: ignore
-        test_fail("ABC 인스턴스화 불가", "예외가 발생해야 함")
+        _fail("ABC 인스턴스화 불가", "예외가 발생해야 함")
     except TypeError:
-        test_pass("ABC 직접 인스턴스화 불가 확인")
+        _pass("ABC 직접 인스턴스화 불가 확인")
 
     # 필수 메서드 존재 확인
     abstract_methods = getattr(BrokerAdapter, "__abstractmethods__", set())
@@ -118,7 +118,7 @@ def test_broker_adapter_abc():
     }
     for method in expected:
         assert method in abstract_methods, f"{method} 누락"
-    test_pass("BrokerAdapter 추상 메서드 10개 확인")
+    _pass("BrokerAdapter 추상 메서드 10개 확인")
 
 
 # ──────────────────────────────────────────────────────────────
@@ -133,20 +133,20 @@ def test_rate_limiter():
         # 기본 생성
         limiter = RateLimiter(calls_per_second=5)
         assert limiter.total_calls == 0
-        test_pass("RateLimiter 초기화")
+        _pass("RateLimiter 초기화")
 
         # 제한 내 호출 즉시 반환
         for _ in range(5):
             await limiter.acquire()
         assert limiter.total_calls == 5
-        test_pass("5회 호출 성공 (한도 내)")
+        _pass("5회 호출 성공 (한도 내)")
 
         # MultiEndpointRateLimiter
         multi = MultiEndpointRateLimiter(default_cps=10)
         multi.set_limit("order", 5)
         await multi.acquire("order")
         await multi.acquire("quote")
-        test_pass("MultiEndpointRateLimiter 엔드포인트별 제한")
+        _pass("MultiEndpointRateLimiter 엔드포인트별 제한")
 
     run(_test())
 
@@ -164,7 +164,7 @@ def test_state_machine():
     async def _test():
         sm = StateMachine()
         assert sm.state == ConnectionState.DISCONNECTED
-        test_pass("초기 상태 DISCONNECTED 확인")
+        _pass("초기 상태 DISCONNECTED 확인")
 
         # 정상 전환
         await sm.transition(ConnectionState.CONNECTING)
@@ -172,14 +172,14 @@ def test_state_machine():
         await sm.transition(ConnectionState.AUTHENTICATED)
         assert sm.state == ConnectionState.AUTHENTICATED
         assert sm.is_operational()
-        test_pass("DISCONNECTED → CONNECTING → CONNECTED → AUTHENTICATED 정상 전환")
+        _pass("DISCONNECTED → CONNECTING → CONNECTED → AUTHENTICATED 정상 전환")
 
         # 잘못된 전환
         try:
             await sm.transition(ConnectionState.CONNECTING)  # AUTHENTICATED에서 CONNECTING 불가
-            test_fail("잘못된 전환 거부", "예외가 발생해야 함")
+            _fail("잘못된 전환 거부", "예외가 발생해야 함")
         except InvalidStateTransitionError:
-            test_pass("잘못된 전환 거부 확인")
+            _pass("잘못된 전환 거부 확인")
 
         # 콜백 등록
         changes = []
@@ -187,12 +187,12 @@ def test_state_machine():
         await sm.transition(ConnectionState.SUBSCRIBED)
         assert len(changes) == 1
         assert changes[0][1] == ConnectionState.SUBSCRIBED
-        test_pass("상태 변경 콜백 호출 확인")
+        _pass("상태 변경 콜백 호출 확인")
 
         # 강제 초기화
         sm.reset()
         assert sm.state == ConnectionState.DISCONNECTED
-        test_pass("강제 초기화(reset) 확인")
+        _pass("강제 초기화(reset) 확인")
 
     run(_test())
 
@@ -215,7 +215,7 @@ def test_idempotency_guard():
         # 미등록 ID 조회 → None
         result = await guard.check("CLI001")
         assert result is None
-        test_pass("미등록 ID → None 반환")
+        _pass("미등록 ID → None 반환")
 
         # 주문 등록 후 재조회 → 기존 결과 반환
         order = OrderResult(
@@ -234,12 +234,12 @@ def test_idempotency_guard():
         cached = await guard.check("CLI001")
         assert cached is not None
         assert cached.order_id == "ORD001"
-        test_pass("등록된 ID → 기존 OrderResult 반환")
+        _pass("등록된 ID → 기존 OrderResult 반환")
 
         # 다른 ID는 None
         result2 = await guard.check("CLI002")
         assert result2 is None
-        test_pass("다른 ID는 영향 없음")
+        _pass("다른 ID는 영향 없음")
 
     run(_test())
 
@@ -259,38 +259,38 @@ def test_error_classifier():
     # API 응답 분류
     normal = clf.classify_api_response({"rt_cd": "0", "msg_cd": ""})
     assert normal == ErrorCategory.TRANSIENT  # 정상은 TRANSIENT (호출자가 무시)
-    test_pass("정상 응답 → TRANSIENT")
+    _pass("정상 응답 → TRANSIENT")
 
     perm = clf.classify_api_response({"rt_cd": "1", "msg_cd": "OPSQ0009"})
     assert perm == ErrorCategory.PERMANENT
-    test_pass("주문 수량 오류 → PERMANENT")
+    _pass("주문 수량 오류 → PERMANENT")
 
     auth = clf.classify_api_response({"rt_cd": "1", "msg_cd": "EGW00123"})
     assert auth == ErrorCategory.AUTH
-    test_pass("토큰 만료 → AUTH")
+    _pass("토큰 만료 → AUTH")
 
     rl = clf.classify_api_response({"rt_cd": "1", "msg_cd": "EGW00201"})
     assert rl == ErrorCategory.RATE_LIMIT
-    test_pass("속도 제한 → RATE_LIMIT")
+    _pass("속도 제한 → RATE_LIMIT")
 
     # 재시도 가능 여부
     assert clf.is_retryable(ErrorCategory.TRANSIENT)
     assert clf.is_retryable(ErrorCategory.RATE_LIMIT)
     assert not clf.is_retryable(ErrorCategory.PERMANENT)
     assert not clf.is_retryable(ErrorCategory.AUTH)
-    test_pass("is_retryable 분류 확인")
+    _pass("is_retryable 분류 확인")
 
     # 재인증 필요 여부
     assert clf.needs_reauth(ErrorCategory.AUTH)
     assert not clf.needs_reauth(ErrorCategory.TRANSIENT)
-    test_pass("needs_reauth 분류 확인")
+    _pass("needs_reauth 분류 확인")
 
     # 일반 예외 분류
     import httpx
     timeout_exc = httpx.TimeoutException("timeout")
     cat = clf.classify_exception(timeout_exc)
     assert cat == ErrorCategory.TRANSIENT
-    test_pass("TimeoutException → TRANSIENT")
+    _pass("TimeoutException → TRANSIENT")
 
 
 # ──────────────────────────────────────────────────────────────
@@ -308,26 +308,26 @@ def test_mock_adapter():
         # 미연결 상태에서 오류
         try:
             await adapter.get_balance()
-            test_fail("미연결 오류", "예외가 발생해야 함")
+            _fail("미연결 오류", "예외가 발생해야 함")
         except RuntimeError:
-            test_pass("미연결 상태 오류 확인")
+            _pass("미연결 상태 오류 확인")
 
         # 연결
         await adapter.connect()
         assert adapter.is_connected
-        test_pass("connect() 성공")
+        _pass("connect() 성공")
 
         # 잔고 조회
         balance = await adapter.get_balance()
         assert balance.cash == Decimal("10000000")
         assert balance.positions == []
-        test_pass("초기 잔고 조회")
+        _pass("초기 잔고 조회")
 
         # 현재가 조회
         quote = await adapter.get_quote("005930")
         assert quote.symbol == "005930"
         assert quote.price == Decimal("75000")
-        test_pass("현재가 조회 (기본값)")
+        _pass("현재가 조회 (기본값)")
 
         # 매수 주문
         order = await adapter.place_order(
@@ -339,7 +339,7 @@ def test_mock_adapter():
         )
         assert order.status == OrderStatus.FILLED
         assert order.filled_qty == 10
-        test_pass("매수 주문 즉시 체결")
+        _pass("매수 주문 즉시 체결")
 
         # 잔고 차감 확인
         balance2 = await adapter.get_balance()
@@ -348,7 +348,7 @@ def test_mock_adapter():
         assert len(balance2.positions) == 1
         assert balance2.positions[0].symbol == "005930"
         assert balance2.positions[0].qty == 10
-        test_pass("매수 후 잔고/포지션 갱신 확인")
+        _pass("매수 후 잔고/포지션 갱신 확인")
 
         # 잔고 부족 오류
         try:
@@ -359,9 +359,9 @@ def test_mock_adapter():
                 order_type=OrderType.MARKET,
                 qty=100000,  # 엄청 많이
             )
-            test_fail("잔고 부족 오류", "예외가 발생해야 함")
+            _fail("잔고 부족 오류", "예외가 발생해야 함")
         except ValueError:
-            test_pass("잔고 부족 ValueError 확인")
+            _pass("잔고 부족 ValueError 확인")
 
         # 매도 주문
         sell_order = await adapter.place_order(
@@ -372,18 +372,18 @@ def test_mock_adapter():
             qty=5,
         )
         assert sell_order.status == OrderStatus.FILLED
-        test_pass("매도 주문 즉시 체결")
+        _pass("매도 주문 즉시 체결")
 
         # 포지션 5주 남음
         balance3 = await adapter.get_balance()
         assert balance3.positions[0].qty == 5
-        test_pass("매도 후 포지션 수량 감소 확인")
+        _pass("매도 후 포지션 수량 감소 확인")
 
         # 가격 변경 후 시세 확인
         adapter.set_price("005930", Decimal("80000"))
         quote2 = await adapter.get_quote("005930")
         assert quote2.price == Decimal("80000")
-        test_pass("set_price() 가격 변경 확인")
+        _pass("set_price() 가격 변경 확인")
 
         # 구독
         received = []
@@ -395,7 +395,7 @@ def test_mock_adapter():
         ))
         assert len(received) == 1
         assert received[0].price == Decimal("81000")
-        test_pass("fire_quote_event() 콜백 호출 확인")
+        _pass("fire_quote_event() 콜백 호출 확인")
 
         # 보유 수량 부족 오류
         try:
@@ -406,21 +406,21 @@ def test_mock_adapter():
                 order_type=OrderType.MARKET,
                 qty=100,
             )
-            test_fail("보유 수량 부족 오류", "예외가 발생해야 함")
+            _fail("보유 수량 부족 오류", "예외가 발생해야 함")
         except ValueError:
-            test_pass("보유 수량 부족 ValueError 확인")
+            _pass("보유 수량 부족 ValueError 확인")
 
         # reset
         adapter.reset()
         balance4 = await adapter.get_balance()
         assert balance4.cash == Decimal("10000000")
         assert balance4.positions == []
-        test_pass("reset() 후 상태 초기화 확인")
+        _pass("reset() 후 상태 초기화 확인")
 
         # 연결 해제
         await adapter.disconnect()
         assert not adapter.is_connected
-        test_pass("disconnect() 성공")
+        _pass("disconnect() 성공")
 
     run(_test())
 
@@ -437,31 +437,31 @@ def test_adapter_factory():
     # mock 타입 생성
     adapter = AdapterFactory.create("mock")
     assert isinstance(adapter, MockAdapter)
-    test_pass("AdapterFactory.create('mock') → MockAdapter")
+    _pass("AdapterFactory.create('mock') → MockAdapter")
 
     # initial_cash 전달
     adapter2 = AdapterFactory.create("mock", initial_cash=Decimal("5000000"))
     assert isinstance(adapter2, MockAdapter)
-    test_pass("AdapterFactory.create('mock', initial_cash=5000000)")
+    _pass("AdapterFactory.create('mock', initial_cash=5000000)")
 
     # 편의 함수
     adapter3 = create_adapter("mock")
     assert isinstance(adapter3, MockAdapter)
-    test_pass("create_adapter('mock') 편의 함수")
+    _pass("create_adapter('mock') 편의 함수")
 
     # 알 수 없는 타입 오류
     try:
         AdapterFactory.create("unknown")
-        test_fail("알 수 없는 타입 오류", "예외가 발생해야 함")
+        _fail("알 수 없는 타입 오류", "예외가 발생해야 함")
     except ValueError:
-        test_pass("알 수 없는 broker_type → ValueError")
+        _pass("알 수 없는 broker_type → ValueError")
 
     # kiwoom 환경변수 누락 오류
     try:
         AdapterFactory.create("kiwoom")
-        test_fail("환경변수 누락 오류", "예외가 발생해야 함")
+        _fail("환경변수 누락 오류", "예외가 발생해야 함")
     except EnvironmentError:
-        test_pass("키움 환경변수 누락 → EnvironmentError")
+        _pass("키움 환경변수 누락 → EnvironmentError")
 
 
 # ──────────────────────────────────────────────────────────────
@@ -494,17 +494,17 @@ def test_reconciler():
         )
         reconciler.register_order(order)
         assert reconciler.local_order_count == 1
-        test_pass("주문 등록 확인")
+        _pass("주문 등록 확인")
 
         # 대사 실행 → 서버에 없으니 ORPHAN
         events = await reconciler.reconcile_once()
         assert len(events) == 1
         assert events[0].event_type == RECONCILE_ORPHAN
-        test_pass("ORPHAN 이벤트 감지 확인")
+        _pass("ORPHAN 이벤트 감지 확인")
 
         # ORPHAN 후 상태가 FILLED로 갱신됨
         assert reconciler._local_orders["ORD001"].status == OrderStatus.FILLED
-        test_pass("ORPHAN 주문 → FILLED로 자동 갱신")
+        _pass("ORPHAN 주문 → FILLED로 자동 갱신")
 
         # 이벤트 콜백
         received_events = []
@@ -521,7 +521,7 @@ def test_reconciler():
         ))
         await reconciler.reconcile_once()
         assert len(received_events) == 1
-        test_pass("이벤트 콜백 호출 확인")
+        _pass("이벤트 콜백 호출 확인")
 
     run(_test())
 

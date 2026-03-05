@@ -14,14 +14,14 @@ if _ROOT not in sys.path:
 
 
 def run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro)
+    return asyncio.run(coro)
 
 
-def test_pass(name: str) -> None:
+def _pass(name: str) -> None:
     print(f"  [PASS] {name}")
 
 
-def test_fail(name: str, reason: str) -> None:
+def _fail(name: str, reason: str) -> None:
     print(f"  [FAIL] {name}: {reason}")
     raise AssertionError(f"{name}: {reason}")
 
@@ -41,19 +41,19 @@ def test_full_trading_flow():
         adapter = create_adapter("mock", initial_cash=Decimal("20000000"))
         await adapter.connect()
         assert adapter.is_connected
-        test_pass("MockAdapter 연결")
+        _pass("MockAdapter 연결")
 
         # 초기 잔고 확인
         balance = await adapter.get_balance()
         assert balance.cash == Decimal("20000000")
         assert len(balance.positions) == 0
-        test_pass("초기 잔고 2천만원 확인")
+        _pass("초기 잔고 2천만원 확인")
 
         # 삼성전자 현재가 조회
         quote = await adapter.get_quote("005930")
         assert quote.symbol == "005930"
         samsung_price = quote.price
-        test_pass(f"삼성전자 현재가 조회: {samsung_price}원")
+        _pass(f"삼성전자 현재가 조회: {samsung_price}원")
 
         # 삼성전자 100주 매수
         buy_order = await adapter.place_order(
@@ -65,7 +65,7 @@ def test_full_trading_flow():
         )
         assert buy_order.status == OrderStatus.FILLED
         assert buy_order.filled_qty == 100
-        test_pass("삼성전자 100주 매수 체결")
+        _pass("삼성전자 100주 매수 체결")
 
         # 매수 후 잔고 확인
         balance2 = await adapter.get_balance()
@@ -74,12 +74,12 @@ def test_full_trading_flow():
         assert len(balance2.positions) == 1
         assert balance2.positions[0].symbol == "005930"
         assert balance2.positions[0].qty == 100
-        test_pass("매수 후 잔고/포지션 확인")
+        _pass("매수 후 잔고/포지션 확인")
 
         # SK하이닉스 현재가 조회
         hynix_quote = await adapter.get_quote("000660")
         hynix_price = hynix_quote.price
-        test_pass(f"SK하이닉스 현재가 조회: {hynix_price}원")
+        _pass(f"SK하이닉스 현재가 조회: {hynix_price}원")
 
         # SK하이닉스 50주 매수
         buy_order2 = await adapter.place_order(
@@ -90,7 +90,7 @@ def test_full_trading_flow():
             qty=50,
         )
         assert buy_order2.status == OrderStatus.FILLED
-        test_pass("SK하이닉스 50주 매수 체결")
+        _pass("SK하이닉스 50주 매수 체결")
 
         # 2개 종목 포지션 확인
         balance3 = await adapter.get_balance()
@@ -98,7 +98,7 @@ def test_full_trading_flow():
         symbols = {p.symbol for p in balance3.positions}
         assert "005930" in symbols
         assert "000660" in symbols
-        test_pass("2개 종목 포지션 확인")
+        _pass("2개 종목 포지션 확인")
 
         # 삼성전자 50주 매도
         sell_order = await adapter.place_order(
@@ -109,17 +109,17 @@ def test_full_trading_flow():
             qty=50,
         )
         assert sell_order.status == OrderStatus.FILLED
-        test_pass("삼성전자 50주 매도 체결")
+        _pass("삼성전자 50주 매도 체결")
 
         # 매도 후 포지션 50주 남음
         balance4 = await adapter.get_balance()
         samsung_pos = next(p for p in balance4.positions if p.symbol == "005930")
         assert samsung_pos.qty == 50
-        test_pass("매도 후 포지션 50주 확인")
+        _pass("매도 후 포지션 50주 확인")
 
         await adapter.disconnect()
         assert not adapter.is_connected
-        test_pass("연결 해제")
+        _pass("연결 해제")
 
     run(_test())
 
@@ -149,18 +149,18 @@ def test_idempotency_flow():
             qty=10,
         )
         await guard.register(order1)
-        test_pass("첫 번째 주문 등록")
+        _pass("첫 번째 주문 등록")
 
         # 동일 client_order_id로 재요청 → 기존 결과 반환
         cached = await guard.check("IDEM-001")
         assert cached is not None
         assert cached.order_id == order1.order_id
-        test_pass("동일 ID 재요청 → 기존 결과 반환 (실제 주문 미발생)")
+        _pass("동일 ID 재요청 → 기존 결과 반환 (실제 주문 미발생)")
 
         # 다른 ID는 정상 처리
         not_cached = await guard.check("IDEM-002")
         assert not_cached is None
-        test_pass("다른 ID → None 반환 (신규 주문 처리 필요)")
+        _pass("다른 ID → None 반환 (신규 주문 처리 필요)")
 
         await adapter.disconnect()
 
@@ -186,7 +186,7 @@ def test_quote_subscription_flow():
             ["005930", "000660"],
             callback=lambda e: received_events.append(e),
         )
-        test_pass("2개 종목 구독 등록")
+        _pass("2개 종목 구독 등록")
 
         # 시세 이벤트 수동 발생 (실제 WebSocket 없이)
         adapter.fire_quote_event(QuoteEvent(
@@ -204,11 +204,11 @@ def test_quote_subscription_flow():
         assert received_events[0].symbol == "005930"
         assert received_events[0].price == Decimal("76000")
         assert received_events[1].symbol == "000660"
-        test_pass("2개 종목 시세 이벤트 수신 확인")
+        _pass("2개 종목 시세 이벤트 수신 확인")
 
         # 구독 해제
         await adapter.unsubscribe_quotes(["005930"])
-        test_pass("구독 해제 완료")
+        _pass("구독 해제 완료")
 
         await adapter.disconnect()
 
@@ -238,10 +238,10 @@ def test_error_handling_flow():
                 order_type=OrderType.MARKET,
                 qty=2,
             )
-            test_fail("잔고 부족 오류", "예외가 발생해야 함")
+            _fail("잔고 부족 오류", "예외가 발생해야 함")
         except ValueError as e:
             assert "잔고 부족" in str(e)
-            test_pass("잔고 부족 ValueError 발생")
+            _pass("잔고 부족 ValueError 발생")
 
         # 보유하지 않은 종목 매도 시도
         try:
@@ -252,10 +252,10 @@ def test_error_handling_flow():
                 order_type=OrderType.MARKET,
                 qty=1,
             )
-            test_fail("보유 수량 부족 오류", "예외가 발생해야 함")
+            _fail("보유 수량 부족 오류", "예외가 발생해야 함")
         except ValueError as e:
             assert "보유 수량 부족" in str(e)
-            test_pass("미보유 종목 매도 → ValueError")
+            _pass("미보유 종목 매도 → ValueError")
 
         # 연결 해제 후 주문 시도
         await adapter.disconnect()
@@ -267,9 +267,9 @@ def test_error_handling_flow():
                 order_type=OrderType.MARKET,
                 qty=1,
             )
-            test_fail("미연결 상태 오류", "예외가 발생해야 함")
+            _fail("미연결 상태 오류", "예외가 발생해야 함")
         except RuntimeError:
-            test_pass("미연결 상태 RuntimeError 발생")
+            _pass("미연결 상태 RuntimeError 발생")
 
     run(_test())
 
@@ -310,11 +310,11 @@ def test_reconnect_flow():
 
         # 재연결 태스크가 시작됨을 확인
         assert mgr.is_running
-        test_pass("ERROR 상태에서 재연결 태스크 시작 확인")
+        _pass("ERROR 상태에서 재연결 태스크 시작 확인")
 
         # 재연결 완료 대기
         await asyncio.sleep(0.2)
-        test_pass("재연결 시도 확인 (2회 호출)")
+        _pass("재연결 시도 확인 (2회 호출)")
 
     run(_test())
 
