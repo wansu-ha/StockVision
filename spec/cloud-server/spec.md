@@ -17,6 +17,8 @@
 - 매매 판단/명령 미수행 (시스템매매 도구, 투자일임 아님)
 - 수집된 시세는 **내부 분석용** (유저 재배포 아님)
 - LLM은 "데이터 제공" 역할만 (감성 점수, 요약 등)
+- 종목 메타데이터 관리 (공공데이터포털 수집)
+- 관심종목 관리
 
 ---
 
@@ -47,6 +49,9 @@
 | F19 | yfinance 보조 수집 (한국 외 시장) | market_data | P2 |
 | F20 | 데이터 수집 상태 모니터링 | admin | P2 |
 | F21 | 시세 조회 API는 어드민 전용 (일반 유저 호출 금지, §5③ 준수) | market_data | P0 |
+| F22 | 종목 메타데이터 관리 (StockMaster — 공공데이터포털 수집, 일 1회 갱신) | stocks | P0 |
+| F23 | 종목 검색 API (메타데이터만, 시세 미포함) | stocks | P0 |
+| F24 | 관심종목 CRUD | watchlist | P0 |
 
 ### 2.2 비기능적 요구사항
 
@@ -79,13 +84,17 @@ cloud_server/
 │   ├── quotes.py              # 시세 데이터 조회
 │   ├── heartbeat.py           # 하트비트 수신
 │   ├── version.py             # 버전 체크
-│   └── admin.py               # 어드민 API
+│   ├── admin.py               # 어드민 API
+│   ├── stocks.py              # 종목 메타데이터 검색/관리
+│   └── watchlist.py           # 관심종목 CRUD
 ├── services/
 │   ├── auth_service.py        # 인증 비즈니스 로직
 │   ├── rule_service.py        # 규칙 비즈니스 로직
 │   ├── context_service.py     # 컨텍스트 계산 (시세 DB → 지표)
 │   ├── ai_service.py          # Claude API 호출 (감성 분석 등)
-│   └── admin_service.py       # 어드민 비즈니스 로직
+│   ├── admin_service.py       # 어드민 비즈니스 로직
+│   ├── stock_service.py       # 종목 메타데이터 비즈니스 로직
+│   └── watchlist_service.py   # 관심종목 비즈니스 로직
 ├── collector/
 │   ├── kiwoom_collector.py    # 키움 WS 시세 수신 (서비스 키)
 │   ├── yfinance_collector.py  # yfinance 보조 수집
@@ -158,6 +167,8 @@ DELETE /api/v1/rules/:id     → 규칙 삭제
 
 ### 5.2 규칙 데이터 모델
 
+> 상세 스키마: `spec/rule-model/spec.md` §4 참조
+
 ```python
 class TradingRule(Base):
     __tablename__ = "trading_rules"
@@ -169,19 +180,22 @@ class TradingRule(Base):
 
     # 조건 (JSON)
     buy_conditions = Column(JSON)     # { operator: "AND", conditions: [...] }
-    sell_conditions = Column(JSON)
+    sell_conditions = Column(JSON)    # 선택 (매도 조건)
 
-    # 설정
-    order_type = Column(String(10), default="market")  # market | limit
-    qty = Column(Integer, nullable=False)
-    max_position_count = Column(Integer, default=5)
-    budget_ratio = Column(Float, default=0.2)
+    # 주문 설정 (JSON)
+    execution = Column(JSON, nullable=False)  # { order_type, qty_type, qty_value, limit_price }
 
-    # 상태
+    # 트리거 정책 (JSON)
+    trigger_policy = Column(JSON, nullable=False, default={"frequency": "ONCE_PER_DAY"})
+
+    # 메타
+    priority = Column(Integer, default=0)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, onupdate=datetime.utcnow)
 ```
+
+> `max_position_count`, `budget_ratio`는 사용자 전역 설정으로 이동 (`spec/rule-model/spec.md` §7)
 
 ### 5.3 조건 JSON 스키마
 
@@ -209,6 +223,35 @@ class TradingRule(Base):
     }
   ]
 }
+```
+
+### 5.5 종목 검색 API
+
+```
+GET /api/v1/stocks/search?q=삼성  → StockMaster에서 name/symbol 매칭 (상위 20건)
+GET /api/v1/stocks/:symbol        → 종목 상세 메타데이터
+```
+
+메타데이터만 반환 (시세 미포함). 제5조③ 시세 중계와 무관.
+
+### 5.6 관심종목 API
+
+```
+GET    /api/v1/watchlist          → 내 관심종목 목록
+POST   /api/v1/watchlist          → 관심종목 등록 { symbol }
+DELETE /api/v1/watchlist/:symbol  → 관심종목 해제
+```
+
+### 5.7 관심종목/종목 데이터 모델
+
+```python
+class Watchlist(Base):
+    __tablename__ = "watchlist"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    symbol = Column(String(10), nullable=False)
+    added_at = Column(DateTime, default=datetime.utcnow)
+    __table_args__ = (UniqueConstraint("user_id", "symbol"),)
 ```
 
 ---
@@ -275,6 +318,9 @@ async def get_sentiment(symbol: str) -> SentimentResult:
 ### 7.2 시세 데이터 모델
 
 ```python
+# 종목 메타데이터: 공공데이터포털에서 일 1회 수집. 시세(가격)와 명확히 분리.
+# 메타데이터는 유저에게 검색 API로 제공 (공개 정보).
+# 시세 데이터(DailyBar, MinuteBar)는 서비스 키로 수집, 내부 분석용만.
 class StockMaster(Base):
     __tablename__ = "stock_master"
     symbol = Column(String(10), primary_key=True)
@@ -325,7 +371,7 @@ class MinuteBar(Base):
 |------|------|------|------|
 | 실시간 체결가 WS 수신 | 장 시간 | 09:00~15:30 | 서비스 키 |
 | 일봉 저장 | 매일 1회 | 16:00 (장 마감 후) | 당일 종가 확정 후 |
-| 종목 마스터 갱신 | 매일 1회 | 08:00 (장 시작 전) | 상장/폐지 반영 |
+| 종목 마스터 갱신 | 매일 1회 | 08:00 (장 시작 전) | 공공데이터포털(금융위원회_KRX상장종목정보) 수집 → StockMaster 갱신 |
 | yfinance 보조 수집 | 매일 1회 | 17:00 | 한국 외 지수, 환율 등 |
 | 데이터 정합성 체크 | 매일 1회 | 18:00 | 누락 데이터 감지 + 재수집 |
 
@@ -456,6 +502,7 @@ PUT  /api/v1/rules/:id          규칙 sync (로컬에서 변경 시 업로드)
 GET  /api/v1/context            AI 컨텍스트 fetch (버전 변경 시)
 GET  /api/v1/templates          전략 템플릿 목록 fetch
 POST /api/v1/auth/refresh       JWT 자동 갱신 (Refresh Token)
+GET  /api/v1/stocks/master-version  종목 메타 버전 (하트비트 응답에 포함 가능)
 ```
 
 > WS 없음 — 하트비트 응답의 버전 비교로 변경 감지.
@@ -553,6 +600,12 @@ class StrategyTemplate(Base):
 - [ ] 로컬 서버가 규칙 sync (업로드) → DB 반영 + version 증가
 - [ ] Refresh Token 갱신 정상 동작
 
+### 12.7 종목/관심종목
+
+- [ ] 종목 검색 → 이름/코드 매칭 결과 반환
+- [ ] 관심종목 등록/해제 정상 동작
+- [ ] 공공데이터포털 수집 → StockMaster 갱신 확인
+
 ---
 
 ## 13. 범위
@@ -632,4 +685,4 @@ class StrategyTemplate(Base):
 
 ---
 
-**마지막 갱신**: 2026-03-05
+**마지막 갱신**: 2026-03-06
