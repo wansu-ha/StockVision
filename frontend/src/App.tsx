@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import Dashboard from './pages/Dashboard'
 import StockList from './pages/StockList'
@@ -6,8 +6,10 @@ import StockDetail from './pages/StockDetail'
 import Trading from './pages/Trading'
 import ExecutionLog from './pages/ExecutionLog'
 import StrategyBuilder from './pages/StrategyBuilder'
+import StrategyList from './pages/StrategyList'
 import Portfolio from './pages/Portfolio'
 import Templates from './pages/Templates'
+import Settings from './pages/Settings'
 import AdminDashboard from './pages/AdminDashboard'
 import Login from './pages/Login'
 import Register from './pages/Register'
@@ -15,10 +17,11 @@ import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
 import Onboarding from './pages/Onboarding'
 import Layout from './components/Layout'
+import AlertContainer from './components/AlertContainer'
 import ToastContainer from './components/ToastContainer'
-import { AuthProvider } from './context/AuthContext'
+import AdminGuard from './components/AdminGuard'
+import { AuthProvider, useAuth } from './context/AuthContext'
 
-// React Query 클라이언트 생성
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -28,34 +31,57 @@ const queryClient = new QueryClient({
   },
 })
 
+/** 인증 필수 라우트 가드 */
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated } = useAuth()
+  if (!isAuthenticated) return <Navigate to="/login" replace />
+  return <>{children}</>
+}
+
+function AppRoutes() {
+  return (
+    <Routes>
+      {/* 공개 라우트 */}
+      <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/onboarding" element={<Onboarding />} />
+
+      {/* 인증 필수 라우트 */}
+      <Route path="*" element={
+        <ProtectedRoute>
+          <Layout>
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/stocks" element={<StockList />} />
+              <Route path="/stocks/:symbol" element={<StockDetail />} />
+              <Route path="/trading" element={<Trading />} />
+              <Route path="/logs" element={<ExecutionLog />} />
+              <Route path="/strategies" element={<StrategyList />} />
+              <Route path="/strategies/new" element={<StrategyBuilder />} />
+              <Route path="/strategies/:id/edit" element={<StrategyBuilder />} />
+              <Route path="/strategy" element={<StrategyBuilder />} />
+              <Route path="/portfolio" element={<Portfolio />} />
+              <Route path="/templates" element={<Templates />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/admin/*" element={<AdminGuard><AdminDashboard /></AdminGuard>} />
+            </Routes>
+          </Layout>
+        </ProtectedRoute>
+      } />
+    </Routes>
+  )
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <Router>
+          <AlertContainer />
           <ToastContainer />
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-            <Route path="/onboarding" element={<Onboarding />} />
-            <Route path="*" element={
-              <Layout>
-                <Routes>
-                  <Route path="/" element={<Dashboard />} />
-                  <Route path="/stocks" element={<StockList />} />
-                  <Route path="/stocks/:symbol" element={<StockDetail />} />
-                  <Route path="/trading" element={<Trading />} />
-                  <Route path="/logs" element={<ExecutionLog />} />
-                  <Route path="/strategy" element={<StrategyBuilder />} />
-                  <Route path="/portfolio" element={<Portfolio />} />
-                  <Route path="/templates" element={<Templates />} />
-                  <Route path="/admin" element={<AdminDashboard />} />
-                </Routes>
-              </Layout>
-            } />
-          </Routes>
+          <AppRoutes />
         </Router>
       </AuthProvider>
     </QueryClientProvider>

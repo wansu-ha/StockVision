@@ -1,11 +1,22 @@
 import type { ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import NotificationCenter from './NotificationCenter'
+import TrafficLightStatus from './TrafficLightStatus'
+import UserMenu from './UserMenu'
 import { useLocalBridgeWS } from '../hooks/useLocalBridgeWS'
 
 interface LayoutProps {
   children: ReactNode
 }
+
+const navItems = [
+  { path: '/', label: '대시보드' },
+  { path: '/strategies', label: '전략' },
+  { path: '/stocks', label: '주식 목록' },
+  { path: '/trading', label: '가상 거래' },
+  { path: '/portfolio', label: '포트폴리오' },
+  { path: '/logs', label: '실행 로그' },
+]
 
 const Layout = ({ children }: LayoutProps) => {
   const location = useLocation()
@@ -31,70 +42,30 @@ const Layout = ({ children }: LayoutProps) => {
                   StockVision
                 </span>
               </Link>
+
+              {/* 신호등 */}
+              <div className="ml-6">
+                <TrafficLightStatus />
+              </div>
             </div>
-            
+
             <div className="flex items-center space-x-2">
+              {navItems.map((item) => (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={`px-5 py-2.5 rounded-2xl text-sm font-semibold transition-all duration-200 ${
+                    isActive(item.path)
+                      ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              ))}
+
               <NotificationCenter />
-              <Link
-                to="/"
-                className={`px-6 py-3 rounded-2xl text-sm font-semibold transition-all duration-200 ${
-                  isActive('/') 
-                    ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg' 
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                }`}
-              >
-                대시보드
-              </Link>
-              <Link
-                to="/stocks"
-                className={`px-6 py-3 rounded-2xl text-sm font-semibold transition-all duration-200 ${
-                  isActive('/stocks')
-                    ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                }`}
-              >
-                주식 목록
-              </Link>
-              <Link
-                to="/trading"
-                className={`px-6 py-3 rounded-2xl text-sm font-semibold transition-all duration-200 ${
-                  isActive('/trading')
-                    ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                }`}
-              >
-                가상 거래
-              </Link>
-              <Link
-                to="/strategy"
-                className={`px-6 py-3 rounded-2xl text-sm font-semibold transition-all duration-200 ${
-                  isActive('/strategy')
-                    ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                }`}
-              >
-                전략
-              </Link>
-              <Link
-                to="/portfolio"
-                className={`px-6 py-3 rounded-2xl text-sm font-semibold transition-all duration-200 ${
-                  isActive('/portfolio')
-                    ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                }`}
-              >
-                포트폴리오
-              </Link>
-              <Link
-                to="/logs"
-                className={`px-6 py-3 rounded-2xl text-sm font-semibold transition-all duration-200 ${
-                  isActive('/logs')
-                    ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                }`}
-              >
-                실행 로그
-              </Link>
+              <UserMenu />
             </div>
           </div>
         </div>
