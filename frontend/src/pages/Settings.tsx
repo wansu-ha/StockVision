@@ -62,6 +62,7 @@ export default function Settings() {
         <div className="space-y-3">
           <input
             type="password"
+            autoComplete="off"
             placeholder="App Key"
             value={appKey}
             onChange={(e) => setAppKey(e.target.value)}
@@ -69,6 +70,7 @@ export default function Settings() {
           />
           <input
             type="password"
+            autoComplete="off"
             placeholder="App Secret"
             value={appSecret}
             onChange={(e) => setAppSecret(e.target.value)}

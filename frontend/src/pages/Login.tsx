@@ -44,6 +44,7 @@ export default function Login() {
             <label className="block text-sm font-medium mb-1">이메일</label>
             <input
               type="email"
+              autoComplete="username"
               value={email}
               onChange={e => setEmail(e.target.value)}
               className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -54,6 +55,7 @@ export default function Login() {
             <label className="block text-sm font-medium mb-1">비밀번호</label>
             <input
               type="password"
+              autoComplete="current-password"
               value={password}
               onChange={e => setPassword(e.target.value)}
               className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"

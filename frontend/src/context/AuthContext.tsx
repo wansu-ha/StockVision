@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
-import { authApi } from '../services/auth'
+import { cloudAuth } from '../services/cloudClient'
 
 interface AuthState {
   jwt: string | null
@@ -31,13 +31,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const rt = localStorage.getItem(STORAGE_KEY_RT)
     if (rt && !sessionStorage.getItem(STORAGE_KEY_JWT)) {
-      authApi.refresh(rt)
-        .then(({ data }) => {
-          sessionStorage.setItem(STORAGE_KEY_JWT, data.jwt)
-          localStorage.setItem(STORAGE_KEY_RT, data.refresh_token)
+      cloudAuth.refresh(rt)
+        .then((res) => {
+          const d = res.data
+          sessionStorage.setItem(STORAGE_KEY_JWT, d.access_token)
+          localStorage.setItem(STORAGE_KEY_RT, d.refresh_token)
           setState({
-            jwt: data.jwt,
-            refreshToken: data.refresh_token,
+            jwt: d.access_token,
+            refreshToken: d.refresh_token,
             email: localStorage.getItem(STORAGE_KEY_EMAIL),
             isAuthenticated: true,
           })
@@ -50,13 +51,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const login = useCallback(async (email: string, password: string) => {
-    const { data } = await authApi.login(email, password)
-    sessionStorage.setItem(STORAGE_KEY_JWT, data.jwt)
-    localStorage.setItem(STORAGE_KEY_RT, data.refresh_token)
+    const res = await cloudAuth.login(email, password)
+    const d = res.data
+    sessionStorage.setItem(STORAGE_KEY_JWT, d.access_token)
+    localStorage.setItem(STORAGE_KEY_RT, d.refresh_token)
     localStorage.setItem(STORAGE_KEY_EMAIL, email)
     setState({
-      jwt: data.jwt,
-      refreshToken: data.refresh_token,
+      jwt: d.access_token,
+      refreshToken: d.refresh_token,
       email,
       isAuthenticated: true,
     })
@@ -64,7 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     const rt = localStorage.getItem(STORAGE_KEY_RT)
-    if (rt) await authApi.logout(rt).catch(() => {})
+    if (rt) await cloudAuth.logout(rt).catch(() => {})
     sessionStorage.removeItem(STORAGE_KEY_JWT)
     localStorage.removeItem(STORAGE_KEY_RT)
     localStorage.removeItem(STORAGE_KEY_EMAIL)
