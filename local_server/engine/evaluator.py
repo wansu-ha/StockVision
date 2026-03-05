@@ -1,75 +1,76 @@
-"""
-조건 평가 엔진
+"""RuleEvaluator — 규칙 조건 평가 (AND/OR 논리).
 
-- 컨텍스트(클라우드) + 실시간 가격(키움) 기반 조건 평가
-- AND 논리: 모든 조건 충족 시에만 True
+규칙의 conditions 리스트를 현재 시세 데이터와 AI 컨텍스트로 평가하여
+True/False를 반환한다.
 """
+from __future__ import annotations
+
 import logging
-import operator as op
-
-from engine.models import TradingRule, rule_from_dict
+from decimal import Decimal, InvalidOperation
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
-_OPS = {
-    ">":  op.gt,
-    "<":  op.lt,
-    ">=": op.ge,
-    "<=": op.le,
-    "==": op.eq,
-}
-
 
 class RuleEvaluator:
-    def __init__(self, context: dict, prices: dict[str, float]):
-        """
-        context: 클라우드 시장 컨텍스트 (rsi_14, kospi_change 등)
-        prices:  종목별 현재가 {stock_code: float}
-        """
-        self.ctx    = context
-        self.prices = prices
+    """규칙 조건을 현재 데이터로 평가."""
 
-    def evaluate(self, rule: TradingRule) -> bool:
-        for cond in rule.conditions:
-            val = self._resolve(cond.variable, rule.symbol)
-            if val is None:
-                logger.debug(f"변수 없음: {cond.variable} — 규칙 스킵")
-                return False
-            fn = _OPS.get(cond.operator)
-            if fn is None:
-                logger.warning(f"알 수 없는 연산자: {cond.operator}")
-                return False
-            if not fn(val, cond.value):
-                return False
-        return True
+    def evaluate(self, rule: dict, market_data: dict, context: dict) -> bool:
+        """규칙의 조건을 평가한다.
 
-    def _resolve(self, variable: str, symbol: str) -> float | None:
-        if variable == "price":
-            return self.prices.get(symbol)
-        # 플랫 조회 먼저
-        raw = self.ctx.get(variable)
-        # 없으면 중첩 market 섹션 조회 (kospi_rsi_14 등)
-        if raw is None:
-            raw = self.ctx.get("market", {}).get(variable)
-        if raw is None:
-            return None
+        Args:
+            rule: 규칙 dict (operator, conditions 포함)
+            market_data: 시세 데이터 (price, volume, rsi_14, ...)
+            context: AI 컨텍스트 (market_kospi_rsi, ...)
+
+        Returns:
+            True이면 조건 충족, False면 미충족
+        """
+        conditions = rule.get("conditions", [])
+        if not conditions:
+            return False
+
+        op = rule.get("operator", "AND")
+        results = [self._eval_single(c, market_data, context) for c in conditions]
+
+        if op == "OR":
+            return any(results)
+        # 기본 AND
+        return all(results)
+
+    def _eval_single(self, condition: dict, market_data: dict, context: dict) -> bool:
+        """단일 조건 평가."""
+        cond_type = condition.get("type", "")
+        field_name = condition.get("field", "")
+
+        # 데이터 소스 선택
+        if cond_type in ("price", "indicator", "volume"):
+            value = market_data.get(field_name)
+        elif cond_type == "context":
+            value = context.get(field_name)
+        else:
+            return False
+
+        if value is None:
+            return False
+
+        return self._compare(value, condition.get("operator", ""), condition.get("value"))
+
+    @staticmethod
+    def _compare(value: Any, operator: str, expected: Any) -> bool:
+        """비교 연산. Decimal 안전."""
         try:
-            return float(raw)
-        except (TypeError, ValueError):
-            return None
+            a = Decimal(str(value))
+            b = Decimal(str(expected))
+        except (InvalidOperation, TypeError, ValueError):
+            return False
 
-
-async def evaluate_rule(rule: dict) -> None:
-    """scheduler.py에서 호출 — dict 형태 규칙 1개 평가"""
-    from cloud.context import get_context
-    from engine.signal import get_signal_manager
-
-    try:
-        trading_rule = rule_from_dict(rule)
-        ctx          = get_context()
-        evaluator    = RuleEvaluator(ctx, prices={})
-
-        if evaluator.evaluate(trading_rule):
-            await get_signal_manager().process(trading_rule)
-    except Exception as e:
-        logger.error(f"규칙 평가 오류 (rule_id={rule.get('id')}): {e}")
+        ops: dict[str, bool] = {
+            "==": a == b,
+            "!=": a != b,
+            "<": a < b,
+            "<=": a <= b,
+            ">": a > b,
+            ">=": a >= b,
+        }
+        return ops.get(operator, False)

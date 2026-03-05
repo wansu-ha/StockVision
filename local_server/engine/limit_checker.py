@@ -1,0 +1,63 @@
+"""LimitChecker — 일일 예산 및 포지션 수 한도 체크."""
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass
+from decimal import Decimal
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class CheckResult:
+    """한도 체크 결과."""
+
+    ok: bool
+    reason: str = ""
+
+
+class LimitChecker:
+    """일일 거래 예산, 최대 포지션 수 체크."""
+
+    def __init__(
+        self,
+        budget_ratio: Decimal = Decimal("0.1"),
+        max_positions: int = 5,
+    ) -> None:
+        self._budget_ratio = budget_ratio  # 계좌의 N%
+        self._max_positions = max_positions
+        self._today_executed: Decimal = Decimal(0)
+
+    def check_budget(
+        self,
+        account_balance: Decimal,
+        order_amount: Decimal,
+    ) -> CheckResult:
+        """일일 예산 체크."""
+        max_daily = account_balance * self._budget_ratio
+        if self._today_executed + order_amount > max_daily:
+            return CheckResult(
+                ok=False,
+                reason=(
+                    f"일일 예산 초과 "
+                    f"({self._today_executed + order_amount} > {max_daily})"
+                ),
+            )
+        return CheckResult(ok=True)
+
+    def check_max_positions(self, current_positions: int) -> CheckResult:
+        """최대 포지션 수 체크."""
+        if current_positions >= self._max_positions:
+            return CheckResult(
+                ok=False,
+                reason=f"포지션 수 초과 ({current_positions} >= {self._max_positions})",
+            )
+        return CheckResult(ok=True)
+
+    def record_execution(self, amount: Decimal) -> None:
+        """체결 금액 누적 (일일 예산 추적)."""
+        self._today_executed += amount
+
+    def reset_daily(self) -> None:
+        """일일 누적 리셋."""
+        self._today_executed = Decimal(0)
