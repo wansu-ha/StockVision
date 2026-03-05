@@ -1,13 +1,7 @@
-import axios from 'axios'
+/** 어드민 API 클라이언트 — /api/admin/ */
+import api from './cloudClient'
 
-const api = axios.create({ baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000' })
-
-api.interceptors.request.use(cfg => {
-  const token = localStorage.getItem('jwt')
-  if (token) cfg.headers.Authorization = `Bearer ${token}`
-  return cfg
-})
-
+// 기존 타입 유지 (하위 호환)
 export interface AdminStats {
   users: { total: number; active_30d: number; new_7d: number; onboarding_done: number }
   templates: { total: number; active: number }
@@ -33,11 +27,42 @@ export interface AdminTemplate {
 }
 
 export const adminApi = {
-  getStats: () => api.get<{ success: boolean; data: AdminStats }>('/api/admin/stats').then(r => r.data.data),
+  // 통계
+  getStats: () => api.get('/api/admin/stats'),
+
+  // 유저
+  getUsers: (params?: { page?: number; search?: string }) =>
+    api.get('/api/admin/users', { params }),
+  updateUser: (id: string, body: Record<string, unknown>) =>
+    api.patch(`/api/admin/users/${id}`, body),
+
+  // 접속 통계
+  getConnectionStats: (period: string) =>
+    api.get('/api/admin/stats/connections', { params: { period } }),
+
+  // 서비스 키
+  getServiceKeys: () => api.get('/api/admin/service-keys'),
+  createServiceKey: (body: { source: string; key: string; description?: string }) =>
+    api.post('/api/admin/service-keys', body),
+  deleteServiceKey: (id: number) => api.delete(`/api/admin/service-keys/${id}`),
+
+  // 템플릿
+  getTemplates: () => api.get('/api/admin/templates'),
+  createTemplate: (body: Record<string, unknown>) => api.post('/api/admin/templates', body),
+  updateTemplate: (id: number, body: Record<string, unknown>) =>
+    api.put(`/api/admin/templates/${id}`, body),
+  deleteTemplate: (id: number) => api.delete(`/api/admin/templates/${id}`),
+
+  // 시세 데이터 상태
+  getDataStatus: () => api.get('/api/admin/data/status'),
+
+  // 에러 로그
+  getErrors: (params?: { level?: string; limit?: number; offset?: number }) =>
+    api.get('/api/admin/errors', { params }),
+
+  // 하위 호환 (기존 코드용)
   listUsers: (page = 1) =>
-    api.get<{ success: boolean; data: AdminUser[]; total: number }>(`/api/admin/users?page=${page}`).then(r => r.data),
+    api.get(`/api/admin/users?page=${page}`).then((r) => r.data),
   listTemplates: () =>
-    api.get<{ success: boolean; data: AdminTemplate[] }>('/api/admin/templates').then(r => r.data.data),
-  deleteTemplate: (id: number) =>
-    api.delete(`/api/admin/templates/${id}`).then(r => r.data),
+    api.get('/api/admin/templates').then((r) => r.data.data),
 }
