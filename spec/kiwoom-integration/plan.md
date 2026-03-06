@@ -1,6 +1,6 @@
 # 키움 API 연동 구현 계획서 (kiwoom-integration)
 
-> 작성일: 2026-03-04 | 상태: 초안 | 범위: 로컬 서버 COM API 레이어 | 의존: local-bridge
+> 작성일: 2026-03-04 | 상태: **v1 참고용 → Unit 1 (kiwoom-rest) plan으로 대체**
 
 ---
 

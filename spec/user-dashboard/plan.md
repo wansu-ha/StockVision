@@ -1,6 +1,6 @@
 # 사용자 대시보드 구현 계획서 (user-dashboard)
 
-> 작성일: 2026-03-04 | 상태: 초안 | 범위: Phase 3 메인 대시보드 | 의존: local-bridge, execution-log
+> 작성일: 2026-03-04 | 상태: **→ Unit 5 (frontend) plan에 통합**
 
 ---
 

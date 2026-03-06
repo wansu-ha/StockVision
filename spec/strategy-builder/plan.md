@@ -1,6 +1,6 @@
 # 전략 빌더 구현 계획서 (strategy-builder)
 
-> 작성일: 2026-03-04 | 상태: 초안 | 범위: Phase 3 UI | 의존: context-cloud, execution-engine
+> 작성일: 2026-03-04 | 상태: **→ Unit 5 (frontend) plan에 통합**
 
 ---
 
