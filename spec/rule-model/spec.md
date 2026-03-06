@@ -30,7 +30,9 @@
 
 ## 2. DSL 개요
 
-> 상세 문법/의미론: `docs/research/rule-dsl-design.md` 참조. 여기서는 데이터 모델에 필요한 핵심만 요약.
+> 정형 문법(EBNF): `spec/rule-model/grammar.md` 참조. 파서 구현은 해당 문법을 따른다.
+>
+> 설계 배경/의미론: `docs/research/rule-dsl-design.md` 참조. 여기서는 데이터 모델에 필요한 핵심만 요약.
 
 ### 2.1 핵심 원칙
 
@@ -166,7 +168,7 @@ class TradingRule(Base):
     __tablename__ = "trading_rules"
 
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
     name = Column(String(100), nullable=False)
     symbol = Column(String(10), nullable=False)
 

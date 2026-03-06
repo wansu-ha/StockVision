@@ -114,12 +114,10 @@
 **파일**: `parser.py`, `__init__.py`
 
 **작업**:
-- 재귀 하강 파서 구현
-  - 연산자 우선순위: `OR` < `AND` < `NOT` < 비교(`>`, `<`, `>=`, `<=`, `==`, `!=`) < 가감(`+`, `-`) < 승제(`*`, `/`) < 단항(`-`) < 호출/괄호
-  - 최상위: 커스텀 함수 선언*, 매수: 블록, 매도: 블록
-  - 커스텀 함수: `이름() = 식` (후방 참조 금지, 재귀 금지)
-  - 매수:/매도: 둘 다 필수, 각 1회
-  - 타입 체크: 비교는 숫자↔숫자, 논리는 boolean↔boolean
+- `spec/rule-model/grammar.md`의 EBNF를 1:1로 구현하는 재귀 하강 파서
+  - 구문 규칙 §2.2 → 각 비단말 = 파서 메서드
+  - 의미 제약 §4.1 → 파싱 시 검증 (매수/매도 필수, 후방 참조/재귀 금지)
+  - 타입 제약 §4.2 → 타입 체크 패스 (비교는 숫자↔숫자, 논리는 boolean↔boolean)
 - `__init__.py`에 `parse(script: str) -> Script` 공개
 
 **verify**: spec §2.3 예시 + 에러 케이스 (매도 누락, 타입 오류, 재귀 참조) 파싱 테스트
@@ -129,15 +127,17 @@
 **파일**: `evaluator.py`
 
 **작업**:
-- `evaluate(ast: Script, context: dict) -> tuple[bool, bool]` — (매수 결과, 매도 결과)
+- `evaluate(ast: Script, context: dict, state: dict) -> tuple[bool, bool]` — (매수 결과, 매도 결과)
 - context dict 구조: `{"현재가": Decimal, "거래량": int, "RSI": Callable, "MA": Callable, ...}`
+- state dict 구조: `{"cross_prev": {(func, arg_hash): (prev_a, prev_b)}}` — 엔진이 규칙별로 관리, 평가 간 유지
 - 내장 함수 호출: context에서 callable 조회 → 인자 전달 → 결과 반환
 - 내장 패턴 함수: builtins 레지스트리에서 정의 조회 → 인라인 평가
 - 커스텀 함수: 선언 순서대로 평가, 결과 캐시
 - null 전파: 어디서든 None 발생 → 해당 블록 전체 False (spec §7.2)
 - 0으로 나누기 → None (null 전파로 블록 실패)
+- `상향돌파(A,B)`/`하향돌파(A,B)`: 이전 값 없는 첫 평가 시 항상 false 반환
 
-**verify**: 골든크로스+RSI 조합 시나리오, null 전파 시나리오, 0 나누기 시나리오
+**verify**: 골든크로스+RSI 조합 시나리오, null 전파 시나리오, 0 나누기 시나리오, 상향돌파 첫 평가 = false
 
 ### Step 5: 클라우드 데이터 모델 + 검증
 
@@ -152,6 +152,7 @@
   priority = Column(Integer, default=0)
   ```
 - 기존 `order_type`, `qty`, `max_position_count`, `budget_ratio` 컬럼 유지 (하위 호환)
+- **우선순위**: `execution`이 non-null이면 JSON에서 추출, null이면 개별 컬럼(`order_type`, `qty`) 폴백
 - `validators.py`에 `validate_dsl_script()` 추가:
   ```python
   from sv_core.parsing import parse
@@ -188,31 +189,50 @@
   execution: dict = field(default_factory=...)
   trigger_policy: dict = field(default_factory=...)
   ```
+  - 기존 `side` 필드 제거 — DSL에서는 `매수:`/`매도:` 블록으로 대체
   - `from_dict()` 갱신: 새 필드 파싱 + 기존 필드 호환
-- `RuleEvaluator` DSL 경로 추가:
+  - `execution` 우선순위: non-null이면 JSON, null이면 개별 필드(`order_type`, `qty`) 폴백
+- `RuleEvaluator` 반환 타입 변경:
+  - 기존: `evaluate(rule, ...) -> bool` (단일 방향)
+  - 변경: `evaluate(rule, ...) -> tuple[bool, bool]` (매수 결과, 매도 결과)
   ```
   if rule.script is not None:
       ast = cache.get(rule.id) or parse(rule.script)
       buy, sell = evaluate(ast, context)
+      return (buy, sell)
   else:
       buy = self._eval_json(rule.buy_conditions, ...)
       sell = self._eval_json(rule.sell_conditions, ...)
+      return (buy, sell)
   ```
   - AST 캐시: `{rule_id: (script_hash, ast)}` — script 변경 시 무효화
 - `MarketSnapshot` → evaluator 컨텍스트 dict 변환 로직
+- **evaluate_all 호출 흐름 변경** (scheduler → evaluator → executor):
+  ```
+  for rule in rules (priority 내림차순):
+      buy_result, sell_result = evaluator.evaluate(rule, ...)
+      if buy_result and not holding(rule.symbol):
+          executor.execute(rule, side="BUY", ...)
+      if sell_result and holding(rule.symbol):
+          executor.execute(rule, side="SELL", ...)
+  ```
+  - 기존: rule에서 side를 읽어 한 방향만 평가/실행
+  - 변경: 매수/매도 동시 평가, 각각 독립 실행
 
-**verify**: DSL 규칙 평가 → 매수/매도 판정 정확. JSON 규칙 → 기존 동작 유지
+**verify**: DSL 규칙 평가 → 매수/매도 판정 정확. JSON 규칙 → 기존 동작 유지. evaluate_all이 양방향 처리
 
-### Step 8: 로컬 실행기 — 매도 보호
+### Step 8: 로컬 실행기 — 매도 보호 + 인터페이스 변경
 
 **파일**: `local_server/engine/executor.py`
 
 **작업**:
+- **인터페이스 변경**: `side`를 rule dict에서 읽지 않고, 호출자로부터 파라미터로 받음
+  - 기존: `rule.get("side")` → 변경: `execute(rule, side: str, ...)`
 - 매도 주문 실행 전 `보유수량 > 0` 확인 추가 (spec §7.3)
-- `execution` dict에서 `order_type`, `qty_type`, `qty_value`, `limit_price` 추출
+- `execution` dict에서 `order_type`, `qty_type`, `qty_value`, `limit_price` 추출 (없으면 개별 필드 폴백)
 - `trigger_policy` 처리: `ONCE` → 실행 후 `is_active=false` 설정
 
-**verify**: 미보유 종목 매도 시도 → REJECTED. ONCE 트리거 → 1회 실행 후 비활성화
+**verify**: 미보유 종목 매도 시도 → REJECTED. ONCE 트리거 → 1회 실행 후 비활성화. side 파라미터로 주문 방향 결정
 
 ### Step 9: 프론트엔드 타입 + API 클라이언트
 
@@ -239,9 +259,30 @@
 
 **verify**: 폼으로 규칙 생성 → script 필드 포함하여 저장 → 재조회 시 폼에 표시
 
+### Step 11: JSON → DSL 마이그레이션 스크립트
+
+**파일**: `scripts/migrate_rules_to_dsl.py` (신규)
+
+**작업**:
+- 기존 JSON 조건(`buy_conditions`/`sell_conditions`) → DSL `script` 텍스트 변환
+- 변환 규칙: `{type, field, op, value}` → `필드명 op value`, operator → AND/OR 결합, `매수:`/`매도:` 블록 생성
+- dry-run 모드: 변환 결과만 출력 (실제 DB 수정 없음)
+- 변환 후 `validate_dsl_script()` 검증 통과 확인
+- spec §10.4 수용 기준 충족
+
+**verify**: 기존 JSON 규칙 → DSL 변환 → parse 통과 → 원래 조건과 동일한 평가 결과
+
 ---
 
 ## 4. 검증 방법
+
+### 테스트 파일 위치
+
+| 위치 | 대상 |
+|------|------|
+| `sv_core/parsing/tests/` | Lexer, Parser, Evaluator 단위 테스트 |
+| `cloud_server/tests/` | validator, API 통합 테스트 |
+| `local_server/tests/` | RuleConfig, evaluate_all 흐름 테스트 |
 
 ### 4.1 단위 테스트
 
@@ -277,7 +318,7 @@
 - LLM 연동 (v2 — AI 분석)
 - 전략 템플릿 갤러리 (v2)
 - DB 마이그레이션 스크립트 실행 (Alembic — 별도 작업)
-- JSON → DSL 일괄 변환 스크립트 (마이그레이션 — 별도 작업)
+- JSON → DSL 대규모 일괄 변환 (운영 DB — 별도 작업)
 
 ---
 
