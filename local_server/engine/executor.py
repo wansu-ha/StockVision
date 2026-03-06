@@ -1,7 +1,7 @@
 """OrderExecutor — 주문 실행 파이프라인.
 
-조건 충족 → 중복 체크 → 한도 체크 → 안전장치 → 가격 검증 → 주문 실행.
-각 단계에서 거부되면 로그를 기록하고 거부 결과를 반환한다.
+v2: side를 호출자 파라미터로 받음. execution dict에서 주문 설정 추출.
+매도 보호: 보유수량 > 0 확인. trigger_policy 처리.
 """
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ from sv_core.broker.models import OrderSide, OrderType
 
 if TYPE_CHECKING:
     from sv_core.broker.base import BrokerAdapter
+    from sv_core.broker.models import BalanceResult
     from local_server.engine.limit_checker import LimitChecker
     from local_server.engine.price_verifier import PriceVerifier
     from local_server.engine.safeguard import Safeguard
@@ -39,6 +40,7 @@ class ExecutionResult:
     status: ExecutionStatus
     rule_id: int
     symbol: str
+    side: str
     message: str
     order_id: str | None = None
 
@@ -63,79 +65,88 @@ class OrderExecutor:
     async def execute(
         self,
         rule: dict[str, Any],
+        side: str,
         market_data: dict[str, Any],
-        balance_cash: Decimal,
-        position_count: int,
+        balance: BalanceResult,
     ) -> ExecutionResult:
         """주문 실행 파이프라인.
 
-        1. 중복 체크 (SignalManager)
-        2. 한도 체크 (LimitChecker)
-        3. 안전장치 체크 (Safeguard)
-        4. 가격 검증 (PriceVerifier)
-        5. 주문 실행 (BrokerAdapter.place_order)
+        Args:
+            rule: 규칙 dict
+            side: "BUY" | "SELL" (호출자가 결정)
+            market_data: 시세 데이터
+            balance: BalanceResult (cash, positions)
         """
         rule_id = int(rule.get("id", 0))
         symbol = str(rule.get("symbol", ""))
-        side_str = str(rule.get("side", "BUY"))
-        qty = int(rule.get("qty", 1))
-        order_type_str = str(rule.get("order_type", "MARKET"))
 
-        # 1. 중복 체크
-        if not self._signal.can_trigger(rule_id):
+        # execution dict에서 주문 설정 추출 (없으면 개별 필드 폴백)
+        execution = rule.get("execution") or {}
+        order_type_str = str(execution.get("order_type", rule.get("order_type", "MARKET"))).upper()
+        qty = int(execution.get("qty_value", rule.get("qty", 1)))
+        limit_price_raw = execution.get("limit_price", rule.get("limit_price"))
+        trigger_policy = rule.get("trigger_policy")
+
+        # 매도 보호: 보유수량 > 0 확인 (spec §7.3)
+        if side == "SELL":
+            holding = any(p.symbol == symbol for p in balance.positions)
+            if not holding:
+                return ExecutionResult(
+                    status=ExecutionStatus.REJECTED,
+                    rule_id=rule_id, symbol=symbol, side=side,
+                    message="미보유 종목 매도 거부",
+                )
+
+        # 1. 중복 체크 (매수/매도 독립)
+        if not self._signal.can_trigger(rule_id, side):
             return ExecutionResult(
                 status=ExecutionStatus.REJECTED,
-                rule_id=rule_id,
-                symbol=symbol,
-                message="오늘 이미 실행된 규칙",
+                rule_id=rule_id, symbol=symbol, side=side,
+                message=f"오늘 이미 실행된 규칙 ({side})",
             )
 
-        # 2. 한도 체크
+        # 2. 한도 체크 (매수만)
         ws_price = Decimal(str(market_data.get("price", 0)))
         order_amount = ws_price * qty
 
-        budget_check = self._limit.check_budget(balance_cash, order_amount)
-        if not budget_check.ok:
-            return ExecutionResult(
-                status=ExecutionStatus.REJECTED,
-                rule_id=rule_id,
-                symbol=symbol,
-                message=budget_check.reason,
-            )
+        if side == "BUY":
+            budget_check = self._limit.check_budget(balance.cash, order_amount)
+            if not budget_check.ok:
+                return ExecutionResult(
+                    status=ExecutionStatus.REJECTED,
+                    rule_id=rule_id, symbol=symbol, side=side,
+                    message=budget_check.reason,
+                )
 
-        pos_check = self._limit.check_max_positions(position_count)
-        if not pos_check.ok:
-            return ExecutionResult(
-                status=ExecutionStatus.REJECTED,
-                rule_id=rule_id,
-                symbol=symbol,
-                message=pos_check.reason,
-            )
+            pos_check = self._limit.check_max_positions(len(balance.positions))
+            if not pos_check.ok:
+                return ExecutionResult(
+                    status=ExecutionStatus.REJECTED,
+                    rule_id=rule_id, symbol=symbol, side=side,
+                    message=pos_check.reason,
+                )
 
         # 3. 안전장치 체크
         if not self._safeguard.is_trading_enabled():
             return ExecutionResult(
                 status=ExecutionStatus.REJECTED,
-                rule_id=rule_id,
-                symbol=symbol,
+                rule_id=rule_id, symbol=symbol, side=side,
                 message="Trading Enabled = OFF (Kill Switch 또는 손실 락)",
             )
 
         if not self._safeguard.check_order_speed():
             return ExecutionResult(
                 status=ExecutionStatus.REJECTED,
-                rule_id=rule_id,
-                symbol=symbol,
+                rule_id=rule_id, symbol=symbol, side=side,
                 message="주문 속도 제한 초과",
             )
 
-        # 4. 가격 검증 (실패 시 IDLE 복귀 — 일시적 괴리는 재시도 허용)
+        # 4. 가격 검증
         verify_result = await self._price.verify(symbol, ws_price)
         if not verify_result.ok:
             return ExecutionResult(
                 status=ExecutionStatus.REJECTED,
-                rule_id=rule_id,
-                symbol=symbol,
+                rule_id=rule_id, symbol=symbol, side=side,
                 message=(
                     f"가격 검증 실패 (WS={ws_price}, "
                     f"REST={verify_result.actual_price}, "
@@ -143,13 +154,13 @@ class OrderExecutor:
                 ),
             )
 
-        # 5. 주문 실행 — mark_triggered는 주문 직전 (가격 검증 실패 시 재시도 가능)
-        self._signal.mark_triggered(rule_id)
-        side = OrderSide.BUY if side_str == "BUY" else OrderSide.SELL
+        # 5. 주문 실행
+        self._signal.mark_triggered(rule_id, side)
+        order_side = OrderSide.BUY if side == "BUY" else OrderSide.SELL
         order_type = OrderType.LIMIT if order_type_str == "LIMIT" else OrderType.MARKET
         limit_price = (
-            Decimal(str(rule.get("limit_price")))
-            if rule.get("limit_price") and order_type == OrderType.LIMIT
+            Decimal(str(limit_price_raw))
+            if limit_price_raw and order_type == OrderType.LIMIT
             else None
         )
         client_order_id = f"sv-{rule_id}-{uuid.uuid4().hex[:8]}"
@@ -158,35 +169,33 @@ class OrderExecutor:
             result = await self._broker.place_order(
                 client_order_id=client_order_id,
                 symbol=symbol,
-                side=side,
+                side=order_side,
                 order_type=order_type,
                 qty=qty,
                 limit_price=limit_price,
             )
 
             self._safeguard.increment_order_count()
-            self._signal.mark_filled(rule_id)
+            self._signal.mark_filled(rule_id, side, trigger_policy)
             self._limit.record_execution(order_amount)
 
             logger.info(
                 "주문 성공: Rule %d, %s %s %d주, order_id=%s",
-                rule_id, side.value, symbol, qty, result.order_id,
+                rule_id, side, symbol, qty, result.order_id,
             )
 
             return ExecutionResult(
                 status=ExecutionStatus.SUCCESS,
-                rule_id=rule_id,
-                symbol=symbol,
+                rule_id=rule_id, symbol=symbol, side=side,
                 order_id=result.order_id,
                 message="주문 성공",
             )
 
         except Exception as e:
-            self._signal.mark_failed(rule_id)
+            self._signal.mark_failed(rule_id, side)
             logger.error("주문 실행 실패: Rule %d — %s", rule_id, e)
             return ExecutionResult(
                 status=ExecutionStatus.FAILED,
-                rule_id=rule_id,
-                symbol=symbol,
+                rule_id=rule_id, symbol=symbol, side=side,
                 message=f"주문 실행 실패: {e}",
             )

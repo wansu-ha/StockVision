@@ -127,7 +127,10 @@ class StrategyEngine:
     # ── 메인 루프 ──
 
     async def evaluate_all(self) -> None:
-        """1분마다 호출되는 메인 루프."""
+        """1분마다 호출되는 메인 루프.
+
+        v2: DSL 양방향 평가 + priority 정렬 + ABC 정합.
+        """
         if not self._running:
             return
 
@@ -144,22 +147,36 @@ class StrategyEngine:
                 logger.debug("장 마감 — 평가 중단")
                 return
 
-            # 활성 규칙 필터
-            active_rules = [r for r in self._rules if r.get("is_active", False)]
+            # 활성 규칙 (priority 내림차순)
+            active_rules = sorted(
+                [r for r in self._rules if r.get("is_active", False)],
+                key=lambda r: r.get("priority", 0),
+                reverse=True,
+            )
             if not active_rules:
                 return
 
-            # 잔고 조회
+            # Kill Switch 체크
+            trading_enabled = self._safeguard.is_trading_enabled()
+
+            # 잔고 조회 (ABC: 파라미터 없음)
             balance = await self._broker.get_balance()
+            holding_symbols = {p.symbol for p in balance.positions}
 
             for rule in active_rules:
-                await self._evaluate_rule(rule, balance)
+                await self._evaluate_rule(rule, balance, holding_symbols, trading_enabled)
 
         except Exception:
             logger.exception("evaluate_all 오류")
 
-    async def _evaluate_rule(self, rule: dict, balance: Any) -> None:
-        """개별 규칙 평가 → 주문 실행."""
+    async def _evaluate_rule(
+        self,
+        rule: dict,
+        balance: Any,
+        holding_symbols: set[str],
+        trading_enabled: bool,
+    ) -> None:
+        """개별 규칙 평가 → 매수/매도 각각 실행."""
         rule_id = rule.get("id", 0)
         symbol = rule.get("symbol", "")
 
@@ -172,25 +189,24 @@ class StrategyEngine:
 
             context = self._context_cache.get()
 
-            # 조건 평가
-            if not self._evaluator.evaluate(rule, latest, context):
-                return
+            # 조건 평가 → (buy_result, sell_result)
+            buy_result, sell_result = self._evaluator.evaluate(rule, latest, context)
 
-            logger.info("Rule %d (%s): 조건 충족 → 주문 실행", rule_id, symbol)
+            # 매수: 조건 충족 + 미보유 + 거래 가능
+            if buy_result and symbol not in holding_symbols and trading_enabled:
+                logger.info("Rule %d (%s): 매수 조건 충족", rule_id, symbol)
+                result = await self._executor.execute(rule, "BUY", latest, balance)
+                logger.info("Rule %d BUY: %s — %s", rule_id, result.status.value, result.message)
+                if self._on_execution:
+                    self._on_execution(result)
 
-            # 주문 실행
-            result = await self._executor.execute(
-                rule=rule,
-                market_data=latest,
-                balance_cash=balance.cash,
-                position_count=len(balance.positions),
-            )
-
-            logger.info("Rule %d: %s — %s", rule_id, result.status.value, result.message)
-
-            # 콜백
-            if self._on_execution:
-                self._on_execution(result)
+            # 매도: 조건 충족 + 보유 중 + 거래 가능
+            if sell_result and symbol in holding_symbols and trading_enabled:
+                logger.info("Rule %d (%s): 매도 조건 충족", rule_id, symbol)
+                result = await self._executor.execute(rule, "SELL", latest, balance)
+                logger.info("Rule %d SELL: %s — %s", rule_id, result.status.value, result.message)
+                if self._on_execution:
+                    self._on_execution(result)
 
         except Exception:
             logger.exception("Rule %d 평가 오류", rule_id)
