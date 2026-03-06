@@ -1,9 +1,9 @@
-import type { TradingRule } from '../services/rules'
+import type { Rule } from '../types/strategy'
 
 interface Props {
-  rules: TradingRule[]
-  onToggle: (id: number) => void
-  onEdit: (rule: TradingRule) => void
+  rules: Rule[]
+  onToggle: (rule: Rule) => void
+  onEdit: (rule: Rule) => void
   onDelete: (id: number) => void
 }
 
@@ -18,7 +18,7 @@ export default function RuleList({ rules, onToggle, onEdit, onDelete }: Props) {
         <li key={rule.id} className="flex items-center gap-3 py-3">
           {/* ON/OFF 토글 */}
           <button
-            onClick={() => onToggle(rule.id)}
+            onClick={() => onToggle(rule)}
             className={`w-10 h-5 rounded-full transition-colors ${
               rule.is_active ? 'bg-blue-500' : 'bg-gray-300'
             }`}
@@ -33,17 +33,18 @@ export default function RuleList({ rules, onToggle, onEdit, onDelete }: Props) {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <span className="font-medium text-sm truncate">{rule.name}</span>
-              <span className={`text-xs px-1.5 py-0.5 rounded ${
-                rule.side === 'BUY' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'
-              }`}>
-                {rule.side === 'BUY' ? '매수' : '매도'}
+              <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
+                {rule.symbol}
               </span>
+              {rule.priority > 0 && (
+                <span className="text-xs text-gray-400">P{rule.priority}</span>
+              )}
             </div>
-            <div className="text-xs text-gray-500 mt-0.5">
-              {rule.stock_code} · {rule.quantity}주 ·{' '}
-              {rule.conditions.map((c, i) => (
-                <span key={i}>{c.variable} {c.operator} {c.value}{i < rule.conditions.length - 1 ? ' AND ' : ''}</span>
-              ))}
+            <div className="text-xs text-gray-500 mt-0.5 truncate">
+              {rule.script
+                ? rule.script.split('\n').filter(l => l.trim() && !l.trim().startsWith('--')).join(' | ')
+                : '(JSON 조건)'
+              }
             </div>
           </div>
 

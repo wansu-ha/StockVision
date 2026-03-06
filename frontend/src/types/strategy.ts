@@ -15,21 +15,53 @@ export interface OrderSettings {
   limit_price?: number
 }
 
+/** v2 주문 설정 (execution JSON) */
+export interface Execution {
+  order_type: 'MARKET' | 'LIMIT'
+  qty_type: 'FIXED'
+  qty_value: number
+  limit_price?: number | null
+}
+
+/** v2 트리거 정책 */
+export interface TriggerPolicy {
+  frequency: 'ONCE_PER_DAY' | 'ONCE'
+  cooldown_minutes?: number | null
+}
+
 export interface Rule {
   id: number
   name: string
   symbol: string
-  side: 'BUY' | 'SELL'
-  operator: 'AND' | 'OR'
-  conditions: Condition[]
-  order_settings: OrderSettings
   is_active: boolean
   priority: number
+  version: number
   created_at: string
-  updated_at: string
+  updated_at: string | null
+  // v2 DSL
+  script: string | null
+  execution: Execution | null
+  trigger_policy: TriggerPolicy | null
+  // v1 하위 호환
+  buy_conditions: Record<string, unknown> | null
+  sell_conditions: Record<string, unknown> | null
+  order_type: string
+  qty: number
+  max_position_count: number
+  budget_ratio: number
 }
 
-export type CreateRulePayload = Omit<Rule, 'id' | 'created_at' | 'updated_at'>
+export type CreateRulePayload = Pick<Rule, 'name' | 'symbol'> & {
+  script?: string | null
+  execution?: Execution | null
+  trigger_policy?: TriggerPolicy | null
+  priority?: number
+  buy_conditions?: Record<string, unknown> | null
+  sell_conditions?: Record<string, unknown> | null
+  order_type?: string
+  qty?: number
+  is_active?: boolean
+}
 export type UpdateRulePayload = Partial<CreateRulePayload>
 
 export interface Indicator {
