@@ -1,8 +1,12 @@
 # 키움 REST API 연동 구현 계획서 (kiwoom-rest)
 
-> 작성일: 2026-03-05 | 상태: 초안 | Unit 1 (Phase 3-A)
+> 작성일: 2026-03-05 | 상태: 초안 — 재작성 필요 | Unit 1 (Phase 3-A)
 >
 > **기반**: `spec/kiwoom-rest/spec.md` (2026-03-04)
+>
+> **검토 (2026-03-07)**: 이전 AI가 한국투자증권 Open API+를 키움증권으로 착각하여 구현.
+> **코드 전면 재구현 필요** — `local_server/broker/kiwoom/` 전체가 잘못된 증권사 API 기반.
+> 증권사 방향 결정 후 spec/plan/code 모두 재작성해야 함.
 
 ---
 

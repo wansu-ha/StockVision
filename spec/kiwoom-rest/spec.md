@@ -1,9 +1,15 @@
 # 키움 REST API 연동 명세서 (kiwoom-rest)
 
-> 작성일: 2026-03-04 | 상태: 초안 | Unit 1 (Phase 3-A)
+> 작성일: 2026-03-04 | 상태: 초안 — 재작성 필요 | Unit 1 (Phase 3-A)
 >
 > **이전 spec**: `spec/kiwoom-integration/` (COM/pykiwoom 기반) → 폐기.
 > 키움증권이 2025년 REST API를 공개하여 COM/HTS/32bit 제약 전부 해소됨.
+>
+> **검토 (2026-03-07)**: 구현 코드(`local_server/broker/kiwoom/`)가 **키움증권이 아닌
+> 한국투자증권 Open API+**(`openapi.koreainvestment.com:9443`)를 사용 중.
+> 도메인·엔드포인트·tr_id·인증 흐름 전부 한국투자증권 것이며, 변수명만 `KIWOOM_`.
+> 이전 AI가 키움증권 API 문서에 접근하지 못하고 한국투자증권 API를 키움으로 착각하여 구현.
+> **코드 전면 재구현 필요** — 증권사 방향 결정 후 spec/plan/code 모두 갈아엎어야 함.
 
 ---
 
