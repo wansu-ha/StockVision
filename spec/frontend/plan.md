@@ -1,6 +1,6 @@
 # 프론트엔드 구현 계획서 (frontend)
 
-> 작성일: 2026-03-05 | 상태: 초안 | Unit 6 (Phase 3)
+> 작성일: 2026-03-05 | 상태: 초안 | Unit 5 (Phase 3)
 
 ---
 
@@ -143,51 +143,53 @@ src/
 
 ---
 
-### Step 3 — 레이아웃 + 라우팅 (사이드바, 신호등 헤더, 보호된 라우트)
+### Step 3 — 레이아웃 + 라우팅 (신호등 헤더, 보호된 라우트)
 
-**목표**: 인증된 사용자만 접근 가능한 레이아웃 및 네비게이션 완성
+**목표**: 인증된 사용자만 접근 가능한 싱글 페이지 레이아웃 완성
 
 **파일**:
 - `components/Layout.tsx` (기존 개선)
-  - 헤더 (로고, 신호등 3개, 유저메뉴)
-  - 사이드바 (메뉴: 대시보드, 전략, 로그, 설정, 어드민)
-  - 푸터 (선택)
+  - 헤더 (로고 + 신호등, 검색바, 유저메뉴)
+  - **사이드바 없음** — spec §3.1 싱글 페이지 원칙
   - 반응형 디자인 (태블릿/PC)
 - `components/TrafficLightStatus.tsx` (신규)
-  - 3개 신호등: 클라우드 서버, 로컬 서버, 키움 API
-  - 5초마다 갱신 (cloudClient.healthCheck + localClient.getStatus)
-  - 색상: green(정상), red(오류), yellow(준비 중)
-  - 호버 시 상태 텍스트 표시
+  - **신호등 1개 (통합)**: "지금 거래 가능한가?"
+  - 색상 로직:
+    - green: 로컬 + 키움 정상 → 거래 가능
+    - yellow: 로컬만 연결 (키움 미연결 또는 Kill Switch 활성)
+    - red: 로컬 미연결
+  - 확인 방법: localhost `/api/status` → kiwoom_connected + kill_switch 상태
+  - 5초마다 갱신 (localClient.getStatus)
+  - 호버 시 상태 텍스트 표시 (원인 안내)
 - `components/UserMenu.tsx` (신규)
-  - 드롭다운: 프로필, 설정, 로그아웃
+  - 드롭다운: 실행 로그, 설정, 로그아웃
 - `hooks/useAuth.ts` (신규)
   - AuthContext를 래핑하여 isAuthenticated 확인
 - `App.tsx` (기존 개선)
   - ProtectedRoute 컴포넌트 추가
   - 미인증 시 /login으로 리다이렉트
 
-**라우팅 구조**:
+**라우팅 구조** (spec §3.1 준수):
 ```
-/                       → Dashboard (인증 필요)
+/                       → 메인 (인증 필요, 싱글 페이지)
 /login, /register, ...  → 인증 페이지 (인증 불필요)
-/strategies             → 전략 목록
-/strategies/new         → 전략 빌더 (새 규칙)
-/strategies/:id/edit    → 전략 빌더 (수정)
+/settings               → 설정 (API Key, 모드, 프로필)
 /logs                   → 실행 로그
-/settings               → 설정
 /admin/*                → 어드민 (role=admin만)
 ```
+> 대시보드·내 종목·종목 상세·규칙 편집은 모두 `/`에서 모달/패널로 처리.
+> 설정·로그는 유저 메뉴에서 접근.
 
 **타입**:
 - `types/ui.ts` (신규)
-  - TrafficLightColor ('green' | 'red' | 'yellow')
-  - ServerStatus (cloud, local, kiwoom)
+  - TrafficLightColor ('green' | 'yellow' | 'red')
+  - LocalStatus (connected, kiwoom_connected, kill_switch, engine_running)
 
 **검증**:
 - [ ] 미인증 시 /login 리다이렉트
-- [ ] 인증 후 모든 페이지 접근 가능
+- [ ] 인증 후 `/` 접근 가능
 - [ ] 신호등 5초 갱신 + 색상 변화 확인
-- [ ] 사이드바 메뉴 렌더링 + 클릭 네비게이션
+- [ ] 유저 메뉴에서 로그/설정 접근
 - [ ] 로그아웃 → /login 리다이렉트
 
 ---
@@ -198,7 +200,7 @@ src/
 
 **파일**:
 - `pages/Dashboard.tsx` (기존 개선)
-  - 상단: 시스템 상태 (신호등 3개) + 요약 (활성 전략, 오늘 체결)
+  - 상단: 시스템 상태 (신호등 1개, 통합) + 엔진 시작/중지 버튼 + 요약 (활성 전략, 오늘 체결)
   - 중앙-상: 실시간 시세 테이블 (종목명, 현재가, 변동률, 거래량)
   - 중앙-하: 최근 체결 피드 (시간, 종목, 매수/매도, 수량, 체결가, 상태)
   - 하단: 시장 컨텍스트 (KOSPI RSI, 변동성, 추세)
@@ -231,14 +233,13 @@ src/
 
 **API 호출**:
 - cloudClient.getContext() — 시장 컨텍스트
-- cloudClient.healthCheck() — 신호등 (클라우드)
-- localClient.getStatus() — 신호등 (로컬 + 키움)
+- localClient.getStatus() — 신호등 (통합: 로컬 + 키움 + Kill Switch)
 
 **검증**:
 - [ ] 대시보드 로드 시 시세 테이블 표시
 - [ ] localhost WS 연결 → 시세 업데이트 실시간 반영
 - [ ] 체결 이벤트 수신 → ExecutionFeed 반영
-- [ ] 신호등 5초 갱신
+- [ ] 신호등 1개 (통합) 5초 갱신
 - [ ] 시장 컨텍스트 데이터 표시
 - [ ] localhost 미연결 시 경고 UI
 
@@ -306,16 +307,56 @@ src/
 
 ---
 
-### Step 6 — 전략 빌더 (조건 UI, AND/OR, 저장 + sync)
+### Step 6 — 종목 검색 + 관심종목
+
+**목표**: 종목 검색 자동완성 + 관심종목 목록 관리
+
+**파일**:
+- `components/StockSearch.tsx` (신규)
+  - 검색 입력 + 자동완성 드롭다운
+  - primary: cloudClient.searchStocks(query) — StockMaster 검색
+  - fallback: 로컬 캐시 검색 (클라우드 미연결 시 localClient.searchStocks(query))
+  - debounce 300ms
+  - 선택 시 종목 상세 패널 열기
+- `components/WatchlistPanel.tsx` (신규) — `/` 내 패널로 표시
+  - 관심종목 목록 표시 (종목명, 현재가, 변동률)
+  - cloudClient.getWatchlist() / addWatchlist(symbol) / deleteWatchlist(symbol)
+  - 오프라인 대응:
+    - 읽기: localClient.getWatchlist() 캐시에서 조회
+    - 변경: sync_queue에 저장 → 연결 복구 시 flush
+
+> **싱글 페이지 원칙**: 별도 라우트 없이 `/` 내 패널로 표시 (spec §3.1)
+
+**API 호출**:
+- cloudClient.searchStocks(query) — 종목 검색
+- cloudClient.getWatchlist() — 관심종목 조회
+- cloudClient.addWatchlist(symbol) — 관심종목 추가
+- cloudClient.deleteWatchlist(symbol) — 관심종목 삭제
+- localClient.searchStocks(query) — 오프라인 fallback 검색
+- localClient.getWatchlist() — 오프라인 fallback 조회
+
+**검증**:
+- [ ] 종목 검색 입력 → 자동완성 표시 (debounce 300ms)
+- [ ] 검색 결과 클릭 → 종목 상세 패널 열기
+- [ ] 관심종목 추가/삭제 → API 호출 + UI 반영
+- [ ] 클라우드 미연결 시 → 로컬 캐시 fallback 동작
+- [ ] 연결 복구 → sync_queue flush
+
+---
+
+### Step 7 — 전략 빌더 (조건 UI, AND/OR, 저장 + sync)
 
 **목표**: 시각적 규칙 편집기 — 매수/매도 조건을 드래그-드롭 또는 폼으로 구성
 
 **파일**:
 - `pages/StrategyBuilder.tsx` (기존 개선)
-  - 상단: 전략 이름 + 대상 종목 입력
+  - 상단: 전략 이름 + 대상 종목 선택 (StockSearch 컴포넌트 사용)
   - 중단: 매수 조건 + 매도 조건 각각 구성기
-  - 하단: 주문 설정 (주문 유형, 수량, 예산 비율, 최대 포지션)
+  - 하단: 실행 설정 (execution) + 트리거 정책 (trigger_policy)
+    - execution: order_type (시장가/지정가), qty_type (fixed/ratio), qty_value, limit_price (지정가 시)
+    - trigger_policy: frequency (once/every_bar/cooldown_minutes)
   - 버튼: 저장, 저장+활성화, 취소
+  - **참고**: max_position_count, budget_ratio는 전역 설정 (설정 페이지로 이동)
 - `components/ConditionEditor.tsx` (기존 개선)
   - 조건 행 반복 (지표, 연산자, 값)
   - AND/OR 드롭다운
@@ -329,8 +370,9 @@ src/
 **타입**:
 - `types/strategy.ts` (신규)
   - Condition (indicator, operator, value, logic: 'AND' | 'OR')
-  - Rule (id, name, symbol, buy_conditions, sell_conditions, order_settings, enabled, created_at, updated_at)
-  - OrderSettings (order_type: 'market' | 'limit', qty, budget_ratio, max_positions)
+  - Rule (id, name, symbol, buy_conditions, sell_conditions, execution, trigger_policy, enabled, created_at, updated_at)
+  - Execution (order_type: 'market' | 'limit', qty_type: 'fixed' | 'ratio', qty_value, limit_price?)
+  - TriggerPolicy (frequency: 'once' | 'every_bar' | 'cooldown_minutes', cooldown_minutes?)
   - Indicator (key, name, params?)
 
 **API 호출**:
@@ -345,8 +387,8 @@ const savedRule = await cloudClient.saveRule(rule);
 // 2. localhost에 즉시 sync
 await localClient.syncRules([savedRule]);
 
-// 3. 전략 목록으로 이동
-navigate('/strategies');
+// 3. 저장 완료 → 모달 닫기 (싱글 페이지)
+closeModal();
 ```
 
 **미보존된 변경 경고**:
@@ -363,15 +405,15 @@ navigate('/strategies');
 
 ---
 
-### Step 7 — 전략 목록 관리 (CRUD, ON/OFF 토글)
+### Step 8 — 전략 목록 관리 (CRUD, ON/OFF 토글)
 
 **목표**: 저장된 규칙 목록 조회, 활성화/비활성화, 수정, 삭제
 
 **파일**:
-- `pages/StrategyList.tsx` (신규) 또는 라우트 통합
-  - 테이블: 규칙명, 대상 종목, 조건 요약, 활성 여부, 생성일, 작업 버튼
-  - 검색/필터 (종목, 활성 여부)
-  - 규칙 하나 클릭 → 상세 뷰 또는 수정 페이지
+- `components/StrategyListPanel.tsx` (신규) — `/` 내 종목 상세 패널의 하위
+  - 선택된 종목의 규칙 목록 (규칙명, 조건 요약, 활성 여부, 작업 버튼)
+  - 필터 (활성 여부)
+  - 규칙 클릭 → 규칙 편집 모달
   - 토글 버튼: 규칙 ON/OFF (즉시 api 호출)
   - 삭제 버튼 (확인 다이얼로그)
 - `components/RuleCard.tsx` (신규)
@@ -392,11 +434,11 @@ navigate('/strategies');
 - [ ] 규칙 ON/OFF 토글 → api 호출 + UI 반영
 - [ ] 규칙 삭제 → 확인 → api 호출 + 목록 갱신
 - [ ] localhost 미연결 시 → 경고 표시 (api는 성공)
-- [ ] 수정 클릭 → /strategies/:id/edit로 이동
+- [ ] 수정 클릭 → 규칙 편집 모달 열기
 
 ---
 
-### Step 8 — 실행 로그 뷰어 (체결 내역, 필터, 상세 조회)
+### Step 9 — 실행 로그 뷰어 (체결 내역, 필터, 상세 조회)
 
 **목표**: localhost에서 저장된 체결 로그, 오류 로그를 조회하고 분석
 
@@ -428,7 +470,7 @@ navigate('/strategies');
 
 ---
 
-### Step 9 — 설정 페이지 (API Key 등록, 모드 전환, 프로필)
+### Step 10 — 설정 페이지 (API Key 등록, 모드 전환, 프로필)
 
 **목표**: 사용자 설정 — 키움 API Key, 모의/실거래 모드, 프로필 정보
 
@@ -444,7 +486,11 @@ navigate('/strategies');
     - 이메일 (읽기 전용)
     - 닉네임 (수정 가능)
     - 저장 버튼
-  - 섹션 3: 알림 설정 (향후)
+  - 섹션 3: 거래 전역 설정
+    - max_position_count (최대 포지션 수)
+    - budget_ratio (예산 비율)
+    - localClient.updateConfig() 호출
+  - 섹션 4: 알림 설정 (향후)
 
 **API 호출**:
 - localClient.setKiwoomKeys(appKey, appSecret) — API Key 등록
@@ -471,15 +517,15 @@ navigate('/strategies');
 
 ---
 
-### Step 10 — 신호등 + 상태 모니터링 (헤더, 토스트 알림)
+### Step 11 — 신호등 + 상태 모니터링 (헤더, 토스트 알림)
 
 **목표**: 신호등 시스템 완성 — 실시간 상태 모니터링 + 변화 시 알림
 
 **파일**:
 - `components/TrafficLightStatus.tsx` (기존 Step 3에서 확장)
-  - 매 5초 갱신
-  - 상태 변화 감지 → 토스트 알림 (예: "키움 API 연결 끊김")
-  - 호버 시 상세 정보 (마지막 갱신 시간, 상태 메시지)
+  - 신호등 1개 (통합) — 매 5초 갱신
+  - 상태 변화 감지 → 토스트 알림 (예: "키움 연결 끊김", "로컬 서버 미연결")
+  - 호버 시 상세 정보 (마지막 갱신 시간, 원인 메시지)
 
 **토스트 알림**:
 - `stores/alertStore.ts` (Zustand)
@@ -490,25 +536,31 @@ navigate('/strategies');
 
 **상태 변화 감지**:
 ```typescript
-// 이전 상태와 비교하여 변화 시에만 알림
-if (prevStatus.kiwoom !== currentStatus.kiwoom) {
+// 이전 신호등 색상과 비교하여 변화 시에만 알림
+const prevColor = getTrafficLight(prevStatus);
+const currColor = getTrafficLight(currentStatus);
+if (prevColor !== currColor) {
+  const messages = {
+    green: '시스템 정상 — 거래 가능',
+    yellow: '키움 미연결 — 규칙 관리만 가능',
+    red: '로컬 서버 미연결'
+  };
   addAlert({
-    type: currentStatus.kiwoom ? 'success' : 'error',
-    message: currentStatus.kiwoom ? '키움 API 연결됨' : '키움 API 연결 끊김'
-  })
+    type: currColor === 'green' ? 'success' : currColor === 'yellow' ? 'warn' : 'error',
+    message: messages[currColor]
+  });
 }
 ```
 
 **API 호출** (5초 주기):
-- cloudClient.healthCheck() — 클라우드 서버
-- localClient.getStatus() — 로컬 서버 + 키움 상태
+- localClient.getStatus() — 로컬 서버 + 키움 + Kill Switch 상태
 
 **검증**:
-- [ ] 신호등 색상 변화 (green → red → yellow)
-- [ ] 상태 변화 시 토스트 알림 표시
-- [ ] 매 5초 갱신 (네트워크 요청)
-- [ ] 호버 시 상세 정보 표시
-- [ ] localhost 연결 불가 → 빨강 + 알림
+- [ ] 신호등 1개 색상 변화 (green ↔ yellow ↔ red)
+- [ ] 상태 변화 시 토스트 알림 표시 (원인 메시지 포함)
+- [ ] 매 5초 갱신 (localClient.getStatus)
+- [ ] 호버 시 상세 정보 표시 (원인 안내)
+- [ ] localhost 연결 불가 → red + 알림
 
 ---
 
@@ -523,7 +575,8 @@ if (prevStatus.kiwoom !== currentStatus.kiwoom) {
 | `utils/ws.ts` | WebSocket 관리자 |
 | `hooks/useLocalBridgeWS.ts` (완성) | WS 훅 |
 | `hooks/useAuth.ts` | 인증 상태 훅 |
-| `components/TrafficLightStatus.tsx` | 신호등 |
+| `components/TrafficLightStatus.tsx` | 신호등 (통합 1개) |
+| `components/StockSearch.tsx` | 종목 검색 자동완성 |
 | `components/UserMenu.tsx` | 사용자 메뉴 |
 | `components/PriceTable.tsx` | 실시간 시세 테이블 |
 | `components/ExecutionFeed.tsx` | 체결 피드 |
@@ -535,11 +588,12 @@ if (prevStatus.kiwoom !== currentStatus.kiwoom) {
 | `pages/Dashboard.tsx` (개선) | 대시보드 |
 | `pages/StrategyBuilder.tsx` (개선) | 전략 빌더 |
 | `pages/StrategyList.tsx` | 전략 목록 |
+| `pages/Watchlist.tsx` | 관심종목 |
 | `pages/ExecutionLog.tsx` (개선) | 실행 로그 |
 | `pages/Settings.tsx` | 설정 |
 | `types/auth.ts` | 인증 타입 |
 | `types/dashboard.ts` | 대시보드 타입 |
-| `types/strategy.ts` | 전략 타입 |
+| `types/strategy.ts` | 전략 타입 (execution + trigger_policy 모델) |
 | `types/log.ts` | 로그 타입 |
 | `types/settings.ts` | 설정 타입 |
 | `types/ui.ts` | UI 타입 |
@@ -550,7 +604,7 @@ if (prevStatus.kiwoom !== currentStatus.kiwoom) {
 
 | 파일 | 변경 |
 |------|------|
-| `components/Layout.tsx` | 신호등, 사이드바, 헤더 개선 |
+| `components/Layout.tsx` | 신호등, 헤더 개선 (사이드바 없음) |
 | `pages/Login.tsx` | localClient.setAuthToken() 호출 추가 |
 | `pages/Register.tsx` | 이메일 인증 흐름 추가 |
 | `pages/Dashboard.tsx` | 시세, 체결, 시장 컨텍스트 추가 |
@@ -619,6 +673,21 @@ if (prevStatus.kiwoom !== currentStatus.kiwoom) {
 - **설정**: API Key 등록 불가 (경고 표시)
 - **실행 로그**: 조회 불가 (로컬 데이터)
 
+### 4.6 클라우드 서버 미연결 시 오프라인 대응
+
+**결정**:
+
+**클라우드 다운 시 동작**:
+- **규칙 편집**: 로컬 캐시에서 읽기/쓰기 → sync_queue에 변경 저장
+- **관심종목**: 로컬 캐시에서 읽기, 변경은 sync_queue에 저장
+- **종목 검색**: 로컬 stock_master 캐시 fallback (localClient.searchStocks)
+- **로그인**: JWT 유효하면 계속 사용 (만료 시 갱신 불가 — 경고)
+- **에러 배너**: "서버 점검 중 — 자동 매매는 정상 작동합니다. 규칙 변경은 복구 후 동기화됩니다."
+
+**연결 복구 시**:
+- sync_queue flush → 클라우드 서버에 일괄 동기화
+- 충돌 시 서버 데이터 우선 (last-write-wins)
+
 ### 4.3 모바일 반응형 필요 여부
 
 **미결**: m.stockvision.app 필요?
@@ -652,14 +721,15 @@ if (prevStatus.kiwoom !== currentStatus.kiwoom) {
 |------|-----------|
 | 1 | `feat: Step 1 — cloudClient + localClient 구성` |
 | 2 | `feat: Step 2 — 인증 UI (로그인, 회원가입, 비밀번호 재설정)` |
-| 3 | `feat: Step 3 — 레이아웃 + 라우팅 (사이드바, 신호등, ProtectedRoute)` |
+| 3 | `feat: Step 3 — 레이아웃 + 라우팅 (신호등, ProtectedRoute)` |
 | 4 | `feat: Step 4 — 대시보드 (시세, 체결, 시장 컨텍스트, 신호등)` |
 | 5 | `feat: Step 5 — localhost WS 연결 (실시간 시세 + 체결)` |
-| 6 | `feat: Step 6 — 전략 빌더 (조건 UI, AND/OR, 저장 + sync)` |
-| 7 | `feat: Step 7 — 전략 목록 관리 (CRUD, ON/OFF 토글)` |
-| 8 | `feat: Step 8 — 실행 로그 뷰어 (필터, 상세)` |
-| 9 | `feat: Step 9 — 설정 페이지 (API Key, 모드, 프로필)` |
-| 10 | `feat: Step 10 — 신호등 + 상태 모니터링 (헤더, 토스트)` |
+| 6 | `feat: Step 6 — 종목 검색 + 관심종목 (StockSearch, Watchlist)` |
+| 7 | `feat: Step 7 — 전략 빌더 (조건 UI, AND/OR, execution, 저장 + sync)` |
+| 8 | `feat: Step 8 — 전략 목록 관리 (CRUD, ON/OFF 토글)` |
+| 9 | `feat: Step 9 — 실행 로그 뷰어 (필터, 상세)` |
+| 10 | `feat: Step 10 — 설정 페이지 (API Key, 모드, 전역 설정, 프로필)` |
+| 11 | `feat: Step 11 — 신호등 + 상태 모니터링 (헤더, 토스트)` |
 
 ---
 
@@ -673,7 +743,7 @@ if (prevStatus.kiwoom !== currentStatus.kiwoom) {
 ### 대시보드
 - [ ] localhost WS 연결 → 시세 실시간 표시
 - [ ] 체결 이벤트 수신 → 피드 갱신
-- [ ] 신호등 3개 5초마다 갱신
+- [ ] 신호등 1개 (통합) 5초마다 갱신
 - [ ] 시장 컨텍스트 표시
 
 ### 전략 관리
@@ -712,4 +782,4 @@ npm run dev       # http://localhost:5173
 
 ---
 
-**마지막 갱신**: 2026-03-05
+**마지막 갱신**: 2026-03-06

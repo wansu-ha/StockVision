@@ -45,6 +45,7 @@
 | F13 | 장 시간 절전 방지 (SetThreadExecutionState) | P0 |
 | F14 | Kill Switch 트레이 메뉴 항목 (긴급 정지 → 엔진 즉시 중지) | P0 |
 | F15 | 하트비트 실패 임계값별 트레이 상태 전환 (🟢→🟡→🔴) | P1 |
+| F15b | 체결 시 Windows 토스트 알림 (브라우저 없어도 알림) | P0 |
 | F16 | localhost API CORS allowlist (Origin 검증 겸용, 허용 출처만 응답) | P1 |
 | F17 | 하트비트 응답에서 latest_version + min_version 감지 → 업데이트 알림 | P2 |
 | F18 | 127.0.0.1만 바인딩 (0.0.0.0 금지) | P0 |

@@ -427,8 +427,22 @@ Body: {
 }
 ```
 
+**응답**:
+```json
+{
+  "rules_version": 5,
+  "context_version": 3,
+  "watchlist_version": 2,
+  "stock_master_version": "2026-03-06T08:00:00Z",
+  "latest_version": "1.2.0",
+  "min_version": "1.0.0",
+  "timestamp": "2026-03-06T10:35:00Z"
+}
+```
+
 - UUID는 로컬 설치 시 1회 생성 (개인정보 아님)
 - 로컬 서버가 JWT 인증으로 직접 전송
+- 로컬은 응답의 버전을 로컬 캐시 버전과 비교 → 다르면 해당 리소스 fetch
 
 ### 8.2 버전 체크
 

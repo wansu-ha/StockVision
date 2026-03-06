@@ -345,7 +345,7 @@ cloud_server/
 
 | 구간 | 방식 |
 |------|------|
-| 프론트 ↔ 클라우드 서버 | 이메일 + JWT (1h) + Refresh Token (7~30d) |
+| 프론트 ↔ 클라우드 서버 | 이메일 + JWT (1h) + Refresh Token (7~30d, Rotation) |
 | 프론트 ↔ 로컬 서버 | localhost (인증 불필요, 외부 접근 불가) |
 | 로컬 서버 ↔ 클라우드 서버 | JWT (프론트에서 전달받음, Refresh Token으로 자동 갱신) |
 | 로컬 서버 → 키움 | OAuth Bearer Token (24h, 유저 키로 발급) |
@@ -450,8 +450,12 @@ PATCH /api/config               설정 변경
 POST /api/rules/sync            규칙 동기화 (규칙 저장 직후)
 GET  /api/status                서버 + 키움 + 엔진 상태
 GET  /api/logs                  체결 로그 조회
+GET  /api/watchlist             관심종목 캐시 조회 (오프라인 fallback)
+GET  /api/stocks/search?q=      종목 검색 (로컬 캐시, 오프라인 fallback)
 POST /api/strategy/start        전략 엔진 시작
 POST /api/strategy/stop         전략 엔진 중지
+POST /api/strategy/kill         Kill Switch 활성화
+POST /api/strategy/unlock       Kill Switch 해제
 WS   /ws                       실시간 시세 + 체결 이벤트
 ```
 
@@ -459,11 +463,15 @@ WS   /ws                       실시간 시세 + 체결 이벤트
 
 ```
 POST /api/v1/heartbeat          하트비트 (30초~1분)
-                                → 응답: { rules_version, context_version }
+                                → 응답: { rules_version, context_version,
+                                          watchlist_version, stock_master_version,
+                                          latest_version, min_version }
                                 → 버전 다르면 아래 API로 fetch
 GET  /api/v1/rules              규칙 fetch (버전 변경 시)
 PUT  /api/v1/rules/:id          규칙 sync (로컬 변경 시)
 GET  /api/v1/context            AI 컨텍스트 fetch (버전 변경 시)
+GET  /api/v1/watchlist          관심종목 fetch (버전 변경 시)
+GET  /api/v1/stocks/master      종목 마스터 fetch (버전 변경 시)
 GET  /api/v1/templates          전략 템플릿 목록 fetch
 POST /api/v1/auth/refresh       JWT 자동 갱신
 ```
