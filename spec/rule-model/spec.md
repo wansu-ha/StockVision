@@ -170,8 +170,8 @@ class TradingRule(Base):
     name = Column(String(100), nullable=False)
     symbol = Column(String(10), nullable=False)
 
-    # DSL 스크립트
-    script = Column(Text, nullable=False)
+    # DSL 스크립트 (하위 호환: 기존 규칙은 null 가능)
+    script = Column(Text, nullable=True)
 
     # 하위 호환 (마이그레이션 완료 후 제거)
     buy_conditions = Column(JSON, nullable=True)
@@ -195,10 +195,21 @@ class TradingRule(Base):
 
 ### 5.1 하위 호환
 
-- `script` 필드가 있으면 DSL로 평가
-- `buy_conditions`/`sell_conditions`가 있으면 기존 JSON 방식으로 평가
+- **우선순위**: `script`가 non-null이면 DSL로 평가. `script`가 null이면 `buy_conditions`/`sell_conditions` JSON으로 평가. 둘 다 없으면 규칙 스킵
 - 폼 UI는 항상 DSL로 저장 (내부적으로)
 - 마이그레이션: 기존 JSON 조건 → DSL 텍스트 변환 스크립트 제공
+
+### 5.2 클라우드 DSL 검증
+
+클라우드 서버는 규칙 저장(POST/PUT) 시 `script` 필드를 **파싱 검증**한다:
+
+- 문법 에러 → 400 응답 + 에러 위치/메시지 반환
+- 타입 에러 → 400 응답 + 에러 상세
+- `매수:`/`매도:` 누락 → 400 응답
+- 검증 통과 → 저장
+
+> **이유**: 잘못된 DSL이 저장되면 로컬 엔진에서 매 평가마다 파싱 에러 발생.
+> 클라우드에 경량 파서(검증 전용, 평가 불필요)를 두어 저장 시점에 차단.
 
 ---
 
@@ -215,8 +226,8 @@ class RuleConfig:
     is_active: bool = True
     priority: int = 0
 
-    # DSL 스크립트
-    script: str = ""
+    # DSL 스크립트 (None이면 하위 호환 모드)
+    script: str | None = None
 
     # 하위 호환
     buy_conditions: dict | None = None
@@ -241,12 +252,14 @@ class RuleConfig:
 ```
 매 1분:
   for rule in rules (priority 내림차순):
-    if rule.script:
+    if rule.script is not None:       # script 우선 (§5.1)
       → DSL 파서로 AST 변환 (캐시)
       → 매수 조건 평가: AST의 매수: 블록 실행
       → 매도 조건 평가: AST의 매도: 블록 실행
     elif rule.buy_conditions or rule.sell_conditions:
       → 기존 JSON 평가 (하위 호환)
+    else:
+      → 스킵
 
     매수 조건 true AND 미보유 → 매수 주문
     매도 조건 true AND 보유 중 → 매도 주문
@@ -281,7 +294,7 @@ class RuleConfig:
 | `daily_loss_limit` | 사용자 정의 | 당일 최대 손실 (원) |
 | `order_rate_limit` | 10 | 분당 최대 주문 수 |
 
-> 이 설정들은 `local_server/config/settings.json`에 저장하며,
+> 이 설정들은 `~/.stockvision/config.json`에 저장하며,
 > 클라우드에도 동기화한다 (사용자 설정 sync).
 
 ---
@@ -310,10 +323,11 @@ class RuleConfig:
 ### 10.1 데이터 모델
 
 - [ ] DSL `script` 필드로 규칙 생성/저장/조회
+- [ ] 잘못된 DSL 저장 시 400 에러 + 에러 위치/메시지 반환 (§5.2)
 - [ ] 내장 패턴 함수 (`골든크로스()` 등) 사용 가능
 - [ ] 커스텀 함수 선언 + 참조 동작
 - [ ] `execution`, `trigger_policy` JSON 필드 저장/조회
-- [ ] 하위 호환: `buy_conditions`/`sell_conditions` JSON도 평가 가능
+- [ ] 하위 호환: `script` null인 규칙도 JSON 방식으로 평가 가능
 
 ### 10.2 DSL 파서
 
