@@ -65,11 +65,14 @@
 
 ### 2.3 로컬 서버 수정
 
-| 파일 | 변경 내용 |
-|------|----------|
-| `local_server/engine/models.py` | `RuleConfig` 재구조: `script`, `execution`, `trigger_policy` 필드 추가. `buy_conditions`/`sell_conditions` 유지 (하위 호환). `from_dict()` 갱신 |
-| `local_server/engine/evaluator.py` | `RuleEvaluator.evaluate()` — `script is not None`이면 DSL 경로, 아니면 기존 JSON 경로. AST 캐시 추가 |
-| `local_server/engine/executor.py` | 매도 보호: `side == SELL`일 때 `보유수량 > 0` 사전 확인. `execution` dict에서 order_type/qty 추출 |
+| 파일 | 변경 내용 | 담당 |
+|------|----------|------|
+| `local_server/engine/models.py` | `RuleConfig` 재구조: `script`, `execution`, `trigger_policy` 필드 추가. `buy_conditions`/`sell_conditions` 유지 (하위 호환). `from_dict()` 갱신 | 본 plan Step 7 |
+| `local_server/engine/evaluator.py` | `RuleEvaluator.evaluate()` — `script is not None`이면 DSL 경로, 아니면 기존 JSON 경로. 반환 타입 `tuple[bool, bool]`. AST 캐시 추가 | 본 plan Step 7 |
+| `local_server/engine/executor.py` | 매도 보호: `side == SELL`일 때 `보유수량 > 0` 사전 확인. `execution` dict에서 order_type/qty 추출. `place_order()` ABC 정합 | 본 plan Step 8 |
+| `local_server/engine/signal_manager.py` | 매수/매도 분리 (`can_trigger(rule_id, side)`), 트리거 정책(ONCE) 지원 | strategy-engine plan Step 1 |
+| `local_server/engine/engine.py` | `evaluate_all()` 재작성 — DSL 양방향 평가 + ABC 정합 + priority 정렬 | strategy-engine plan Step 8 |
+| `local_server/engine/safeguard.py` | BrokerAdapter ABC 메서드명 정합 (`get_open_orders()`, `get_balance()`) | strategy-engine plan Step 4 |
 
 ### 2.4 프론트엔드 수정
 
