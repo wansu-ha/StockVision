@@ -1,6 +1,6 @@
 # 실행 로그 구현 계획서 (execution-log)
 
-> 작성일: 2026-03-04 | 상태: 초안 | 범위: 로컬 SQLite logs.db + 조회 API + React UI
+> 작성일: 2026-03-04 | 상태: **→ Unit 5 (frontend) plan에 통합**
 
 ---
 

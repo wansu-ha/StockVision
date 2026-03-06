@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from cloud_server.core.validators import validate_conditions
+from cloud_server.core.validators import validate_conditions, validate_dsl_script
 from cloud_server.models.rule import TradingRule
 
 
@@ -18,8 +18,12 @@ def _rule_to_dict(rule: TradingRule) -> dict:
         "user_id": rule.user_id,
         "name": rule.name,
         "symbol": rule.symbol,
+        "script": rule.script,
         "buy_conditions": rule.buy_conditions,
         "sell_conditions": rule.sell_conditions,
+        "execution": rule.execution,
+        "trigger_policy": rule.trigger_policy,
+        "priority": rule.priority,
         "order_type": rule.order_type,
         "qty": rule.qty,
         "max_position_count": rule.max_position_count,
@@ -52,7 +56,14 @@ def get_rule(rule_id: int, user_id: str, db: Session) -> dict:
 
 def create_rule(user_id: str, data: dict, db: Session) -> dict:
     """규칙 생성"""
-    # 조건 JSON 검증
+    # DSL 스크립트 검증 (v2)
+    if data.get("script"):
+        try:
+            validate_dsl_script(data["script"])
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    # 조건 JSON 검증 (v1 하위 호환)
     try:
         validate_conditions(data.get("buy_conditions"))
         validate_conditions(data.get("sell_conditions"))
@@ -63,10 +74,14 @@ def create_rule(user_id: str, data: dict, db: Session) -> dict:
         user_id=user_id,
         name=data["name"],
         symbol=data["symbol"],
+        script=data.get("script"),
+        execution=data.get("execution"),
+        trigger_policy=data.get("trigger_policy", {"frequency": "ONCE_PER_DAY"}),
+        priority=data.get("priority", 0),
         buy_conditions=data.get("buy_conditions"),
         sell_conditions=data.get("sell_conditions"),
         order_type=data.get("order_type", "market"),
-        qty=data["qty"],
+        qty=data.get("qty", 1),
         max_position_count=data.get("max_position_count", 5),
         budget_ratio=data.get("budget_ratio", 0.2),
         is_active=data.get("is_active", True),
@@ -93,7 +108,14 @@ def update_rule(rule_id: int, user_id: str, data: dict, db: Session) -> dict:
     if not rule:
         raise HTTPException(status_code=404, detail="규칙을 찾을 수 없습니다.")
 
-    # 조건 JSON 검증
+    # DSL 스크립트 검증 (v2)
+    if "script" in data and data["script"]:
+        try:
+            validate_dsl_script(data["script"])
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    # 조건 JSON 검증 (v1 하위 호환)
     if "buy_conditions" in data:
         try:
             validate_conditions(data["buy_conditions"])
@@ -108,8 +130,9 @@ def update_rule(rule_id: int, user_id: str, data: dict, db: Session) -> dict:
 
     # 필드 업데이트
     updatable = [
-        "name", "symbol", "buy_conditions", "sell_conditions",
-        "order_type", "qty", "max_position_count", "budget_ratio", "is_active"
+        "name", "symbol", "script", "execution", "trigger_policy", "priority",
+        "buy_conditions", "sell_conditions",
+        "order_type", "qty", "max_position_count", "budget_ratio", "is_active",
     ]
     for field in updatable:
         if field in data:

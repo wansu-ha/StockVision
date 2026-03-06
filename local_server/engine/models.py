@@ -13,35 +13,62 @@ from typing import Optional
 
 @dataclass
 class RuleConfig:
-    """규칙 JSON을 파싱한 구조체."""
+    """규칙 JSON을 파싱한 구조체.
+
+    v2: DSL script 기반. script가 None이면 v1 JSON 폴백.
+    """
 
     id: int
     name: str
     symbol: str
-    side: str  # "BUY" | "SELL"
-    operator: str  # "AND" | "OR"
-    conditions: list[dict] = field(default_factory=list)
-    qty: int = 1
-    order_type: str = "MARKET"  # "MARKET" | "LIMIT"
-    limit_price: Optional[Decimal] = None
     is_active: bool = True
     priority: int = 0
 
+    # v2 DSL
+    script: Optional[str] = None
+    execution: dict = field(default_factory=lambda: {
+        "order_type": "MARKET", "qty_type": "FIXED", "qty_value": 1,
+    })
+    trigger_policy: dict = field(default_factory=lambda: {
+        "frequency": "ONCE_PER_DAY",
+    })
+
+    # v1 하위 호환
+    buy_conditions: Optional[dict] = None
+    sell_conditions: Optional[dict] = None
+    operator: str = "AND"
+    qty: int = 1
+    order_type: str = "MARKET"
+    limit_price: Optional[Decimal] = None
+
     @classmethod
     def from_dict(cls, d: dict) -> RuleConfig:
-        """JSON dict → RuleConfig."""
+        """JSON dict → RuleConfig. v2/v1 양쪽 지원."""
+        # execution: 우선순위 — non-null이면 JSON, null이면 개별 필드 폴백
+        execution = d.get("execution")
+        if execution is None:
+            execution = {
+                "order_type": str(d.get("order_type", "MARKET")).upper(),
+                "qty_type": "FIXED",
+                "qty_value": int(d.get("qty", 1)),
+                "limit_price": d.get("limit_price"),
+            }
+
         return cls(
             id=int(d["id"]),
             name=str(d.get("name", "")),
             symbol=str(d.get("symbol", "")),
-            side=str(d.get("side", "BUY")),
+            is_active=bool(d.get("is_active", True)),
+            priority=int(d.get("priority", 0)),
+            script=d.get("script"),
+            execution=execution,
+            trigger_policy=d.get("trigger_policy") or {"frequency": "ONCE_PER_DAY"},
+            buy_conditions=d.get("buy_conditions"),
+            sell_conditions=d.get("sell_conditions"),
             operator=str(d.get("operator", "AND")),
-            conditions=d.get("conditions", []),
             qty=int(d.get("qty", 1)),
             order_type=str(d.get("order_type", "MARKET")),
             limit_price=Decimal(str(d["limit_price"])) if d.get("limit_price") else None,
-            is_active=bool(d.get("is_active", True)),
-            priority=int(d.get("priority", 0)),
         )
 
 

@@ -1,6 +1,6 @@
 # 전략 템플릿 구현 계획서 (strategy-template)
 
-> 작성일: 2026-03-04 | 상태: 초안 | 범위: Phase 3 | 의존: strategy-builder
+> 작성일: 2026-03-04 | 상태: **→ Unit 6 (admin) plan에 통합**
 
 ---
 

@@ -9,7 +9,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     JSON, Boolean, Column, DateTime, Float, ForeignKey, Index, Integer,
-    String, UniqueConstraint,
+    String, Text, UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 
@@ -29,11 +29,19 @@ class TradingRule(Base):
     name   = Column(String(100), nullable=False)
     symbol = Column(String(10), nullable=False)
 
-    # 조건 JSON: { "operator": "AND"|"OR", "conditions": [...] }
+    # DSL 스크립트 (v2 — 하위 호환: 기존 규칙은 null)
+    script = Column(Text, nullable=True)
+
+    # 하위 호환 (v1 JSON 조건 — 마이그레이션 완료 후 제거)
     buy_conditions  = Column(JSON, nullable=True)
     sell_conditions = Column(JSON, nullable=True)
 
-    # 설정
+    # 주문 설정 (v2 JSON — null이면 개별 컬럼 폴백)
+    execution = Column(JSON, nullable=True)
+    trigger_policy = Column(JSON, nullable=True, default={"frequency": "ONCE_PER_DAY"})
+    priority = Column(Integer, default=0, nullable=False)
+
+    # 설정 (v1 개별 컬럼 — execution 폴백용)
     order_type         = Column(String(10), default="market", nullable=False)  # market | limit
     qty                = Column(Integer, nullable=False)
     max_position_count = Column(Integer, default=5, nullable=False)

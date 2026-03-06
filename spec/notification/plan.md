@@ -1,6 +1,6 @@
 # 알림 시스템 구현 계획서 (notification)
 
-> 작성일: 2026-03-04 | 상태: 초안 | 범위: Phase 3 | 의존: execution-engine, local-bridge
+> 작성일: 2026-03-04 | 상태: **→ Unit 5 (frontend) plan에 통합**
 
 ---
 

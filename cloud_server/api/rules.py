@@ -38,10 +38,16 @@ class Conditions(BaseModel):
 class RuleCreateBody(BaseModel):
     name: str
     symbol: str
+    # v2 DSL
+    script: str | None = None
+    execution: dict | None = None
+    trigger_policy: dict | None = None
+    priority: int = 0
+    # v1 하위 호환
     buy_conditions: dict | None = None
     sell_conditions: dict | None = None
     order_type: str = "market"
-    qty: int
+    qty: int = 1
     max_position_count: int = 5
     budget_ratio: float = 0.2
     is_active: bool = True
@@ -50,6 +56,12 @@ class RuleCreateBody(BaseModel):
 class RuleUpdateBody(BaseModel):
     name: str | None = None
     symbol: str | None = None
+    # v2 DSL
+    script: str | None = None
+    execution: dict | None = None
+    trigger_policy: dict | None = None
+    priority: int | None = None
+    # v1 하위 호환
     buy_conditions: dict | None = None
     sell_conditions: dict | None = None
     order_type: str | None = None

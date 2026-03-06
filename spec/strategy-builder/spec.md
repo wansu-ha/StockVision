@@ -1,6 +1,8 @@
 # 전략 빌더 기능 명세서 (strategy-builder)
 
-> 작성일: 2026-03-04 | 상태: 초안 | 우선순위: Phase 3
+> 작성일: 2026-03-04 | 상태: **→ Unit 5 (frontend)에 통합** | 우선순위: Phase 3
+>
+> 이 spec의 내용은 `spec/frontend/`에서 통합 구현합니다.
 
 ## 1. 개요
 

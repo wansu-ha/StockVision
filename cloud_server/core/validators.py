@@ -1,7 +1,8 @@
 """
-조건 JSON 검증
+조건 검증
 
-규칙의 buy_conditions, sell_conditions 형식 검증.
+- validate_conditions: v1 JSON 조건 형식 검증
+- validate_dsl_script: v2 DSL 스크립트 파싱 검증
 """
 
 VALID_OPERATORS = {"AND", "OR"}
@@ -55,3 +56,13 @@ def validate_conditions(conditions: dict | None) -> None:
         value = cond.get("value")
         if not isinstance(value, (int, float)):
             raise ValueError(f"conditions[{i}].value는 숫자여야 합니다.")
+
+
+def validate_dsl_script(script: str) -> None:
+    """DSL 스크립트 파싱 검증. 무효 시 ValueError (위치+메시지)."""
+    from sv_core.parsing import parse, DSLError
+
+    try:
+        parse(script)
+    except DSLError as e:
+        raise ValueError(f"[{e.line}:{e.col}] {e.message}") from e
