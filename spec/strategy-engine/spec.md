@@ -173,6 +173,8 @@ class EngineScheduler:
 
 ### 4.2 조건 평가
 
+> 규칙 데이터 모델 상세: `spec/rule-model/spec.md` 참조
+
 ```python
 class RuleEvaluator:
     """규칙 조건을 현재 데이터로 평가."""
@@ -438,6 +440,7 @@ class OrderExecutor:
 - [x] ~~Kill Switch 해제 시 자동 재개 vs 수동 재개~~ → 수동 해제만 허용
 - [x] ~~최대 손실: 실현손익 vs 평가손익~~ → v1은 실현손익 기준
 - [x] ~~DEGRADED 상태 엔진 정책~~ → Strategy Active=ON, Trading Enabled=OFF (STOP_NEW)
+- [x] ~~규칙 데이터 모델 분리~~ → `spec/rule-model/spec.md`로 분리 (매수/매도 분리, 조건 타입 확장, 트리거 정책)
 - [ ] 장 시작 SYNCING 구간 길이 (09:00~09:02? 더 길게?)
 - [ ] WS 끊김 시 분봉 복구 REST 호출 대상 (차트 API? 현재가?)
 
@@ -451,4 +454,4 @@ class OrderExecutor:
 
 ---
 
-**마지막 갱신**: 2026-03-05
+**마지막 갱신**: 2026-03-06

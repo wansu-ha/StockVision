@@ -92,6 +92,9 @@ local_server/app/storage/
 ├── __init__.py
 ├── credential_store.py        # keyring (API Key + Refresh Token)
 ├── rule_cache.py              # JSON 규칙 캐시
+├── watchlist_cache.py         # 관심종목 캐시 (JSON)
+├── stock_master_cache.py      # 종목 마스터 캐시 (JSON)
+├── sync_queue.py              # 오프라인 변경 큐 (JSON)
 ├── config_manager.py          # config.json
 └── log_db.py                  # SQLite logs.db
 ```
@@ -127,7 +130,28 @@ local_server/app/storage/
      }
      ```
 
-4. **LogDB** (`log_db.py`)
+4. **WatchlistCache** (`watchlist_cache.py`)
+   - `load()` → list[dict] | None
+   - `save(watchlist: list[dict])` → JSON 파일 저장
+   - 파일 경로: `%APPDATA%\StockVision\watchlist.json`
+
+5. **StockMasterCache** (`stock_master_cache.py`)
+   - `load()` → list[dict] | None
+   - `save(stocks: list[dict])` → JSON 파일 저장
+   - `search(query: str)` → list[dict] (로컬 검색)
+   - 파일 경로: `%APPDATA%\StockVision\stock_master.json`
+   - `stock_detail_cache.json`: 한번이라도 상세 조회한 종목 정보
+
+6. **SyncQueue** (`sync_queue.py`)
+   - `enqueue(action: dict)` → 큐에 추가
+   - `dequeue()` → 하나 꺼냄
+   - `peek_all()` → 전체 조회
+   - `flush()` → 클라우드 연결 시 전부 전송
+   - 파일 경로: `%APPDATA%\StockVision\sync_queue.json`
+   - action 형식: `{ "type": "rule_create|rule_update|watchlist_add|watchlist_delete", "data": {...}, "timestamp": "..." }`
+   - last-write-wins 충돌 해결 (timestamp 기반)
+
+7. **LogDB** (`log_db.py`)
    - SQLite 파일: `%APPDATA%\StockVision\logs.db`
    - 모델 (SQLAlchemy):
      ```python
@@ -165,6 +189,10 @@ local_server/app/storage/
 - [ ] strategies.json 생성/로드 테스트
 - [ ] config.json 읽기/쓰기 테스트
 - [ ] logs.db 테이블 생성 및 레코드 삽입 테스트
+- [ ] watchlist.json 생성/로드 테스트
+- [ ] stock_master.json 검색 테스트
+- [ ] sync_queue.json enqueue/dequeue 테스트
+- [ ] sync_queue flush 후 파일 비어있는지 확인
 
 ---
 
@@ -181,6 +209,8 @@ local_server/app/routers/
 ├── status.py                  # GET /api/status
 ├── trading.py                 # POST /api/strategy/*
 ├── rules.py                   # POST /api/rules/sync
+├── watchlist.py               # GET/POST/DELETE /api/watchlist
+├── stocks.py                  # GET /api/stocks/search
 └── logs.py                    # GET /api/logs
 ```
 
@@ -257,7 +287,30 @@ local_server/app/routers/
    > 프론트엔드가 클라우드에 규칙 저장 후 localhost에 즉시 push.
    > 하트비트 sync와 별개로 사용자 즉시 반영용.
 
-6. **logs.py** — 체결/오류 로그 조회
+6. **watchlist.py** — 관심종목 (로컬 캐시 기반, 오프라인 가능)
+   ```
+   GET /api/watchlist
+     응답: { "success": true, "data": [...] }
+     동작: WatchlistCache에서 로드
+
+   POST /api/watchlist
+     요청: { "symbol": "005930", "name": "삼성전자" }
+     응답: { "success": true }
+     동작: WatchlistCache에 추가 + SyncQueue에 enqueue (클라우드 미연결 대비)
+
+   DELETE /api/watchlist/{symbol}
+     응답: { "success": true }
+     동작: WatchlistCache에서 삭제 + SyncQueue에 enqueue
+   ```
+
+7. **stocks.py** — 종목 검색 (로컬 캐시 fallback)
+   ```
+   GET /api/stocks/search?q=삼성
+     응답: { "success": true, "data": [...], "count": 5 }
+     동작: 클라우드 primary → 실패 시 StockMasterCache.search() fallback
+   ```
+
+8. **logs.py** — 체결/오류 로그 조회
    ```
    GET /api/logs?limit=100&offset=0
      응답:
@@ -492,7 +545,9 @@ local_server/app/cloud_client/
 ├── client.py                  # HTTP 클라이언트 (JWT 관리)
 ├── heartbeat.py               # 하트비트 폴링
 ├── rule_syncer.py             # 규칙 fetch/upload
-└── context_fetcher.py         # 컨텍스트 fetch
+├── context_fetcher.py         # 컨텍스트 fetch
+├── watchlist_syncer.py        # 관심종목 fetch/sync
+└── stock_master_syncer.py     # 종목 마스터 fetch
 ```
 
 **구현 내용**:
@@ -559,14 +614,19 @@ local_server/app/cloud_client/
    ```python
    class HeartbeatClient:
        def __init__(self, cloud_client: CloudClient, rule_cache: RuleCache,
-                    context_cache: dict, rule_syncer, context_fetcher):
+                    context_cache: dict, rule_syncer, context_fetcher,
+                    watchlist_syncer=None, stock_master_syncer=None):
            self._cloud = cloud_client
            self._rule_cache = rule_cache
            self._context_cache = context_cache
            self._rule_syncer = rule_syncer
            self._context_fetcher = context_fetcher
+           self._watchlist_syncer = watchlist_syncer
+           self._stock_master_syncer = stock_master_syncer
            self._last_rules_version = None
            self._last_context_version = None
+           self._last_watchlist_version = None
+           self._last_stock_master_version = None
            self._consecutive_failures = 0
 
        async def start(self, interval_sec=60):
@@ -583,6 +643,14 @@ local_server/app/cloud_client/
                    if resp.get("context_version") != self._last_context_version:
                        await self._context_fetcher.fetch()
                        self._last_context_version = resp["context_version"]
+
+                   if resp.get("watchlist_version") != self._last_watchlist_version:
+                       await self._watchlist_syncer.fetch()
+                       self._last_watchlist_version = resp["watchlist_version"]
+
+                   if resp.get("stock_master_version") != self._last_stock_master_version:
+                       await self._stock_master_syncer.fetch()
+                       self._last_stock_master_version = resp["stock_master_version"]
 
                    # 최소/최신 버전 확인
                    if resp.get("min_version"):
@@ -645,6 +713,43 @@ local_server/app/cloud_client/
        def get(self) -> dict:
            """캐시된 컨텍스트 반환"""
            return self._context_cache
+   ```
+
+5. **watchlist_syncer.py** — 관심종목 fetch/sync
+   ```python
+   class WatchlistSyncer:
+       def __init__(self, cloud_client: CloudClient, watchlist_cache: WatchlistCache,
+                    sync_queue: SyncQueue):
+           self._cloud = cloud_client
+           self._cache = watchlist_cache
+           self._sync_queue = sync_queue
+
+       async def fetch(self):
+           """클라우드에서 관심종목 fetch → 로컬 JSON 캐시"""
+           resp = await self._cloud.get("/api/v1/watchlist")
+           watchlist = resp["watchlist"]
+           self._cache.save(watchlist)
+           logger.info(f"Watchlist fetched: {len(watchlist)} items")
+
+       async def flush_queue(self):
+           """SyncQueue에 쌓인 watchlist 변경사항을 클라우드에 전송"""
+           # sync_queue에서 watchlist 관련 action만 처리
+           pass
+   ```
+
+6. **stock_master_syncer.py** — 종목 마스터 fetch
+   ```python
+   class StockMasterSyncer:
+       def __init__(self, cloud_client: CloudClient, stock_master_cache: StockMasterCache):
+           self._cloud = cloud_client
+           self._cache = stock_master_cache
+
+       async def fetch(self):
+           """클라우드에서 종목 마스터 fetch → 로컬 JSON 캐시"""
+           resp = await self._cloud.get("/api/v1/stocks/master")
+           stocks = resp["stocks"]
+           self._cache.save(stocks)
+           logger.info(f"Stock master fetched: {len(stocks)} stocks")
    ```
 
 **검증**:
@@ -1029,9 +1134,9 @@ backend/                 ← 클라우드 서버 (기존)
 local_server/            ← 로컬 서버 (신규)
   ├── main.py
   ├── app/
-  │   ├── routers/
-  │   ├── storage/
-  │   ├── cloud_client/
+  │   ├── routers/       # auth, config, status, trading, rules, watchlist, stocks, logs, ws
+  │   ├── storage/       # credential_store, rule_cache, watchlist_cache, stock_master_cache, sync_queue, config_manager, log_db
+  │   ├── cloud_client/  # client, heartbeat, rule_syncer, context_fetcher, watchlist_syncer, stock_master_syncer
   │   ├── tray.py
   │   └── core/
   ├── requirements.txt
@@ -1078,12 +1183,17 @@ local_server/
 │   │   ├── status.py                      # GET /api/status
 │   │   ├── trading.py                     # POST /api/strategy/*
 │   │   ├── rules.py                       # POST /api/rules/sync
+│   │   ├── watchlist.py                   # GET/POST/DELETE /api/watchlist
+│   │   ├── stocks.py                      # GET /api/stocks/search
 │   │   ├── logs.py                        # GET /api/logs
 │   │   └── ws.py                          # WebSocket /ws
 │   ├── storage/
 │   │   ├── __init__.py
 │   │   ├── credential_store.py            # keyring
 │   │   ├── rule_cache.py                  # JSON
+│   │   ├── watchlist_cache.py             # 관심종목 JSON 캐시
+│   │   ├── stock_master_cache.py          # 종목 마스터 JSON 캐시
+│   │   ├── sync_queue.py                  # 오프라인 변경 큐
 │   │   ├── config_manager.py              # config.json
 │   │   └── log_db.py                      # SQLite
 │   ├── cloud_client/
@@ -1091,7 +1201,9 @@ local_server/
 │   │   ├── client.py                      # HTTP + JWT
 │   │   ├── heartbeat.py                   # 폴링
 │   │   ├── rule_syncer.py                 # fetch/sync
-│   │   └── context_fetcher.py             # fetch
+│   │   ├── context_fetcher.py             # fetch
+│   │   ├── watchlist_syncer.py            # 관심종목 fetch/sync
+│   │   └── stock_master_syncer.py         # 종목 마스터 fetch
 │   ├── models/
 │   │   └── __init__.py
 │   ├── tray.py                            # pystray

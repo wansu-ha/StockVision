@@ -26,6 +26,7 @@
 - 아키텍처: `docs/architecture.md` §3.1 (주문 흐름), §4.4 (로컬 서버)
 - 개발 계획: `docs/development-plan-v2.md` Unit 3
 - spec: `spec/strategy-engine/spec.md` (본 문서의 기반)
+- 규칙 데이터 모델: `spec/rule-model/spec.md` (매수/매도 분리, 조건 타입, 트리거 정책)
 
 ---
 
@@ -78,25 +79,45 @@ class EngineScheduler:
 
 ---
 
-### Step 2: RuleEvaluator (조건 평가: AND/OR)
+### Step 2: RuleEvaluator (조건 평가: AND/OR, 매수/매도 분리)
 
-**목표**: 규칙의 조건(가격, 지표, 컨텍스트)을 현재 데이터로 평가 → True/False 반환
+> 규칙 데이터 모델: `spec/rule-model/spec.md` §4 참조
+
+**목표**: 규칙의 buy_conditions / sell_conditions를 현재 데이터로 평가 → True/False 반환
 
 **파일**: `local_server/engine/evaluator.py`
 
 **구현 내용**:
 ```python
 class RuleEvaluator:
-    """규칙 조건을 현재 데이터로 평가."""
+    """규칙 조건을 현재 데이터로 평가. 매수/매도 조건을 분리 평가."""
 
-    def evaluate(self, rule: dict, market_data: dict, context: dict) -> bool:
+    def evaluate_buy(self, rule: dict, market_data: dict, context: dict) -> bool:
         """
-        rule: { operator: "AND", conditions: [...] }
+        rule의 buy_conditions 평가.
+        rule: { buy_conditions: { operator: "AND", conditions: [...] }, ... }
         market_data: { price, volume, rsi_14, ... }  (BrokerAdapter WS에서)
         context: { market_kospi_rsi, ... }  (AI 컨텍스트 캐시에서)
         """
-        conditions = rule.get("conditions", [])
-        op = rule.get("operator", "AND")
+        buy_conds = rule.get("buy_conditions")
+        if not buy_conds:
+            return False
+        return self._evaluate_group(buy_conds, market_data, context)
+
+    def evaluate_sell(self, rule: dict, market_data: dict, context: dict) -> bool:
+        """
+        rule의 sell_conditions 평가.
+        rule: { sell_conditions: { operator: "AND", conditions: [...] }, ... }
+        """
+        sell_conds = rule.get("sell_conditions")
+        if not sell_conds:
+            return False
+        return self._evaluate_group(sell_conds, market_data, context)
+
+    def _evaluate_group(self, group: dict, market_data: dict, context: dict) -> bool:
+        """조건 그룹 (operator + conditions) 평가."""
+        conditions = group.get("conditions", [])
+        op = group.get("operator", "AND")
 
         results = [self._eval_single(c, market_data, context) for c in conditions]
 
@@ -110,6 +131,11 @@ class RuleEvaluator:
     def _eval_single(self, condition: dict, market_data: dict, context: dict) -> bool:
         """단일 조건 평가."""
         cond_type = condition.get("type")
+        operator = condition.get("operator")
+
+        # cross_above / cross_below는 별도 처리 (previous 데이터 필요)
+        if operator in ("cross_above", "cross_below"):
+            return self._eval_cross(condition, market_data)
 
         # 데이터 소스 선택
         if cond_type in ("price", "indicator", "volume"):
@@ -122,7 +148,29 @@ class RuleEvaluator:
         if value is None:
             return False
 
-        return self._compare(value, condition["operator"], condition["value"])
+        return self._compare(value, operator, condition["value"])
+
+    def _eval_cross(self, condition: dict, market_data: dict) -> bool:
+        """
+        cross_above / cross_below 평가.
+        previous 데이터는 BarBuilder에서 직전 분봉으로 제공.
+        market_data: { "field": current_value, "_prev": { "field": prev_value } }
+        """
+        field = condition["field"]
+        op = condition["operator"]
+        value = condition["value"]
+
+        current = market_data.get(field)
+        previous = market_data.get("_prev", {}).get(field)
+
+        if current is None or previous is None:
+            return False
+
+        if op == "cross_above":
+            return previous < value and current >= value
+        if op == "cross_below":
+            return previous > value and current <= value
+        return False
 
     def _compare(self, value, operator: str, expected: float) -> bool:
         """비교 연산자 수행."""
@@ -133,6 +181,8 @@ class RuleEvaluator:
             "<=": lambda a, b: a <= b,
             ">": lambda a, b: a > b,
             ">=": lambda a, b: a >= b,
+            "cross_above": None,  # _eval_cross에서 처리
+            "cross_below": None,  # _eval_cross에서 처리
         }
         op_func = ops.get(operator)
         if not op_func:
@@ -147,14 +197,19 @@ class RuleEvaluator:
 - [ ] AND 조건: 모든 조건 True → True, 하나 False → False
 - [ ] OR 조건: 하나 True → True, 모두 False → False
 - [ ] 비교 연산자 정상 동작 (<, <=, >, >=, ==, !=)
+- [ ] `cross_above`: 직전 < value AND 현재 >= value → True
+- [ ] `cross_below`: 직전 > value AND 현재 <= value → True
+- [ ] cross 연산자: previous 데이터 없으면 → False
+- [ ] `evaluate_buy`: buy_conditions 평가, 없으면 False
+- [ ] `evaluate_sell`: sell_conditions 평가, 없으면 False
 - [ ] 없는 조건 타입 → False 반환
 - [ ] 데이터 미존재 시 → False 반환
 
 ---
 
-### Step 3: SignalManager (신호 상태 관리, 중복 방지)
+### Step 3: SignalManager (신호 상태 관리, 매수/매도 분리, 트리거 정책)
 
-**목표**: 규칙당 하루 1회 실행 보장, 상태머신 관리 (IDLE → TRIGGERED → FILLED/FAILED)
+**목표**: 매수/매도별 독립 상태 관리, 트리거 정책(ONCE_PER_DAY, ONCE) 지원
 
 **파일**: `local_server/engine/signal_manager.py`
 
@@ -163,53 +218,73 @@ class RuleEvaluator:
 from datetime import date
 
 class SignalManager:
-    """신호 상태 머신. 규칙당 하루 1회 실행 보장."""
+    """신호 상태 머신. 매수/매도 별도 트래킹."""
 
     # 상태: IDLE → TRIGGERED → FILLED/FAILED
-    # 매일 자정에 IDLE로 리셋
+    # ONCE_PER_DAY: 매일 자정에 IDLE로 리셋
+    # ONCE: 1회 실행 후 규칙 비활성화
 
-    def __init__(self):
-        self._states: dict[int, str] = {}  # rule_id → state
+    def __init__(self, rule_cache=None):
+        self._buy_states: dict[int, str] = {}   # rule_id → state (매수)
+        self._sell_states: dict[int, str] = {}   # rule_id → state (매도)
         self._last_reset: date = date.today()
+        self._rule_cache = rule_cache  # ONCE 정책 시 규칙 비활성화용
 
-    def can_trigger(self, rule_id: int) -> bool:
-        """실행 가능 여부."""
+    def can_trigger_buy(self, rule_id: int) -> bool:
+        """매수 실행 가능 여부."""
         self._check_daily_reset()
-        return self._states.get(rule_id, "IDLE") == "IDLE"
+        return self._buy_states.get(rule_id, "IDLE") == "IDLE"
 
-    def mark_triggered(self, rule_id: int):
-        """신호 발생 마킹."""
-        self._states[rule_id] = "TRIGGERED"
+    def can_trigger_sell(self, rule_id: int) -> bool:
+        """매도 실행 가능 여부."""
+        self._check_daily_reset()
+        return self._sell_states.get(rule_id, "IDLE") == "IDLE"
 
-    def mark_filled(self, rule_id: int):
-        """주문 체결 마킹."""
-        self._states[rule_id] = "FILLED"
+    def mark_triggered(self, rule_id: int, side: str):
+        """신호 발생 마킹. side: 'BUY' | 'SELL'"""
+        states = self._buy_states if side == "BUY" else self._sell_states
+        states[rule_id] = "TRIGGERED"
 
-    def mark_failed(self, rule_id: int):
+    def mark_filled(self, rule_id: int, side: str, trigger_policy: str = "ONCE_PER_DAY"):
+        """주문 체결 마킹. ONCE 정책이면 규칙 비활성화."""
+        states = self._buy_states if side == "BUY" else self._sell_states
+        states[rule_id] = "FILLED"
+
+        if trigger_policy == "ONCE" and self._rule_cache:
+            self._rule_cache.deactivate(rule_id)
+
+    def mark_failed(self, rule_id: int, side: str):
         """주문 실패 마킹."""
-        self._states[rule_id] = "FAILED"
+        states = self._buy_states if side == "BUY" else self._sell_states
+        states[rule_id] = "FAILED"
 
     def reset_all(self):
         """모든 규칙 리셋 (테스트용)."""
-        self._states.clear()
+        self._buy_states.clear()
+        self._sell_states.clear()
         self._last_reset = date.today()
 
     def _check_daily_reset(self):
-        """자정 기준 일일 리셋."""
+        """자정 기준 일일 리셋 (ONCE_PER_DAY 정책)."""
         if date.today() > self._last_reset:
-            self._states.clear()
+            self._buy_states.clear()
+            self._sell_states.clear()
             self._last_reset = date.today()
 
-    def get_state(self, rule_id: int) -> str:
+    def get_state(self, rule_id: int, side: str) -> str:
         """현재 상태 조회."""
         self._check_daily_reset()
-        return self._states.get(rule_id, "IDLE")
+        states = self._buy_states if side == "BUY" else self._sell_states
+        return states.get(rule_id, "IDLE")
 ```
 
 **검증**:
-- [ ] 같은 규칙 하루에 2회 이상 실행 안 됨
-- [ ] 자정 기준 상태 리셋 확인
+- [ ] 같은 규칙 매수/매도 각각 하루 1회 실행 (ONCE_PER_DAY)
+- [ ] 매수 실행 후에도 매도는 독립적으로 실행 가능
+- [ ] 자정 기준 매수/매도 상태 모두 리셋 확인
 - [ ] 상태 전이 정상 (IDLE → TRIGGERED → FILLED)
+- [ ] ONCE 정책: 1회 체결 → RuleCache.deactivate() 호출 확인
+- [ ] ONCE_PER_DAY 정책: 다음날 자정 리셋 후 재실행 가능
 - [ ] 여러 규칙 독립 관리
 
 ---
@@ -439,11 +514,19 @@ class Safeguard:
 
 ---
 
-### Step 7: OrderExecutor (주문 실행 파이프라인)
+### Step 7: OrderExecutor (주문 실행 파이프라인, 매수/매도 분리)
 
-**목표**: 조건 충족 → 검증 → 주문 실행, 결과 로그, WS 알림
+**목표**: buy_conditions/sell_conditions 기반 주문 실행, 보유 여부 판단, 결과 로그, WS 알림
 
 **파일**: `local_server/engine/executor.py`
+
+**변경 요약** (기존 대비):
+- `rule.get("side")` → buy_conditions/sell_conditions 충족 결과에 따라 side 결정
+- `rule.get("qty")` → `rule["execution"]["qty_value"]`
+- `rule.get("order_type")` → `rule["execution"]["order_type"]`
+- 매수: buy_conditions 충족 + 미보유 → BUY
+- 매도: sell_conditions 충족 + 보유 중 → SELL
+- 보유 여부 판단: 당일 체결 로그(logs.db) + 엔진 내 메모리 상태(`_holdings`)
 
 **구현 내용**:
 ```python
@@ -460,6 +543,7 @@ class ExecutionResult:
     status: ExecutionStatus
     rule_id: int
     symbol: str
+    side: str
     message: str
     order_id: str = None
 
@@ -475,31 +559,51 @@ class OrderExecutor:
         self._safeguard = safeguard
         self._logs = logs_db
         self._ws = ws_manager
+        self._holdings: dict[str, int] = {}  # symbol → 보유 수량 (당일 메모리)
 
-    async def execute(self, rule: dict, market_data: dict, account_state: dict) -> ExecutionResult:
+    def is_holding(self, symbol: str) -> bool:
+        """해당 종목 보유 여부."""
+        return self._holdings.get(symbol, 0) > 0
+
+    def update_holding(self, symbol: str, qty_delta: int):
+        """보유 상태 업데이트. 매수: +qty, 매도: -qty."""
+        current = self._holdings.get(symbol, 0)
+        self._holdings[symbol] = max(0, current + qty_delta)
+
+    async def execute(self, rule: dict, side: str, market_data: dict,
+                      account_state: dict) -> ExecutionResult:
         """
         주문 실행 파이프라인:
-        1. 중복 체크 (SignalManager)
+        1. 중복 체크 (SignalManager, 매수/매도 분리)
         2. 한도 체크 (LimitChecker)
         3. 안전장치 체크 (Safeguard)
         4. 가격 검증 (PriceVerifier)
         5. 주문 실행 (BrokerAdapter)
-        6. 결과 로그 (logs.db)
-        7. WS 알림 (프론트엔드)
+        6. 보유 상태 업데이트
+        7. 결과 로그 (logs.db)
+        8. WS 알림 (프론트엔드)
+
+        side: 'BUY' | 'SELL' — 호출측(StrategyEngine)에서 결정
         """
         rule_id = rule.get("id")
         symbol = rule.get("symbol")
-        side = rule.get("side", "BUY")
-        qty = rule.get("qty", 1)
-        order_type = rule.get("order_type", "MARKET")
+        execution = rule.get("execution", {})
+        qty = execution.get("qty_value", 1)
+        order_type = execution.get("order_type", "MARKET")
+        trigger_policy = rule.get("trigger_policy", {}).get("frequency", "ONCE_PER_DAY")
 
-        # 1. 중복 체크
-        if not self._signal_manager.can_trigger(rule_id):
+        # 1. 중복 체크 (매수/매도 분리)
+        if side == "BUY" and not self._signal_manager.can_trigger_buy(rule_id):
             return ExecutionResult(
                 status=ExecutionStatus.REJECTED,
-                rule_id=rule_id,
-                symbol=symbol,
-                message="오늘 이미 실행된 규칙"
+                rule_id=rule_id, symbol=symbol, side=side,
+                message="오늘 이미 매수 실행된 규칙"
+            )
+        if side == "SELL" and not self._signal_manager.can_trigger_sell(rule_id):
+            return ExecutionResult(
+                status=ExecutionStatus.REJECTED,
+                rule_id=rule_id, symbol=symbol, side=side,
+                message="오늘 이미 매도 실행된 규칙"
             )
 
         # 2. 한도 체크
@@ -511,19 +615,17 @@ class OrderExecutor:
         if not budget_check.ok:
             return ExecutionResult(
                 status=ExecutionStatus.REJECTED,
-                rule_id=rule_id,
-                symbol=symbol,
+                rule_id=rule_id, symbol=symbol, side=side,
                 message=budget_check.reason
             )
 
         positions_check = await self._limit_checker.check_max_positions(
             len(account_state.get("positions", []))
         )
-        if not positions_check.ok:
+        if side == "BUY" and not positions_check.ok:
             return ExecutionResult(
                 status=ExecutionStatus.REJECTED,
-                rule_id=rule_id,
-                symbol=symbol,
+                rule_id=rule_id, symbol=symbol, side=side,
                 message=positions_check.reason
             )
 
@@ -531,23 +633,20 @@ class OrderExecutor:
         if not await self._safeguard.check_trading_enabled():
             return ExecutionResult(
                 status=ExecutionStatus.REJECTED,
-                rule_id=rule_id,
-                symbol=symbol,
+                rule_id=rule_id, symbol=symbol, side=side,
                 message="Trading Enabled = OFF (Kill Switch 또는 손실 락)"
             )
 
         if not await self._safeguard.check_order_speed():
             return ExecutionResult(
                 status=ExecutionStatus.REJECTED,
-                rule_id=rule_id,
-                symbol=symbol,
+                rule_id=rule_id, symbol=symbol, side=side,
                 message="주문 속도 제한 초과"
             )
 
         balance = await self._broker.get_balance(self._account_no)
         if not await self._safeguard.check_max_loss(balance.total_balance):
             await self._safeguard.set_kill_switch(KillSwitchLevel.CANCEL_OPEN)
-            # BrokerAdapter ABC에는 cancel_all이 없으므로 개별 cancel_order() 호출
             for pos in await self._broker.get_positions(self._account_no):
                 if pos.open_order_no:
                     await self._broker.cancel_order(pos.open_order_no)
@@ -555,25 +654,23 @@ class OrderExecutor:
             await self._logs.record_safeguard_event("max_loss_trigger", message)
             return ExecutionResult(
                 status=ExecutionStatus.REJECTED,
-                rule_id=rule_id,
-                symbol=symbol,
+                rule_id=rule_id, symbol=symbol, side=side,
                 message=message
             )
 
         # 4. 가격 검증
-        self._signal_manager.mark_triggered(rule_id)
+        self._signal_manager.mark_triggered(rule_id, side)
 
         ws_price = market_data.get("price", 0)
         verify_result = await self._price_verifier.verify(symbol, ws_price)
 
         if not verify_result.ok:
-            self._signal_manager.mark_failed(rule_id)
+            self._signal_manager.mark_failed(rule_id, side)
             message = f"가격 검증 실패 (WS: {ws_price}, REST: {verify_result.actual_price}, 괴리: {verify_result.diff_pct:.2f}%)"
             await self._logs.record_execution_log(rule_id, symbol, "PRICE_MISMATCH", message)
             return ExecutionResult(
                 status=ExecutionStatus.REJECTED,
-                rule_id=rule_id,
-                symbol=symbol,
+                rule_id=rule_id, symbol=symbol, side=side,
                 message=message
             )
 
@@ -587,50 +684,60 @@ class OrderExecutor:
                 order_type=order_type
             )
 
-            # 6. 결과 로그
+            # 6. 보유 상태 업데이트
+            if side == "BUY":
+                self.update_holding(symbol, qty)
+            else:
+                self.update_holding(symbol, -qty)
+
+            # 7. 결과 로그
             self._safeguard.increment_order_count()
-            self._signal_manager.mark_filled(rule_id)
+            self._signal_manager.mark_filled(rule_id, side, trigger_policy)
 
             await self._logs.record_execution_log(
                 rule_id, symbol, "ORDER_SENT",
-                f"Order ID: {order_result.order_id}, Price: {verify_result.actual_price}"
+                f"Side: {side}, Order ID: {order_result.order_id}, Price: {verify_result.actual_price}"
             )
 
-            # 7. WS 알림
+            # 8. WS 알림
             await self._ws.broadcast({
                 "type": "execution",
                 "status": "success",
                 "rule_id": rule_id,
                 "symbol": symbol,
+                "side": side,
                 "order_id": order_result.order_id,
             })
 
             return ExecutionResult(
                 status=ExecutionStatus.SUCCESS,
-                rule_id=rule_id,
-                symbol=symbol,
+                rule_id=rule_id, symbol=symbol, side=side,
                 order_id=order_result.order_id,
                 message="주문 성공"
             )
 
         except Exception as e:
-            self._signal_manager.mark_failed(rule_id)
+            self._signal_manager.mark_failed(rule_id, side)
             await self._logs.record_execution_log(
                 rule_id, symbol, "ORDER_FAILED", str(e)
             )
             return ExecutionResult(
                 status=ExecutionStatus.FAILED,
-                rule_id=rule_id,
-                symbol=symbol,
+                rule_id=rule_id, symbol=symbol, side=side,
                 message=f"주문 실행 실패: {str(e)}"
             )
 ```
 
 **검증**:
-- [ ] 모의투자 시장가 매수 → 체결 성공
+- [ ] 매수: buy_conditions 충족 + 미보유 → BUY 주문 성공
+- [ ] 매도: sell_conditions 충족 + 보유 중 → SELL 주문 성공
+- [ ] 매수 후 `_holdings` 에 보유 수량 추가 확인
+- [ ] 매도 후 `_holdings` 에서 보유 수량 제거 확인
+- [ ] `execution.qty_value`, `execution.order_type` 필드 참조 확인
 - [ ] 체결 결과 → logs.db 기록
-- [ ] 체결 알림 → localhost WS로 프론트엔드 전송
+- [ ] 체결 알림 → localhost WS로 프론트엔드 전송 (side 포함)
 - [ ] 각 검증 단계에서 거부 시 로그 기록
+- [ ] ONCE 트리거 정책: 체결 후 규칙 비활성화 확인
 
 ---
 
@@ -840,6 +947,7 @@ class StrategyEngine:
         self._rule_cache = rule_cache
         self._ws = ws_manager
         self._config = config
+        self._account_no = config.get("account_no")
         self._running = False
 
     async def start(self):
@@ -860,8 +968,8 @@ class StrategyEngine:
 
         [0] Kill Switch 체크
         [0.5] 분봉 유효성 확인
-        [1] 규칙 로드
-        [2] 각 규칙 평가
+        [1] 규칙 로드 (priority 내림차순 정렬)
+        [2] 각 규칙 매수/매도 분리 평가
         [3] 안전장치 체크
         [4] 가격 검증
         [5] 주문 실행
@@ -887,20 +995,25 @@ class StrategyEngine:
             # WS 끊김 복구 시 누락 분봉 보충 (필요시)
             # TODO: WS 상태 확인 로직 추가
 
-            # [1] 규칙 로드
+            # [1] 규칙 로드 — priority 내림차순 정렬 (높은 순위 먼저 주문)
             rules = self._rule_cache.load()
             if not rules:
                 logger.warning("캐시된 규칙 없음 — 평가 보류")
                 return
 
             active_rules = [r for r in rules if r.get("is_active", False)]
+            active_rules.sort(key=lambda r: r.get("priority", 0), reverse=True)
             logger.debug(f"활성 규칙: {len(active_rules)}개")
 
             # 계좌 상태 조회 (BrokerAdapter ABC: get_balance + get_positions)
             balance = await self._broker.get_balance(self._account_no)
             positions = await self._broker.get_positions(self._account_no)
+            account_state = {
+                "balance": balance.total_balance,
+                "positions": positions,
+            }
 
-            # [2] 각 규칙 평가
+            # [2] 각 규칙 매수/매도 분리 평가
             for rule in active_rules:
                 try:
                     rule_id = rule.get("id")
@@ -915,19 +1028,29 @@ class StrategyEngine:
                     # AI 컨텍스트
                     context = self._context_cache.get()
 
-                    # 규칙 평가
-                    condition_met = self._evaluator.evaluate(rule, market_data, context)
+                    # 매수 평가: buy_conditions 존재 + 미보유 → evaluate_buy
+                    if rule.get("buy_conditions") and not self._executor.is_holding(symbol):
+                        buy_met = self._evaluator.evaluate_buy(rule, market_data, context)
+                        if buy_met:
+                            logger.info(f"Rule {rule_id} ({symbol}): 매수 조건 충족 → 매수 주문")
+                            result = await self._executor.execute(
+                                rule, "BUY", market_data, account_state
+                            )
+                            logger.info(f"Rule {rule_id} BUY: {result.status.value}, {result.message}")
 
-                    if condition_met:
-                        logger.info(f"Rule {rule_id} ({symbol}): 조건 충족 → 주문 실행")
+                    # 매도 평가: sell_conditions 존재 + 보유 중 → evaluate_sell
+                    if rule.get("sell_conditions") and self._executor.is_holding(symbol):
+                        sell_met = self._evaluator.evaluate_sell(rule, market_data, context)
+                        if sell_met:
+                            logger.info(f"Rule {rule_id} ({symbol}): 매도 조건 충족 → 매도 주문")
+                            result = await self._executor.execute(
+                                rule, "SELL", market_data, account_state
+                            )
+                            logger.info(f"Rule {rule_id} SELL: {result.status.value}, {result.message}")
 
-                        # [3] 안전장치 + [4] 가격 검증 + [5] 주문 실행
-                        # (executor.execute에서 통합 처리)
-                        result = await self._executor.execute(rule, market_data, account_state)
-
-                        logger.info(f"Rule {rule_id}: 실행 결과 = {result.status.value}, {result.message}")
-                    else:
-                        logger.debug(f"Rule {rule_id} ({symbol}): 조건 미충족")
+                    # 조건 미충족 시 디버그 로그
+                    if not rule.get("buy_conditions") and not rule.get("sell_conditions"):
+                        logger.debug(f"Rule {rule_id} ({symbol}): 매수/매도 조건 미정의")
 
                 except Exception as e:
                     logger.error(f"Rule {rule.get('id')} 평가 오류: {str(e)}")
@@ -1059,6 +1182,10 @@ class TestStrategyEngine:
 ---
 
 ## 6. 미결 사항 처리
+
+### (해결) 규칙 데이터 모델 분리
+- [x] 규칙 데이터 모델 분리 → `spec/rule-model/spec.md`로 분리 완료
+- 매수/매도 조건 분리, 조건 타입 확장(cross_above/cross_below), 트리거 정책(ONCE_PER_DAY/ONCE) 포함
 
 ### (미결) 가격 검증 괴리 임계값
 - 현재: 1%

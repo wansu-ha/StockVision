@@ -212,6 +212,9 @@ def create_verification_token(user_id: int) -> str:
 - `cloud_server/core/validators.py` (조건 JSON 검증)
 
 **구현 내용:**
+
+> 상세 스키마: `spec/rule-model/spec.md` §4 참조
+
 ```python
 # 1. TradingRule 모델
 class TradingRule(Base):
@@ -223,15 +226,16 @@ class TradingRule(Base):
 
     # 조건 (JSON)
     buy_conditions = Column(JSON)     # { operator: "AND", conditions: [...] }
-    sell_conditions = Column(JSON)
+    sell_conditions = Column(JSON)    # 선택 (매도 조건)
 
-    # 설정
-    order_type = Column(String(10), default="market")  # market | limit
-    qty = Column(Integer, nullable=False)
-    max_position_count = Column(Integer, default=5)
-    budget_ratio = Column(Float, default=0.2)
+    # 주문 설정 (JSON)
+    execution = Column(JSON, nullable=False)  # { order_type, qty_type, qty_value, limit_price }
 
-    # 상태
+    # 트리거 정책 (JSON)
+    trigger_policy = Column(JSON, nullable=False, default={"frequency": "ONCE_PER_DAY"})
+
+    # 메타
+    priority = Column(Integer, default=0)
     is_active = Column(Boolean, default=True)
     version = Column(Integer, default=1)  # 클라이언트 동기화용
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -241,6 +245,8 @@ class TradingRule(Base):
         UniqueConstraint("user_id", "name"),
         Index("idx_user_rules", "user_id"),
     )
+
+# NOTE: max_position_count, budget_ratio는 사용자 전역 설정으로 이동 (spec/rule-model/spec.md §7)
 
 # 2. 조건 JSON 스키마 검증
 def validate_conditions(conditions: dict) -> bool:
@@ -258,8 +264,8 @@ def validate_conditions(conditions: dict) -> bool:
     }
     """
     valid_operators = ["AND", "OR"]
-    valid_types = ["indicator", "context", "price"]
-    valid_field_operators = ["<", ">", "<=", ">=", "==", "!="]
+    valid_types = ["indicator", "context", "price", "volume"]
+    valid_field_operators = ["<", ">", "<=", ">=", "==", "!=", "cross_above", "cross_below"]
 
     if conditions.get("operator") not in valid_operators:
         raise ValueError(f"Invalid operator: {conditions.get('operator')}")
@@ -291,10 +297,9 @@ DELETE /api/v1/rules/:id     → 규칙 삭제
     "symbol": "005930",
     "buy_conditions": { "operator": "AND", "conditions": [...] },
     "sell_conditions": { "operator": "AND", "conditions": [...] },
-    "qty": 10,
-    "order_type": "market",
-    "max_position_count": 5,
-    "budget_ratio": 0.2,
+    "execution": { "order_type": "market", "qty_type": "FIXED", "qty_value": 10 },
+    "trigger_policy": { "frequency": "ONCE_PER_DAY" },
+    "priority": 0,
     "is_active": true,
     "version": 2,
     "created_at": "2026-03-01T10:00:00",
@@ -358,8 +363,10 @@ Body: {
 Response: {
   "success": true,
   "data": {
-    "rules_version": 5,     # 현재 규칙 버전 (로컬이 캐시한 버전과 비교)
-    "context_version": 3,   # 현재 컨텍스트 버전
+    "rules_version": 5,            # 현재 규칙 버전 (로컬이 캐시한 버전과 비교)
+    "context_version": 3,          # 현재 컨텍스트 버전
+    "stock_master_version": "2026-03-05T08:00:00Z",  # 종목 마스터 최종 갱신 시각
+    "watchlist_version": 2,        # 관심종목 변경 버전
     "timestamp": "2026-03-05T10:35:00Z"
   }
 }
@@ -403,16 +410,27 @@ def post_heartbeat(user_id: int, payload: dict) -> dict:
 
     context_version = ... # 컨텍스트 마지막 갱신 시간 기반
 
+    # 종목 마스터 최종 갱신 시각
+    stock_master_version = db.query(func.max(StockMaster.updated_at)).scalar()
+
+    # 관심종목 변경 버전 (최신 created_at 기반)
+    watchlist_version = db.query(func.count(Watchlist.id)).filter(
+        Watchlist.user_id == user_id
+    ).scalar() or 0
+
     return {
         "rules_version": rules_version,
         "context_version": context_version,
+        "stock_master_version": stock_master_version,
+        "watchlist_version": watchlist_version,
         "timestamp": datetime.utcnow()
     }
 ```
 
 **검증:**
-- [ ] `POST /api/v1/heartbeat` (JWT 인증) → 200 OK, rules_version/context_version 반환
+- [ ] `POST /api/v1/heartbeat` (JWT 인증) → 200 OK, rules_version/context_version/stock_master_version/watchlist_version 반환
 - [ ] rules_version 변경 시 → 응답값 변화 확인
+- [ ] stock_master_version, watchlist_version 정상 반환 확인
 - [ ] `GET /api/v1/version` → 200 OK, latest/min_supported 반환
 - [ ] 하트비트 로그 DB 저장 확인
 
@@ -639,6 +657,169 @@ class MarketRepository:
 
 ---
 
+### Step 6-A — 종목 검색 API (StockMaster 검색 + 종목 상세)
+
+**목표**: 사용자가 종목명/코드로 종목을 검색하고 메타데이터를 조회
+
+**파일:**
+- `cloud_server/api/stocks.py` (신규)
+- `cloud_server/models/market.py` (기존 StockMaster 활용)
+- `cloud_server/services/stock_service.py` (신규)
+
+**구현 내용:**
+```python
+# 1. 종목 검색 엔드포인트
+GET /api/v1/stocks/search?q=삼성    → StockMaster에서 name/symbol LIKE 매칭 (상위 20건)
+GET /api/v1/stocks/:symbol          → 종목 상세 메타데이터 (시세 미포함)
+GET /api/v1/stocks/master-version   → 마스터 버전 (로컬 캐시 동기화용)
+
+# 2. StockService
+class StockService:
+    def search(self, db: Session, query: str, limit: int = 20) -> list[dict]:
+        """종목명/코드 검색"""
+        results = db.query(StockMaster).filter(
+            or_(
+                StockMaster.name.ilike(f"%{query}%"),
+                StockMaster.symbol.ilike(f"%{query}%")
+            ),
+            StockMaster.is_active == True
+        ).limit(limit).all()
+
+        return [
+            {"symbol": r.symbol, "name": r.name, "market": r.market, "sector": r.sector}
+            for r in results
+        ]
+
+    def get_detail(self, db: Session, symbol: str) -> dict:
+        """종목 상세 메타데이터"""
+        master = db.query(StockMaster).filter_by(symbol=symbol).first()
+        if not master:
+            raise HTTPException(status_code=404, detail="Symbol not found")
+        return {
+            "symbol": master.symbol,
+            "name": master.name,
+            "market": master.market,
+            "sector": master.sector,
+            "is_active": master.is_active,
+            "updated_at": master.updated_at
+        }
+
+    def get_master_version(self, db: Session) -> dict:
+        """마스터 테이블 최신 갱신 시각"""
+        latest = db.query(func.max(StockMaster.updated_at)).scalar()
+        return {"version": latest.isoformat() if latest else None}
+
+# 3. 응답 형식
+{
+  "success": true,
+  "data": [
+    {"symbol": "005930", "name": "삼성전자", "market": "KOSPI", "sector": "반도체"},
+    {"symbol": "005935", "name": "삼성전자우", "market": "KOSPI", "sector": "반도체"}
+  ],
+  "count": 2
+}
+```
+
+**검증:**
+- [ ] `GET /api/v1/stocks/search?q=삼성` → 삼성 포함 종목 목록 반환
+- [ ] `GET /api/v1/stocks/005930` → 삼성전자 메타데이터 반환 (시세 없음)
+- [ ] `GET /api/v1/stocks/master-version` → 최신 갱신 시각 반환
+- [ ] 존재하지 않는 종목 → 404
+
+---
+
+### Step 6-B — 관심종목 CRUD
+
+**목표**: 사용자별 관심종목 등록/조회/삭제
+
+**파일:**
+- `cloud_server/api/watchlist.py` (신규)
+- `cloud_server/models/watchlist.py` (신규)
+- `cloud_server/services/watchlist_service.py` (신규)
+
+**구현 내용:**
+```python
+# 1. Watchlist 모델
+class Watchlist(Base):
+    __tablename__ = "watchlist"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    symbol = Column(String(10), nullable=False)
+    memo = Column(String(200))
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "symbol"),
+        Index("idx_watchlist_user", "user_id"),
+    )
+
+# 2. 관심종목 엔드포인트 (JWT 인증)
+GET    /api/v1/watchlist          → 내 관심종목 목록
+POST   /api/v1/watchlist          → 관심종목 추가
+DELETE /api/v1/watchlist/:id      → 관심종목 삭제
+
+# 3. WatchlistService
+class WatchlistService:
+    def list(self, db: Session, user_id: int) -> list[dict]:
+        """관심종목 목록 (StockMaster JOIN)"""
+        items = db.query(Watchlist, StockMaster).join(
+            StockMaster, Watchlist.symbol == StockMaster.symbol
+        ).filter(
+            Watchlist.user_id == user_id
+        ).order_by(Watchlist.created_at.desc()).all()
+
+        return [
+            {
+                "id": w.id,
+                "symbol": w.symbol,
+                "name": m.name,
+                "market": m.market,
+                "memo": w.memo,
+                "created_at": w.created_at
+            }
+            for w, m in items
+        ]
+
+    def add(self, db: Session, user_id: int, symbol: str, memo: str = None) -> dict:
+        """관심종목 추가"""
+        # StockMaster에 존재하는 종목인지 확인
+        master = db.query(StockMaster).filter_by(symbol=symbol, is_active=True).first()
+        if not master:
+            raise HTTPException(status_code=404, detail="Symbol not found")
+
+        item = Watchlist(user_id=user_id, symbol=symbol, memo=memo)
+        db.add(item)
+        db.commit()
+        return {"id": item.id, "symbol": item.symbol, "name": master.name}
+
+    def remove(self, db: Session, user_id: int, item_id: int):
+        """관심종목 삭제"""
+        item = db.query(Watchlist).filter_by(id=item_id, user_id=user_id).first()
+        if not item:
+            raise HTTPException(status_code=404, detail="Watchlist item not found")
+        db.delete(item)
+        db.commit()
+
+# 4. 응답 형식
+{
+  "success": true,
+  "data": [
+    {"id": 1, "symbol": "005930", "name": "삼성전자", "market": "KOSPI", "memo": null, "created_at": "..."},
+    {"id": 2, "symbol": "000660", "name": "SK하이닉스", "market": "KOSPI", "memo": "반도체", "created_at": "..."}
+  ],
+  "count": 2
+}
+```
+
+**검증:**
+- [ ] `GET /api/v1/watchlist` → 본인 관심종목만 조회
+- [ ] `POST /api/v1/watchlist` → 관심종목 추가 (StockMaster에 없는 종목 → 404)
+- [ ] `POST /api/v1/watchlist` → 중복 추가 → 409 Conflict
+- [ ] `DELETE /api/v1/watchlist/:id` → 삭제 확인
+- [ ] 다른 사용자의 관심종목 삭제 → 404
+
+---
+
 ### Step 7 — 수집 스케줄러 (APScheduler: WS, 일봉, 종목마스터, yfinance)
 
 **목표**: 정기적인 데이터 수집 자동화
@@ -727,22 +908,38 @@ class CollectorScheduler:
                 await repo.save_daily_bar(symbol, ohlcv["date"], ohlcv)
 
     async def update_stock_master(self):
-        """종목 마스터 갱신"""
+        """종목 마스터 갱신 (공공데이터포털 — 금융위원회_KRX상장종목정보)"""
+        import httpx
+
         repo = MarketRepository(get_db())
 
-        # 키움 API로 상장 종목 조회
-        symbols = await self.broker.get_listed_symbols()
+        # 공공데이터포털 API 호출 (키움 API 대신)
+        url = "https://apis.data.go.kr/1160100/service/GetKrxListedInfoService/getItemInfo"
+        params = {
+            "serviceKey": settings.PUBLIC_DATA_API_KEY,
+            "resultType": "json",
+            "numOfRows": 3000,
+            "pageNo": 1,
+        }
 
-        for symbol in symbols:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(url, params=params)
+            data = resp.json()
+
+        items = data.get("response", {}).get("body", {}).get("items", {}).get("item", [])
+
+        for item in items:
             master = StockMaster(
-                symbol=symbol["code"],
-                name=symbol["name"],
-                market=symbol["market"],
-                sector=symbol["sector"]
+                symbol=item["srtnCd"],       # 단축코드
+                name=item["itmsNm"],         # 종목명
+                market=item["mrktCtg"],      # KOSPI | KOSDAQ
+                sector=item.get("idxIndNm"), # 업종
+                is_active=True,
             )
             repo.db.merge(master)
 
         repo.db.commit()
+        logging.info(f"Stock master updated: {len(items)} items")
 
     async def collect_yfinance(self):
         """yfinance 보조 수집 (해외 지수, 환율 등)"""
@@ -785,7 +982,7 @@ async def startup():
 **검증:**
 - [ ] 09:00 — 키움 WS 시작, 실시간 시세 수신
 - [ ] 16:00 — 일봉 저장 완료
-- [ ] 08:00 — 종목마스터 갱신
+- [ ] 08:00 — 종목마스터 갱신 (공공데이터포털 API)
 - [ ] 17:00 — yfinance 수집
 - [ ] 18:00 — 결측 거래일 감지 및 경고 로그
 
@@ -1028,6 +1225,8 @@ GET  /api/v1/rules              규칙 fetch (버전 변경 시)
 PUT  /api/v1/rules/:id          규칙 sync (로컬에서 변경 시)
 GET  /api/v1/context            AI 컨텍스트 fetch (버전 변경 시)
 GET  /api/v1/templates          전략 템플릿 목록 fetch
+GET  /api/v1/watchlist          관심종목 fetch (watchlist_version 변경 시)
+GET  /api/v1/stocks/master-version  종목 메타 버전 확인
 POST /api/v1/auth/refresh       JWT 자동 갱신
 
 # 2. 규칙 fetch (하트비트에서 version 차이 감지 후)
@@ -1084,8 +1283,9 @@ class SyncService:
                 "symbol": r.symbol,
                 "buy_conditions": r.buy_conditions,
                 "sell_conditions": r.sell_conditions,
-                "qty": r.qty,
-                "order_type": r.order_type,
+                "execution": r.execution,
+                "trigger_policy": r.trigger_policy,
+                "priority": r.priority,
                 "version": r.version,
                 "is_active": r.is_active
             }
@@ -1093,6 +1293,17 @@ class SyncService:
         ]
 
         return result, current_version
+
+    def get_user_watchlist(self, user_id: int, db: Session) -> list[dict]:
+        """관심종목 조회 (로컬 sync용)"""
+        items = db.query(Watchlist, StockMaster).join(
+            StockMaster, Watchlist.symbol == StockMaster.symbol
+        ).filter(Watchlist.user_id == user_id).all()
+
+        return [
+            {"symbol": w.symbol, "name": m.name, "market": m.market, "memo": w.memo}
+            for w, m in items
+        ]
 
     def sync_rule(self, user_id: int, rule_id: int, payload: dict, db: Session) -> dict:
         """규칙 동기화 (로컬 업로드)"""
@@ -1129,6 +1340,8 @@ class SyncService:
 - [ ] `PUT /api/v1/rules/1` → 버전 증가 확인
 - [ ] 버전 충돌 시 → 409 Conflict
 - [ ] 로컬 서버가 규칙 fetch → 캐시 업데이트 확인
+- [ ] `GET /api/v1/watchlist` → 관심종목 sync 확인
+- [ ] `GET /api/v1/stocks/master-version` → 종목 마스터 버전 반환
 
 ---
 
@@ -1218,6 +1431,11 @@ class SyncService:
 | 5 | `cloud_server/core/broker_factory.py` | BrokerAdapter 팩토리 |
 | 6 | `cloud_server/models/market.py` | StockMaster, DailyBar, MinuteBar |
 | 6 | `cloud_server/services/market_repository.py` | 시장 데이터 레이어 |
+| 6-A | `cloud_server/api/stocks.py` | 종목 검색/상세 API |
+| 6-A | `cloud_server/services/stock_service.py` | 종목 메타데이터 로직 |
+| 6-B | `cloud_server/api/watchlist.py` | 관심종목 CRUD API |
+| 6-B | `cloud_server/models/watchlist.py` | Watchlist 모델 |
+| 6-B | `cloud_server/services/watchlist_service.py` | 관심종목 로직 |
 | 7 | `cloud_server/collector/scheduler.py` | APScheduler 스케줄 |
 | 7 | `cloud_server/services/yfinance_service.py` | yfinance 수집 |
 | 8 | `cloud_server/api/admin.py` | 어드민 API |
@@ -1234,7 +1452,7 @@ class SyncService:
 
 | 파일 | 변경 사항 |
 |------|----------|
-| `cloud_server/main.py` | 새 라우터 등록 (auth, rules, heartbeat, admin, sync, context) |
+| `cloud_server/main.py` | 새 라우터 등록 (auth, rules, heartbeat, admin, sync, context, stocks, watchlist) |
 | `cloud_server/core/database.py` | PostgreSQL 멀티 환경 지원 추가 |
 | `cloud_server/requirements.txt` | 신규 의존성 추가 (argon2-cffi, anthropic, APScheduler 등) |
 
@@ -1278,11 +1496,13 @@ class SyncService:
 | 4 | 4 | `feat: cloud-server 하트비트 수신 + 버전 체크 API` |
 | 5 | 5 | `feat: cloud-server 시세 수집기 (서비스 키움 WS/REST, sv_core 사용)` |
 | 6 | 6 | `feat: cloud-server 시세 저장 (DailyBar, MinuteBar, StockMaster)` |
-| 7 | 7 | `feat: cloud-server 수집 스케줄러 (APScheduler: WS, 일봉, 종목마스터, yfinance)` |
-| 8 | 8 | `feat: cloud-server 어드민 API (유저, 통계, 서비스 키, 템플릿, 수집 상태)` |
-| 9 | 9 | `feat: cloud-server AI 컨텍스트 API + Claude 연동 (v1 스텁, v2 추진)` |
-| 10 | 10 | `feat: cloud-server 로컬 서버 통신 API (규칙/컨텍스트 동기화)` |
-| 11 | 11 | `feat: backend/app → cloud_server 마이그레이션 완료` |
+| 7 | 6-A | `feat: cloud-server 종목 검색 API (StockMaster 검색 + 상세)` |
+| 8 | 6-B | `feat: cloud-server 관심종목 CRUD` |
+| 9 | 7 | `feat: cloud-server 수집 스케줄러 (APScheduler: WS, 일봉, 종목마스터, yfinance)` |
+| 10 | 8 | `feat: cloud-server 어드민 API (유저, 통계, 서비스 키, 템플릿, 수집 상태)` |
+| 11 | 9 | `feat: cloud-server AI 컨텍스트 API + Claude 연동 (v1 스텁, v2 추진)` |
+| 12 | 10 | `feat: cloud-server 로컬 서버 통신 API (규칙/컨텍스트/관심종목 동기화)` |
+| 13 | 11 | `feat: backend/app → cloud_server 마이그레이션 완료` |
 
 ---
 
@@ -1308,10 +1528,18 @@ class SyncService:
 - [ ] 장 마감 후 일봉 저장
 - [ ] 결측 거래일 감지 + 재수집
 
+#### 종목/관심종목
+- [ ] 종목 검색 → 이름/코드 매칭 결과 반환 (시세 미포함)
+- [ ] 종목 상세 → 메타데이터 반환
+- [ ] 관심종목 등록/조회/삭제 정상 동작
+- [ ] 중복 관심종목 추가 → 409 Conflict
+- [ ] 공공데이터포털 수집 → StockMaster 갱신 확인
+
 #### 로컬 서버 통신
-- [ ] `POST /api/v1/heartbeat` (JWT 인증) → rules_version, context_version 반환
+- [ ] `POST /api/v1/heartbeat` (JWT 인증) → rules_version, context_version, stock_master_version, watchlist_version 반환
 - [ ] rules_version 변경 시 규칙 fetch
 - [ ] 규칙 sync → version 증가
+- [ ] 관심종목 sync 정상 동작
 - [ ] JWT 자동 갱신
 
 #### 어드민
@@ -1330,12 +1558,15 @@ class SyncService:
 **병렬 가능 항목** (독립적):
 - Step 2 (인증) 과 Step 3 (규칙) 동시 진행
 - Step 8 (어드민) 과 Step 4 (하트비트) 동시 진행
+- Step 6-A (종목 검색) 과 Step 6-B (관심종목) 동시 진행 (Step 6 완료 후)
 
 **의존 순서**:
 ```
 Step 1 (DB) → Step 2 (인증) → Step 3 (규칙)
            → Step 4 (하트비트) → Step 10 (동기화)
-           → Step 5 (수집기) → Step 6 (저장) → Step 7 (스케줄)
+           → Step 5 (수집기) → Step 6 (저장) → Step 6-A (종목 검색)
+                                             → Step 6-B (관심종목)
+                                             → Step 7 (스케줄)
                              → Step 9 (컨텍스트)
            → Step 8 (어드민)
            → Step 11 (마이그레이션)
@@ -1343,4 +1574,4 @@ Step 1 (DB) → Step 2 (인증) → Step 3 (규칙)
 
 ---
 
-**마지막 갱신**: 2026-03-05
+**마지막 갱신**: 2026-03-06
