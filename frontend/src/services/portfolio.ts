@@ -1,6 +1,7 @@
-import axios from 'axios'
-
-const api = axios.create({ baseURL: 'http://localhost:8000', timeout: 10000 })
+/**
+ * 포트폴리오 서비스 — TODO stub
+ * 레거시 백엔드(:8000) 제거. 클라우드 서버 마이그레이션 후 재구현 예정.
+ */
 
 export interface Position {
   symbol: string
@@ -26,19 +27,10 @@ export interface PortfolioData {
 export interface EquityPoint { date: string; equity: number }
 export interface SectorSlice { sector: string; value: number; weight_pct: number }
 
+const STUB_WARN = (name: string) => console.warn(`[stub] ${name}: 레거시 백엔드 제거됨`)
+
 export const portfolioApi = {
-  get: (accountId: number) =>
-    api.get<{ success: boolean; data: PortfolioData }>(`/api/v1/portfolio/${accountId}`)
-      .then(r => r.data),
-
-  equityCurve: (accountId: number, period = '30d') =>
-    api.get<{ success: boolean; data: EquityPoint[] }>(
-      `/api/v1/portfolio/${accountId}/equity-curve`,
-      { params: { period } }
-    ).then(r => r.data),
-
-  sectorAllocation: (accountId: number) =>
-    api.get<{ success: boolean; data: SectorSlice[] }>(
-      `/api/v1/portfolio/${accountId}/sector-allocation`
-    ).then(r => r.data),
+  get: async (_accountId: number) => { STUB_WARN('portfolioApi.get'); return { success: true, data: {} as PortfolioData } },
+  equityCurve: async (_accountId: number, _period = '30d') => { STUB_WARN('portfolioApi.equityCurve'); return { success: true, data: [] as EquityPoint[] } },
+  sectorAllocation: async (_accountId: number) => { STUB_WARN('portfolioApi.sectorAllocation'); return { success: true, data: [] as SectorSlice[] } },
 }

@@ -5,9 +5,11 @@ const BASE = `${CLOUD_URL}/api/v1/auth`
 
 export interface LoginResponse {
   success: boolean
-  jwt: string
-  refresh_token: string
-  expires_in: number
+  data: {
+    access_token: string
+    refresh_token: string
+    expires_in: number
+  }
 }
 
 export const authApi = {

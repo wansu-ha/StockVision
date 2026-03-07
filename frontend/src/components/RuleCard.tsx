@@ -9,16 +9,16 @@ interface Props {
 }
 
 export default function RuleCard({ rule, onToggle, onEdit, onDelete }: Props) {
-  const conditionSummary = rule.conditions.length > 0
-    ? `${rule.conditions.length}개 조건 (${rule.operator})`
-    : '조건 없음'
+  const summary = rule.script
+    ? rule.script.split('\n').filter(l => l.trim() && !l.trim().startsWith('--')).join(' | ')
+    : rule.buy_conditions ? '매수 조건 (JSON)' : rule.sell_conditions ? '매도 조건 (JSON)' : '조건 없음'
 
   return (
     <div className={`bg-white rounded-xl border p-4 transition-colors ${rule.is_active ? 'border-green-200' : 'border-gray-200'}`}>
       <div className="flex items-start justify-between mb-3">
         <div>
           <h3 className="font-semibold text-gray-900">{rule.name}</h3>
-          <p className="text-sm text-gray-500">{rule.symbol} / {rule.side === 'BUY' ? '매수' : '매도'}</p>
+          <p className="text-sm text-gray-500">{rule.symbol}</p>
         </div>
         {/* ON/OFF 토글 */}
         <button
@@ -29,7 +29,7 @@ export default function RuleCard({ rule, onToggle, onEdit, onDelete }: Props) {
         </button>
       </div>
 
-      <div className="text-xs text-gray-500 mb-3">{conditionSummary}</div>
+      <div className="text-xs text-gray-500 mb-3 truncate">{summary}</div>
 
       <div className="flex items-center gap-2">
         <button

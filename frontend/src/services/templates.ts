@@ -1,6 +1,7 @@
-import axios from 'axios'
-
-const api = axios.create({ baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000' })
+/**
+ * 전략 템플릿 서비스 — TODO stub
+ * 레거시 백엔드(:8000) 제거. 클라우드 서버 마이그레이션 후 재구현 예정.
+ */
 
 export interface BacktestSummary {
   cagr: number
@@ -25,7 +26,9 @@ export interface StrategyTemplate {
   tags: string[]
 }
 
+const STUB_WARN = (name: string) => console.warn(`[stub] ${name}: 레거시 백엔드 제거됨`)
+
 export const templatesApi = {
-  list: () => api.get<{ success: boolean; data: StrategyTemplate[] }>('/api/templates').then(r => r.data.data),
-  get: (id: number) => api.get<{ success: boolean; data: StrategyTemplate }>(`/api/templates/${id}`).then(r => r.data.data),
+  list: async (): Promise<StrategyTemplate[]> => { STUB_WARN('templatesApi.list'); return [] },
+  get: async (_id: number): Promise<StrategyTemplate> => { STUB_WARN('templatesApi.get'); return {} as StrategyTemplate },
 }
