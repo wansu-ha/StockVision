@@ -1,6 +1,6 @@
 # 키움 REST API 연동 구현 계획서 (kiwoom-rest)
 
-> 작성일: 2026-03-05 | 상태: 초안 — 재작성 필요 | Unit 1 (Phase 3-A)
+> 작성일: 2026-03-05 | 상태: 구현 완료 | Unit 1 (Phase 3-A)
 >
 > **기반**: `spec/kiwoom-rest/spec.md` (2026-03-04)
 >

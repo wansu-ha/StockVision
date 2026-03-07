@@ -1,6 +1,6 @@
 # 증권사 REST API 연동 명세서 (broker-adapter)
 
-> 작성일: 2026-03-04 | 상태: **진행 중** | Unit 1 (Phase 3-A)
+> 작성일: 2026-03-04 | 상태: **구현 완료** | Unit 1 (Phase 3-A)
 >
 > **이전 spec**: `spec/kiwoom-integration/` (COM/pykiwoom 기반) → 폐기.
 >
