@@ -1,7 +1,7 @@
 """
 하트비트 비즈니스 로직
 
-로컬 서버의 상태 보고를 받고 rules_version, context_version 반환.
+로컬 서버의 상태 보고를 받고 버전 정보(rules, context, watchlist, stock_master) 반환.
 """
 from datetime import datetime
 
@@ -10,11 +10,13 @@ from sqlalchemy.orm import Session
 
 from cloud_server.models.heartbeat import Heartbeat
 from cloud_server.models.rule import TradingRule
+from cloud_server.services.stock_service import get_stock_master_version
+from cloud_server.services.watchlist_service import get_watchlist_version
 
 
 def record_heartbeat(user_id: str, payload: dict, db: Session) -> dict:
     """
-    하트비트 저장 후 rules_version, context_version 반환.
+    하트비트 저장 후 버전 정보 반환.
 
     payload 형식:
     {
@@ -45,11 +47,13 @@ def record_heartbeat(user_id: str, payload: dict, db: Session) -> dict:
         TradingRule.user_id == user_id
     ).scalar() or 0
 
-    # context_version: 현재는 고정값 (Step 9에서 확장)
+    # context_version: 현재는 고정값 (v2에서 확장)
     context_version = 1
 
     return {
         "rules_version": rules_version,
         "context_version": context_version,
+        "watchlist_version": get_watchlist_version(db, user_id),
+        "stock_master_version": get_stock_master_version(db),
         "timestamp": datetime.utcnow().isoformat(),
     }

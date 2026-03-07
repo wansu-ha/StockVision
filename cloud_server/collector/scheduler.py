@@ -179,9 +179,19 @@ class CollectorScheduler:
         await self.collect_yfinance()
 
     async def update_stock_master(self) -> None:
-        """종목 마스터 갱신 (KIS API로 상장 종목 조회)"""
-        logger.info("종목 마스터 갱신 시작 (stub)")
-        # TODO: BrokerAdapter.get_listed_symbols() 사용 (Unit 1 완성 후)
+        """종목 마스터 갱신 (공공데이터포털 KRX 상장종목 API)"""
+        logger.info("종목 마스터 갱신 시작")
+        try:
+            from cloud_server.services.stock_service import fetch_krx_listed
+            db = get_db_session()
+            try:
+                count = await fetch_krx_listed(db)
+                logger.info("종목 마스터 갱신 완료: %d건", count)
+            finally:
+                db.close()
+        except Exception as e:
+            _collector_status["error_count"] += 1
+            logger.error("종목 마스터 갱신 실패: %s", e)
 
     async def collect_yfinance(self) -> None:
         """yfinance 보조 수집 (한국 지수, 해외 지수, 환율)"""

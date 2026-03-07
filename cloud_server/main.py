@@ -25,6 +25,8 @@ from cloud_server.api.version import router as version_router
 from cloud_server.api.admin import router as admin_router
 from cloud_server.api.context import router as context_router
 from cloud_server.api.sync import router as sync_router
+from cloud_server.api.stocks import router as stocks_router
+from cloud_server.api.watchlist import router as watchlist_router
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +113,8 @@ app.include_router(version_router)
 app.include_router(admin_router)
 app.include_router(context_router)
 app.include_router(sync_router)
+app.include_router(stocks_router)
+app.include_router(watchlist_router)
 
 
 # ── 기본 엔드포인트 ──────────────────────────────────────────────────

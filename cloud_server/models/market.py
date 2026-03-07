@@ -4,6 +4,7 @@
 - StockMaster: 종목 마스터 정보
 - DailyBar: 일봉 OHLCV 데이터
 - MinuteBar: 분봉 OHLCV 데이터
+- Watchlist: 사용자별 관심종목
 """
 from datetime import date, datetime
 
@@ -73,4 +74,19 @@ class MinuteBar(Base):
     __table_args__ = (
         UniqueConstraint("symbol", "timestamp", name="uq_minute_symbol_ts"),
         Index("idx_minute_symbol_ts", "symbol", "timestamp"),
+    )
+
+
+class Watchlist(Base):
+    """사용자별 관심종목"""
+    __tablename__ = "watchlist"
+
+    id       = Column(Integer, primary_key=True, autoincrement=True)
+    user_id  = Column(String(36), ForeignKey("users.id"), nullable=False)
+    symbol   = Column(String(10), nullable=False)
+    added_at = Column(DateTime, default=_utcnow, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "symbol", name="uq_watchlist_user_symbol"),
+        Index("idx_watchlist_user", "user_id"),
     )

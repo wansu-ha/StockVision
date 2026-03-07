@@ -9,7 +9,7 @@ from cloud_server.core.database import Base, engine
 from cloud_server.models.user import User, RefreshToken, EmailVerificationToken, PasswordResetToken  # noqa: F401
 from cloud_server.models.rule import TradingRule  # noqa: F401
 from cloud_server.models.heartbeat import Heartbeat  # noqa: F401
-from cloud_server.models.market import StockMaster, DailyBar, MinuteBar  # noqa: F401
+from cloud_server.models.market import StockMaster, DailyBar, MinuteBar, Watchlist  # noqa: F401
 from cloud_server.models.template import StrategyTemplate, BrokerServiceKey  # noqa: F401
 
 
