@@ -10,7 +10,7 @@ from cloud_server.models.user import User, RefreshToken, EmailVerificationToken,
 from cloud_server.models.rule import TradingRule  # noqa: F401
 from cloud_server.models.heartbeat import Heartbeat  # noqa: F401
 from cloud_server.models.market import StockMaster, DailyBar, MinuteBar  # noqa: F401
-from cloud_server.models.template import StrategyTemplate, KiwoomServiceKey  # noqa: F401
+from cloud_server.models.template import StrategyTemplate, BrokerServiceKey  # noqa: F401
 
 
 def init_db() -> None:

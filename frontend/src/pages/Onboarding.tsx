@@ -49,7 +49,7 @@ export default function Onboarding() {
     advance.mutate(3, { onSuccess: () => setLocalStep(4) })
   }
 
-  const handleKiwoomNext = () => {
+  const handleBrokerNext = () => {
     advance.mutate(4, { onSuccess: () => setLocalStep(5) })
   }
 
@@ -118,7 +118,7 @@ export default function Onboarding() {
               className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200 transition">
               키움증권 HTS 다운로드
             </a>
-            <button onClick={handleKiwoomNext}
+            <button onClick={handleBrokerNext}
               className="w-full py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium">
               로그인 완료 → 다음
             </button>

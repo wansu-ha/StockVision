@@ -1,4 +1,4 @@
-"""local_server.broker.kiwoom.state_machine: 브로커 연결 상태 관리 모듈"""
+"""local_server.broker.kis.state_machine: 브로커 연결 상태 관리 모듈"""
 
 import asyncio
 import logging

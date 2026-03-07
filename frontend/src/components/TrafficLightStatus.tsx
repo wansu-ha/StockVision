@@ -1,4 +1,4 @@
-/** 신호등 3개: 클라우드, 로컬, 키움 상태 표시 */
+/** 신호등 3개: 클라우드, 로컬, 증권사 상태 표시 */
 import { useState, useEffect, useRef } from 'react'
 import { cloudHealth } from '../services/cloudClient'
 import { localStatus, localHealth } from '../services/localClient'
@@ -14,14 +14,14 @@ const colorMap: Record<TrafficLightColor, string> = {
 const labelMap: Record<string, string> = {
   cloud: '클라우드',
   local: '로컬',
-  kiwoom: '키움',
+  broker: '증권사',
 }
 
 export default function TrafficLightStatus() {
   const [status, setStatus] = useState<ServerStatus>({
     cloud: 'yellow',
     local: 'yellow',
-    kiwoom: 'yellow',
+    broker: 'yellow',
   })
   const prevRef = useRef<ServerStatus>(status)
   const localVersionRef = useRef<string | null>(null)
@@ -50,15 +50,15 @@ export default function TrafficLightStatus() {
       const next: ServerStatus = {
         cloud: cloudOk ? 'green' : 'red',
         local: localRes ? 'green' : 'red',
-        kiwoom: localRes?.data?.kiwoom_connected ? 'green' : 'red',
+        broker: localRes?.data?.broker_connected ? 'green' : 'red',
         cloud_message: cloudOk ? '정상' : '연결 불가',
         local_message: localRes ? '정상' : '연결 불가',
-        kiwoom_message: localRes?.data?.kiwoom_connected ? '연결됨' : '미연결',
+        broker_message: localRes?.data?.broker_connected ? '연결됨' : '미연결',
       }
 
       // 상태 변화 감지 → 알림
       const prev = prevRef.current
-      for (const key of ['cloud', 'local', 'kiwoom'] as const) {
+      for (const key of ['cloud', 'local', 'broker'] as const) {
         if (prev[key] !== next[key]) {
           const label = labelMap[key]
           if (next[key] === 'green') addAlert(`${label} 서버 연결됨`, 'success')
@@ -77,7 +77,7 @@ export default function TrafficLightStatus() {
 
   return (
     <div className="flex items-center gap-3">
-      {(['cloud', 'local', 'kiwoom'] as const).map((key) => (
+      {(['cloud', 'local', 'broker'] as const).map((key) => (
         <div key={key} className="relative group flex items-center gap-1.5" title={`${labelMap[key]}: ${status[`${key}_message` as keyof ServerStatus] ?? ''}`}>
           <div className={`w-3 h-3 rounded-full ${colorMap[status[key]]} shadow-sm`} />
           <span className="text-xs text-gray-500 hidden sm:inline">{labelMap[key]}</span>

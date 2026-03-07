@@ -1,4 +1,4 @@
-"""local_server.broker.kiwoom.ws: 키움증권 WebSocket 실시간 시세 스트림 모듈"""
+"""local_server.broker.kis.ws: 한국투자증권(KIS) WebSocket 실시간 시세 스트림 모듈"""
 
 import asyncio
 import json
@@ -16,30 +16,30 @@ except ImportError:
 from sv_core.broker.models import QuoteEvent
 
 if TYPE_CHECKING:
-    from local_server.broker.kiwoom.auth import KiwoomAuth
+    from local_server.broker.kis.auth import KisAuth
 
 logger = logging.getLogger(__name__)
 
 # WebSocket 엔드포인트
 WS_URL = "wss://openapi.koreainvestment.com:9443/websocket/tryitout/H0STCNT0"
 
-# 키움 WebSocket 트랜젝션 ID
+# KIS WebSocket 트랜젝션 ID
 TR_SUBSCRIBE = "H0STCNT0"    # 주식 체결가 구독
 TR_UNSUBSCRIBE = "H0STCNT0"  # 구독 해제 (동일 tr_id, tr_type으로 구분)
 
 
-class KiwoomWS:
-    """키움증권 WebSocket 실시간 체결/시세 스트림 클라이언트.
+class KisWS:
+    """한국투자증권(KIS) WebSocket 실시간 체결/시세 스트림 클라이언트.
 
     종목 구독 시 체결 데이터를 QuoteEvent로 변환하여 콜백에 전달한다.
     연결/재연결은 ReconnectManager에서 관리한다.
     """
 
-    def __init__(self, auth: "KiwoomAuth") -> None:
+    def __init__(self, auth: "KisAuth") -> None:
         """초기화.
 
         Args:
-            auth: KiwoomAuth 인스턴스 (접속키 발급에 사용)
+            auth: KisAuth 인스턴스 (접속키 발급에 사용)
         """
         self._auth = auth
         self._ws: Optional[websockets.WebSocketClientProtocol] = None
@@ -146,7 +146,7 @@ class KiwoomWS:
     async def _get_approval_key(self) -> str:
         """WebSocket 접속용 approval_key를 발급받는다.
 
-        키움 WebSocket은 별도 approval_key가 필요하다.
+        KIS WebSocket은 별도 approval_key가 필요하다.
         현재는 access_token을 그대로 사용 (실제 API에서는 별도 endpoint 필요).
         """
         return await self._auth.get_access_token()
@@ -197,7 +197,7 @@ class KiwoomWS:
     def _handle_message(self, raw_msg: str) -> None:
         """수신 메시지를 파싱하여 QuoteEvent로 변환 후 콜백을 호출한다.
 
-        키움 체결 데이터 형식:
+        KIS 체결 데이터 형식:
         - PINGPONG: 연결 유지 메시지 (무시)
         - 데이터: '^'로 구분된 필드 (JSON 아님)
         """

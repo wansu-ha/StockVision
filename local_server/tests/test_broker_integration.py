@@ -1,6 +1,6 @@
 """통합 테스트: MockAdapter를 사용한 전체 브로커 플로우 테스트
 
-실제 키움 API 없이 MockAdapter로 전체 플로우를 검증한다.
+실제 KIS API 없이 MockAdapter로 전체 플로우를 검증한다.
 """
 
 import asyncio
@@ -132,7 +132,7 @@ def test_idempotency_flow():
     """동일 client_order_id 중복 요청 시 기존 결과 반환 확인"""
     print("\n[IT-2] 멱등성 보장 테스트")
     from local_server.broker.mock.adapter import MockAdapter
-    from local_server.broker.kiwoom.idempotency import IdempotencyGuard
+    from local_server.broker.kis.idempotency import IdempotencyGuard
     from sv_core.broker.models import OrderSide, OrderType, OrderStatus, OrderResult
 
     async def _test():
@@ -281,8 +281,8 @@ def test_error_handling_flow():
 def test_reconnect_flow():
     """ReconnectManager가 ERROR 상태 감지 후 재연결 시도하는지 확인"""
     print("\n[IT-5] ReconnectManager 연동 테스트")
-    from local_server.broker.kiwoom.state_machine import StateMachine, ConnectionState
-    from local_server.broker.kiwoom.reconnect import ReconnectManager
+    from local_server.broker.kis.state_machine import StateMachine, ConnectionState
+    from local_server.broker.kis.reconnect import ReconnectManager
 
     async def _test():
         sm = StateMachine()

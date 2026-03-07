@@ -127,7 +127,7 @@ def test_broker_adapter_abc():
 
 def test_rate_limiter():
     print("\n[3] RateLimiter 테스트")
-    from local_server.broker.kiwoom.rate_limiter import RateLimiter, MultiEndpointRateLimiter
+    from local_server.broker.kis.rate_limiter import RateLimiter, MultiEndpointRateLimiter
 
     async def _test():
         # 기본 생성
@@ -157,7 +157,7 @@ def test_rate_limiter():
 
 def test_state_machine():
     print("\n[4] StateMachine 테스트")
-    from local_server.broker.kiwoom.state_machine import (
+    from local_server.broker.kis.state_machine import (
         StateMachine, ConnectionState, InvalidStateTransitionError,
     )
 
@@ -203,7 +203,7 @@ def test_state_machine():
 
 def test_idempotency_guard():
     print("\n[5] IdempotencyGuard 테스트")
-    from local_server.broker.kiwoom.idempotency import IdempotencyGuard
+    from local_server.broker.kis.idempotency import IdempotencyGuard
     from sv_core.broker.models import (
         OrderResult, OrderSide, OrderType, OrderStatus,
     )
@@ -250,7 +250,7 @@ def test_idempotency_guard():
 
 def test_error_classifier():
     print("\n[6] ErrorClassifier 테스트")
-    from local_server.broker.kiwoom.error_classifier import ErrorClassifier
+    from local_server.broker.kis.error_classifier import ErrorClassifier
     from sv_core.broker.models import ErrorCategory
     import httpx
 
@@ -456,12 +456,12 @@ def test_adapter_factory():
     except ValueError:
         _pass("알 수 없는 broker_type → ValueError")
 
-    # kiwoom 환경변수 누락 오류
+    # KIS 환경변수 누락 오류
     try:
-        AdapterFactory.create("kiwoom")
+        AdapterFactory.create("kis")
         _fail("환경변수 누락 오류", "예외가 발생해야 함")
     except EnvironmentError:
-        _pass("키움 환경변수 누락 → EnvironmentError")
+        _pass("KIS 환경변수 누락 → EnvironmentError")
 
 
 # ──────────────────────────────────────────────────────────────
@@ -470,7 +470,7 @@ def test_adapter_factory():
 
 def test_reconciler():
     print("\n[9] Reconciler 테스트")
-    from local_server.broker.kiwoom.reconciler import Reconciler, RECONCILE_ORPHAN
+    from local_server.broker.kis.reconciler import Reconciler, RECONCILE_ORPHAN
     from sv_core.broker.models import OrderResult, OrderSide, OrderType, OrderStatus
     from unittest.mock import AsyncMock
 

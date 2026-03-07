@@ -1,8 +1,8 @@
 """
 BrokerAdapter 팩토리
 
-서비스 키움 키로 BrokerAdapter 인스턴스 생성.
-sv_core.broker.kiwoom.KiwoomAdapter를 사용 (Unit 1에서 구현).
+서비스 KIS 키로 BrokerAdapter 인스턴스 생성.
+sv_core.broker.kis.KisAdapter를 사용 (Unit 1에서 구현).
 """
 import logging
 from decimal import Decimal
@@ -20,33 +20,33 @@ class BrokerFactory:
     """브로커 어댑터 팩토리"""
 
     @staticmethod
-    def create(broker_type: str = "kiwoom", service_key: dict | None = None) -> BrokerAdapter:
+    def create(broker_type: str = "kis", service_key: dict | None = None) -> BrokerAdapter:
         """
         BrokerAdapter 인스턴스 생성.
 
         Args:
-            broker_type: "kiwoom" (현재 지원)
+            broker_type: "kis" (현재 지원)
             service_key: {"api_key": str, "api_secret": str}
         """
-        if broker_type == "kiwoom":
+        if broker_type == "kis":
             try:
-                from sv_core.broker.kiwoom import KiwoomAdapter
-                return KiwoomAdapter(
+                from sv_core.broker.kis import KisAdapter
+                return KisAdapter(
                     api_key=service_key["api_key"],
                     api_secret=service_key["api_secret"],
                 )
             except ImportError:
-                logger.warning("sv_core.broker.kiwoom 미설치 - stub 반환")
-                return _KiwoomStub()
+                logger.warning("sv_core.broker.kis 미설치 - stub 반환")
+                return _KisStub()
 
         raise ValueError(f"지원하지 않는 브로커 타입: {broker_type}")
 
 
-class _KiwoomStub(BrokerAdapter):
+class _KisStub(BrokerAdapter):
     """
-    KiwoomAdapter stub (sv_core 미설치 시 사용).
+    KisAdapter stub (sv_core 미설치 시 사용).
     실제 API 호출 없이 빈 응답 반환.
-    Unit 1 구현 후 sv_core.broker.kiwoom.KiwoomAdapter로 교체.
+    Unit 1 구현 후 sv_core.broker.kis.KisAdapter로 교체.
 
     C5: 정본 BrokerAdapter ABC 시그니처에 맞게 재작성.
     """
@@ -59,12 +59,12 @@ class _KiwoomStub(BrokerAdapter):
     async def connect(self) -> None:
         """연결 (stub: 즉시 성공)"""
         self._connected = True
-        logger.info("[KiwoomStub] connect() 호출")
+        logger.info("[KisStub] connect() 호출")
 
     async def disconnect(self) -> None:
         """연결 해제 (stub)"""
         self._connected = False
-        logger.info("[KiwoomStub] disconnect() 호출")
+        logger.info("[KisStub] disconnect() 호출")
 
     @property
     def is_connected(self) -> bool:
@@ -99,11 +99,11 @@ class _KiwoomStub(BrokerAdapter):
         callback: Callable[[QuoteEvent], None],
     ) -> None:
         """실시간 시세 구독 (stub: 아무 이벤트도 발생시키지 않음)"""
-        logger.info(f"[KiwoomStub] subscribe_quotes({symbols})")
+        logger.info(f"[KisStub] subscribe_quotes({symbols})")
 
     async def unsubscribe_quotes(self, symbols: list[str]) -> None:
         """실시간 시세 구독 해제 (stub)"""
-        logger.info(f"[KiwoomStub] unsubscribe_quotes({symbols})")
+        logger.info(f"[KisStub] unsubscribe_quotes({symbols})")
 
     # ── 주문 ────────────────────────────────────────────────────────────
 
@@ -117,7 +117,7 @@ class _KiwoomStub(BrokerAdapter):
         limit_price: Optional[Decimal] = None,
     ) -> OrderResult:
         """주문 (stub: REJECTED 반환)"""
-        logger.info(f"[KiwoomStub] place_order({symbol}, {side}, {order_type}, qty={qty})")
+        logger.info(f"[KisStub] place_order({symbol}, {side}, {order_type}, qty={qty})")
         return OrderResult(
             order_id="",
             client_order_id=client_order_id,
@@ -131,7 +131,7 @@ class _KiwoomStub(BrokerAdapter):
 
     async def cancel_order(self, order_id: str) -> OrderResult:
         """주문 취소 (stub: REJECTED 반환)"""
-        logger.info(f"[KiwoomStub] cancel_order({order_id})")
+        logger.info(f"[KisStub] cancel_order({order_id})")
         return OrderResult(
             order_id=order_id,
             client_order_id="",

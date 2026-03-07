@@ -34,8 +34,8 @@ export const localConfig = {
   get: () => client.get<{ data: LocalConfig }>('/config').then((r) => r.data.data ?? r.data).catch(() => null),
   update: (patch: Partial<LocalConfig>) =>
     client.patch('/config', patch).then((r) => r.data).catch(() => null),
-  setKiwoomKeys: (appKey: string, appSecret: string) =>
-    client.post('/config/kiwoom', { app_key: appKey, app_secret: appSecret }).then((r) => r.data),
+  setBrokerKeys: (appKey: string, appSecret: string) =>
+    client.post('/config/broker-keys', { app_key: appKey, app_secret: appSecret }).then((r) => r.data),
 }
 
 /** 규칙 sync */

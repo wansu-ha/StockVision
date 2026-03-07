@@ -101,9 +101,9 @@ function handleMessage(
       notif.add(text, 'success')
       break
     }
-    case 'kiwoom_disconnected':
-      toast.showToast('키움 연결이 끊어졌습니다', 'error')
-      notif.add('키움 연결 단절', 'error')
+    case 'broker_disconnected':
+      toast.showToast('증권사 연결이 끊어졌습니다', 'error')
+      notif.add('증권사 연결 단절', 'error')
       break
     case 'alert': {
       const d = msg.data as { level: string; message: string }

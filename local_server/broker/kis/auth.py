@@ -1,4 +1,4 @@
-"""local_server.broker.kiwoom.auth: 키움증권 OAuth 인증 모듈"""
+"""local_server.broker.kis.auth: 한국투자증권(KIS) OAuth 인증 모듈"""
 
 import asyncio
 import logging
@@ -10,8 +10,8 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-# 키움 REST API 기본 URL
-KIWOOM_BASE_URL = "https://openapi.koreainvestment.com:9443"
+# KIS REST API 기본 URL
+KIS_BASE_URL = "https://openapi.koreainvestment.com:9443"
 
 # 토큰 만료 여유 시간 (실제 만료 N초 전에 갱신)
 TOKEN_REFRESH_MARGIN_SECONDS = 300  # 5분
@@ -25,8 +25,8 @@ class TokenInfo:
     expires_at: datetime    # 만료 시각
 
 
-class KiwoomAuth:
-    """키움증권 OAuth 2.0 인증 관리자.
+class KisAuth:
+    """한국투자증권(KIS) OAuth 2.0 인증 관리자.
 
     App Key / App Secret으로 액세스 토큰을 발급받고,
     만료 전 자동 갱신한다.
@@ -36,8 +36,8 @@ class KiwoomAuth:
         """초기화.
 
         Args:
-            app_key: 키움 Open API+ App Key
-            app_secret: 키움 Open API+ App Secret
+            app_key: KIS Open API+ App Key
+            app_secret: KIS Open API+ App Secret
         """
         self._app_key = app_key
         self._app_secret = app_secret
@@ -68,15 +68,15 @@ class KiwoomAuth:
         return datetime.now() >= self._token_info.expires_at - margin
 
     async def _fetch_token(self) -> None:
-        """키움 서버에서 토큰을 새로 발급받는다."""
-        url = f"{KIWOOM_BASE_URL}/oauth2/token"
+        """KIS 서버에서 토큰을 새로 발급받는다."""
+        url = f"{KIS_BASE_URL}/oauth2/token"
         payload = {
             "grant_type": "client_credentials",
             "appkey": self._app_key,
             "appsecret": self._app_secret,
         }
 
-        logger.info("키움 액세스 토큰 발급 요청")
+        logger.info("KIS 액세스 토큰 발급 요청")
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.post(url, json=payload)
             resp.raise_for_status()
@@ -89,7 +89,7 @@ class KiwoomAuth:
             expires_at=datetime.now() + timedelta(seconds=expires_in),
         )
         logger.info(
-            "키움 액세스 토큰 발급 완료 (만료: %s)",
+            "KIS 액세스 토큰 발급 완료 (만료: %s)",
             self._token_info.expires_at.isoformat(),
         )
 

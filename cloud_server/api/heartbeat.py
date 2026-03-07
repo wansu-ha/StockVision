@@ -20,7 +20,7 @@ class HeartbeatBody(BaseModel):
     uuid: str
     version: str | None = None
     os: str | None = None
-    kiwoom_connected: bool | None = None
+    broker_connected: bool | None = None
     engine_running: bool | None = None
     active_rules_count: int | None = None
     timestamp: datetime

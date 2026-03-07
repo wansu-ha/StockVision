@@ -1,4 +1,4 @@
-"""local_server.broker.kiwoom.quote: 키움증권 시세/잔고 조회 모듈"""
+"""local_server.broker.kis.quote: 한국투자증권(KIS) 시세/잔고 조회 모듈"""
 
 import logging
 from decimal import Decimal
@@ -9,30 +9,30 @@ import httpx
 from sv_core.broker.models import BalanceResult, Position, QuoteEvent
 
 if TYPE_CHECKING:
-    from local_server.broker.kiwoom.auth import KiwoomAuth
+    from local_server.broker.kis.auth import KisAuth
 
 logger = logging.getLogger(__name__)
 
-# 키움 REST API 기본 URL
-KIWOOM_BASE_URL = "https://openapi.koreainvestment.com:9443"
+# KIS REST API 기본 URL
+KIS_BASE_URL = "https://openapi.koreainvestment.com:9443"
 
 # 모의/실전 구분 트랜젝션 ID
 TR_PRICE_REAL = "FHKST01010100"   # 실전 현재가 조회
 TR_BALANCE_REAL = "TTTC8434R"     # 실전 잔고 조회
 
 
-class KiwoomQuote:
-    """키움증권 시세 및 잔고 조회 클라이언트.
+class KisQuote:
+    """한국투자증권(KIS) 시세 및 잔고 조회 클라이언트.
 
     모든 HTTP 요청은 RateLimiter를 통해 호출해야 한다.
-    (KiwoomAdapter에서 조합 시 rate_limiter.acquire() 후 호출)
+    (KisAdapter에서 조합 시 rate_limiter.acquire() 후 호출)
     """
 
-    def __init__(self, auth: "KiwoomAuth", account_no: str, is_mock: bool = False) -> None:
+    def __init__(self, auth: "KisAuth", account_no: str, is_mock: bool = False) -> None:
         """초기화.
 
         Args:
-            auth: KiwoomAuth 인스턴스
+            auth: KisAuth 인스턴스
             account_no: 계좌번호 (예: "50123456-01")
             is_mock: 모의투자 여부
         """
@@ -59,7 +59,7 @@ class KiwoomQuote:
             "FID_INPUT_ISCD": symbol,
         }
 
-        url = f"{KIWOOM_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-price"
+        url = f"{KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-price"
 
         logger.debug("현재가 조회: %s", symbol)
         async with httpx.AsyncClient(timeout=5.0) as client:
@@ -103,7 +103,7 @@ class KiwoomQuote:
             "CTX_AREA_NK100": "",
         }
 
-        url = f"{KIWOOM_BASE_URL}/uapi/domestic-stock/v1/trading/inquire-balance"
+        url = f"{KIS_BASE_URL}/uapi/domestic-stock/v1/trading/inquire-balance"
 
         logger.debug("잔고 조회: 계좌 %s", self._account_no)
         async with httpx.AsyncClient(timeout=5.0) as client:

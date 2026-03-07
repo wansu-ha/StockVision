@@ -1,4 +1,4 @@
-"""local_server.broker.kiwoom.idempotency: 주문 멱등성 보장 모듈
+"""local_server.broker.kis.idempotency: 주문 멱등성 보장 모듈
 
 동일한 client_order_id로 중복 주문을 방지한다.
 """

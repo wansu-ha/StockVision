@@ -14,7 +14,7 @@ interface ServiceKey {
 
 export default function AdminServiceKeys() {
   const queryClient = useQueryClient()
-  const [source, setSource] = useState('Kiwoom')
+  const [source, setSource] = useState('KIS')
   const [apiKey, setApiKey] = useState('')
   const [description, setDescription] = useState('')
 
@@ -45,7 +45,7 @@ export default function AdminServiceKeys() {
       <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6 space-y-3">
         <div className="flex gap-3">
           <select value={source} onChange={(e) => setSource(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm">
-            <option value="Kiwoom">Kiwoom</option>
+            <option value="KIS">한국투자증권</option>
             <option value="KOSCOM">KOSCOM</option>
             <option value="yfinance">yfinance</option>
           </select>

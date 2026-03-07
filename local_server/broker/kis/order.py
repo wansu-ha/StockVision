@@ -1,4 +1,4 @@
-"""local_server.broker.kiwoom.order: 키움증권 주문 실행/취소 모듈"""
+"""local_server.broker.kis.order: 한국투자증권(KIS) 주문 실행/취소 모듈"""
 
 import logging
 from datetime import datetime
@@ -15,11 +15,11 @@ from sv_core.broker.models import (
 )
 
 if TYPE_CHECKING:
-    from local_server.broker.kiwoom.auth import KiwoomAuth
+    from local_server.broker.kis.auth import KisAuth
 
 logger = logging.getLogger(__name__)
 
-KIWOOM_BASE_URL = "https://openapi.koreainvestment.com:9443"
+KIS_BASE_URL = "https://openapi.koreainvestment.com:9443"
 
 # 실전 주문 tr_id 매핑
 _ORDER_TR_ID: dict[tuple[OrderSide, OrderType], str] = {
@@ -47,19 +47,19 @@ TR_CANCEL = "TTTC0803U"      # 주문 취소
 TR_OPEN_ORDERS = "TTTC8036R"  # 미체결 조회
 
 
-class KiwoomOrder:
-    """키움증권 주문 실행/취소/미체결 조회 클라이언트."""
+class KisOrder:
+    """한국투자증권(KIS) 주문 실행/취소/미체결 조회 클라이언트."""
 
     def __init__(
         self,
-        auth: "KiwoomAuth",
+        auth: "KisAuth",
         account_no: str,
         is_mock: bool = False,
     ) -> None:
         """초기화.
 
         Args:
-            auth: KiwoomAuth 인스턴스
+            auth: KisAuth 인스턴스
             account_no: 계좌번호
             is_mock: 모의투자 여부
         """
@@ -112,7 +112,7 @@ class KiwoomOrder:
             "SLL_TYPE": _SIDE_CODE[side],
         }
 
-        url = f"{KIWOOM_BASE_URL}/uapi/domestic-stock/v1/trading/order-cash"
+        url = f"{KIS_BASE_URL}/uapi/domestic-stock/v1/trading/order-cash"
 
         logger.info(
             "주문 실행: %s %s %s %d주 @ %s (client_id=%s)",
@@ -168,7 +168,7 @@ class KiwoomOrder:
             "QTY_ALL_ORD_YN": "Y",      # 잔량 전부 취소
         }
 
-        url = f"{KIWOOM_BASE_URL}/uapi/domestic-stock/v1/trading/order-rvsecncl"
+        url = f"{KIS_BASE_URL}/uapi/domestic-stock/v1/trading/order-rvsecncl"
 
         logger.info("주문 취소: order_id=%s symbol=%s qty=%d", order_id, symbol, qty)
         async with httpx.AsyncClient(timeout=5.0) as client:
@@ -210,7 +210,7 @@ class KiwoomOrder:
             "INQR_DVSN_1": "",
         }
 
-        url = f"{KIWOOM_BASE_URL}/uapi/domestic-stock/v1/trading/inquire-psbl-rvsecncl"
+        url = f"{KIS_BASE_URL}/uapi/domestic-stock/v1/trading/inquire-psbl-rvsecncl"
 
         logger.debug("미체결 주문 조회")
         async with httpx.AsyncClient(timeout=5.0) as client:

@@ -22,7 +22,7 @@ export default function BridgeStatus() {
     )
   }
 
-  const modeLabel = d.kiwoom_mode === 'demo' ? '모의투자' : d.kiwoom_mode === 'real' ? '실계좌' : '미연결'
+  const modeLabel = d.broker_mode === 'demo' ? '모의투자' : d.broker_mode === 'real' ? '실계좌' : '미연결'
 
   return (
     <div className="flex items-center gap-3 text-xs">

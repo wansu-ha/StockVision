@@ -1,6 +1,6 @@
-"""local_server.broker.kiwoom.adapter: 키움증권 BrokerAdapter 구현체
+"""local_server.broker.kis.adapter: 한국투자증권(KIS) BrokerAdapter 구현체
 
-모든 kiwoom 모듈을 조합하여 BrokerAdapter ABC를 구현한다.
+모든 kis 모듈을 조합하여 BrokerAdapter ABC를 구현한다.
 """
 
 import logging
@@ -17,28 +17,28 @@ from sv_core.broker.models import (
     QuoteEvent,
 )
 
-from local_server.broker.kiwoom.auth import KiwoomAuth
-from local_server.broker.kiwoom.error_classifier import ErrorClassifier
-from local_server.broker.kiwoom.idempotency import IdempotencyGuard
-from local_server.broker.kiwoom.order import KiwoomOrder
-from local_server.broker.kiwoom.quote import KiwoomQuote
-from local_server.broker.kiwoom.rate_limiter import MultiEndpointRateLimiter
-from local_server.broker.kiwoom.reconciler import Reconciler
-from local_server.broker.kiwoom.reconnect import ReconnectManager
-from local_server.broker.kiwoom.state_machine import (
+from local_server.broker.kis.auth import KisAuth
+from local_server.broker.kis.error_classifier import ErrorClassifier
+from local_server.broker.kis.idempotency import IdempotencyGuard
+from local_server.broker.kis.order import KisOrder
+from local_server.broker.kis.quote import KisQuote
+from local_server.broker.kis.rate_limiter import MultiEndpointRateLimiter
+from local_server.broker.kis.reconciler import Reconciler
+from local_server.broker.kis.reconnect import ReconnectManager
+from local_server.broker.kis.state_machine import (
     ConnectionState,
     StateMachine,
 )
-from local_server.broker.kiwoom.ws import KiwoomWS
+from local_server.broker.kis.ws import KisWS
 
 logger = logging.getLogger(__name__)
 
 
-class KiwoomAdapter(BrokerAdapter):
-    """키움증권 BrokerAdapter 구현체.
+class KisAdapter(BrokerAdapter):
+    """한국투자증권(KIS) BrokerAdapter 구현체.
 
     라이프사이클:
-        adapter = KiwoomAdapter(app_key, app_secret, account_no)
+        adapter = KisAdapter(app_key, app_secret, account_no)
         await adapter.connect()   # 인증 + WS 연결
         ...
         await adapter.disconnect()
@@ -55,16 +55,16 @@ class KiwoomAdapter(BrokerAdapter):
         """초기화.
 
         Args:
-            app_key: 키움 App Key
-            app_secret: 키움 App Secret
+            app_key: KIS App Key
+            app_secret: KIS App Secret
             account_no: 계좌번호
             is_mock: 모의투자 여부
             rate_limit_cps: 초당 REST 호출 수 한도
         """
-        self._auth = KiwoomAuth(app_key, app_secret)
-        self._quote_client = KiwoomQuote(self._auth, account_no, is_mock)
-        self._order_client = KiwoomOrder(self._auth, account_no, is_mock)
-        self._ws = KiwoomWS(self._auth)
+        self._auth = KisAuth(app_key, app_secret)
+        self._quote_client = KisQuote(self._auth, account_no, is_mock)
+        self._order_client = KisOrder(self._auth, account_no, is_mock)
+        self._ws = KisWS(self._auth)
         self._rate_limiter = MultiEndpointRateLimiter(rate_limit_cps)
         self._state = StateMachine()
         self._idempotency = IdempotencyGuard()
@@ -83,7 +83,7 @@ class KiwoomAdapter(BrokerAdapter):
     # ──────────────────────────────────────────
 
     async def connect(self) -> None:
-        """키움 서버에 연결한다. (인증 + WebSocket)
+        """KIS 서버에 연결한다. (인증 + WebSocket)
 
         Raises:
             ConnectionError: 연결/인증 실패 시
@@ -99,23 +99,23 @@ class KiwoomAdapter(BrokerAdapter):
             # 인증 토큰 발급
             await self._auth.get_access_token()
             await self._state.transition(ConnectionState.AUTHENTICATED)
-            logger.info("키움 인증 완료")
+            logger.info("KIS 인증 완료")
 
             # WebSocket 연결
             await self._ws.connect()
             await self._state.transition(ConnectionState.SUBSCRIBED)
-            logger.info("키움 WebSocket 연결 완료")
+            logger.info("KIS WebSocket 연결 완료")
 
             # 대사 태스크 시작
             await self._reconciler.start()
 
         except Exception as exc:
-            logger.error("키움 연결 실패: %s", exc, exc_info=True)
+            logger.error("KIS 연결 실패: %s", exc, exc_info=True)
             try:
                 await self._state.transition(ConnectionState.ERROR)
             except Exception:
                 pass
-            raise ConnectionError(f"키움 연결 실패: {exc}") from exc
+            raise ConnectionError(f"KIS 연결 실패: {exc}") from exc
 
     async def disconnect(self) -> None:
         """연결을 종료한다."""
@@ -123,7 +123,7 @@ class KiwoomAdapter(BrokerAdapter):
         await self._reconciler.stop()
         await self._ws.disconnect()
         self._state.reset()
-        logger.info("KiwoomAdapter 연결 종료")
+        logger.info("KisAdapter 연결 종료")
 
     @property
     def is_connected(self) -> bool:

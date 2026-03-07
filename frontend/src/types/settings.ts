@@ -1,6 +1,6 @@
 /** 설정 관련 타입 */
 
-export interface KiwoomConfig {
+export interface BrokerConfig {
   has_api_key: boolean
   mode: 'paper' | 'live'
   status: 'ok' | 'error' | 'not_configured'

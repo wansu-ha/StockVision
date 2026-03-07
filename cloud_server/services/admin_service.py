@@ -12,7 +12,7 @@ from cloud_server.core.encryption import encrypt_value
 from cloud_server.models.heartbeat import Heartbeat
 from cloud_server.models.market import MinuteBar
 from cloud_server.models.rule import TradingRule
-from cloud_server.models.template import KiwoomServiceKey, StrategyTemplate
+from cloud_server.models.template import BrokerServiceKey, StrategyTemplate
 from cloud_server.models.user import User
 
 
@@ -97,7 +97,7 @@ def set_user_active(user_id: str, is_active: bool, db: Session) -> None:
 
 def list_service_keys(db: Session) -> list[dict]:
     """서비스 키 목록 (secret 마스킹)"""
-    keys = db.query(KiwoomServiceKey).order_by(KiwoomServiceKey.created_at.desc()).all()
+    keys = db.query(BrokerServiceKey).order_by(BrokerServiceKey.created_at.desc()).all()
     return [
         {
             "id": k.id,
@@ -115,7 +115,7 @@ def list_service_keys(db: Session) -> list[dict]:
 def create_service_key(api_key: str, api_secret: str, app_name: str | None, db: Session) -> dict:
     """서비스 키 등록 (api_secret 암호화)"""
     encrypted_secret = encrypt_value(api_secret)
-    key = KiwoomServiceKey(
+    key = BrokerServiceKey(
         api_key=api_key,
         api_secret=encrypted_secret,
         app_name=app_name,
@@ -129,7 +129,7 @@ def create_service_key(api_key: str, api_secret: str, app_name: str | None, db: 
 def delete_service_key(key_id: int, db: Session) -> None:
     """서비스 키 삭제"""
     from fastapi import HTTPException
-    key = db.query(KiwoomServiceKey).filter(KiwoomServiceKey.id == key_id).first()
+    key = db.query(BrokerServiceKey).filter(BrokerServiceKey.id == key_id).first()
     if not key:
         raise HTTPException(status_code=404, detail="키를 찾을 수 없습니다.")
     db.delete(key)

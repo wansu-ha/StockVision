@@ -13,17 +13,17 @@ from local_server.config import get_config
 def read_config() -> dict[str, Any]:
     """현재 설정을 딕셔너리로 반환한다.
 
-    민감 정보(kiwoom.app_key, app_secret)는 마스킹하여 반환한다.
+    민감 정보(kis.app_key, app_secret)는 마스킹하여 반환한다.
     """
     cfg = get_config()
     data = cfg.as_dict()
 
     # 민감 정보 마스킹
-    kiwoom = data.get("kiwoom", {})
-    if kiwoom.get("app_key"):
-        kiwoom["app_key"] = "****"
-    if kiwoom.get("app_secret"):
-        kiwoom["app_secret"] = "****"
+    kis = data.get("kis", {})
+    if kis.get("app_key"):
+        kis["app_key"] = "****"
+    if kis.get("app_secret"):
+        kis["app_secret"] = "****"
 
     return data
 
@@ -38,9 +38,9 @@ def update_config(updates: dict[str, Any]) -> dict[str, Any]:
         업데이트된 설정 (민감 정보 마스킹)
     """
     # 민감 정보가 평문으로 오면 keyring에 저장하고 config에서 제거
-    kiwoom_updates = updates.get("kiwoom", {})
-    app_key = kiwoom_updates.pop("app_key", None)
-    app_secret = kiwoom_updates.pop("app_secret", None)
+    kis_updates = updates.get("kis", {})
+    app_key = kis_updates.pop("app_key", None)
+    app_secret = kis_updates.pop("app_secret", None)
 
     if app_key or app_secret:
         from local_server.storage.credential import save_api_keys, load_api_keys

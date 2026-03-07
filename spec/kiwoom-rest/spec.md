@@ -1,22 +1,19 @@
-# 키움 REST API 연동 명세서 (kiwoom-rest)
+# 증권사 REST API 연동 명세서 (broker-adapter)
 
-> 작성일: 2026-03-04 | 상태: 초안 — 재작성 필요 | Unit 1 (Phase 3-A)
+> 작성일: 2026-03-04 | 상태: **진행 중** | Unit 1 (Phase 3-A)
 >
 > **이전 spec**: `spec/kiwoom-integration/` (COM/pykiwoom 기반) → 폐기.
-> 키움증권이 2025년 REST API를 공개하여 COM/HTS/32bit 제약 전부 해소됨.
 >
-> **검토 (2026-03-07)**: 구현 코드(`local_server/broker/kiwoom/`)가 **키움증권이 아닌
-> 한국투자증권 Open API+**(`openapi.koreainvestment.com:9443`)를 사용 중.
-> 도메인·엔드포인트·tr_id·인증 흐름 전부 한국투자증권 것이며, 변수명만 `KIWOOM_`.
-> 이전 AI가 키움증권 API 문서에 접근하지 못하고 한국투자증권 API를 키움으로 착각하여 구현.
-> **코드 전면 재구현 필요** — 증권사 방향 결정 후 spec/plan/code 모두 갈아엎어야 함.
+> **결정 (2026-03-07)**: **한국투자증권(KIS) Open API+** 채택.
+> BrokerAdapter ABC로 증권사 교체 가능하게 설계, 첫 구현체는 KIS.
+> 코드: `local_server/broker/kis/`, 공통: `sv_core/broker/`
 
 ---
 
 ## 1. 목표
 
-`BrokerAdapter` 인터페이스의 **키움증권 구현체**(KiwoomAdapter)를 구현한다.
-로컬 서버와 클라우드 서버가 이 Adapter를 통해 키움 REST/WS API에 접근한다.
+`BrokerAdapter` 인터페이스의 **한국투자증권(KIS) 구현체**(KisAdapter)를 구현한다.
+로컬 서버와 클라우드 서버가 이 Adapter를 통해 KIS Open API+ REST/WS에 접근한다.
 
 **해결하는 문제:**
 - COM/HTS/32bit Python 의존성 제거
@@ -39,7 +36,7 @@
 | F5 | 잔고/보유 종목을 조회한다 | P0 |
 | F6 | WebSocket으로 실시간 시세를 수신한다 | P0 |
 | F7 | WebSocket으로 체결 통보를 수신한다 | P0 |
-| F8 | API 호출 제한(초당 5건)을 큐로 관리한다 | P1 |
+| F8 | API 호출 제한(초당 20건)을 큐로 관리한다 | P1 |
 | F9 | 모의투자/실거래 모드를 전환한다 (베이스 URL 변경) | P1 |
 | F10 | 미체결 주문 조회 및 정정/취소를 지원한다 | P2 |
 
@@ -57,79 +54,84 @@
 
 ## 3. 아키텍처
 
-### 3.1 키움 REST API 개요
+### 3.1 KIS Open API+ 개요
 
 ```
-키움 REST API
-├── 포털: https://openapi.kiwoom.com
-├── REST (실거래): https://openapi.kiwoom.com
-├── REST (모의투자): https://mockapi.kiwoom.com
-├── 데이터 API: https://api.kiwoom.com
+KIS Open API+
+├── 포털: https://apiportal.koreainvestment.com
+├── REST: https://openapi.koreainvestment.com:9443
 │
 ├── 인증:
-│   POST /v1/auth/login  (api-id: au10001)
-│   → Bearer Token 발급
+│   POST /oauth2/token
+│   Body: { grant_type: "client_credentials", appkey, appsecret }
+│   → Bearer Token 발급 (24시간 유효)
 │
 ├── 주문:
-│   POST /v1/order  (api-id: kt10000)
+│   POST /uapi/domestic-stock/v1/trading/order-cash
+│   Headers: { tr_id: "TTTC0801U" }  (매수 지정가)
 │   → 시장가/지정가 매수·매도
 │
 ├── 조회:
-│   GET /v1/account/balance
+│   GET /uapi/domestic-stock/v1/quotations/inquire-price
+│   Headers: { tr_id: "FHKST01010100" }
+│   → 현재가 조회
+│   GET /uapi/domestic-stock/v1/trading/inquire-balance
+│   Headers: { tr_id: "TTTC8434R" }
 │   → 잔고/보유종목 조회
-│   GET /api/dostk/chart  (api.kiwoom.com, api-id: ka10080)
-│   → 시세/차트 데이터
-│   GET (api-id: ka10001)
-│   → 기본 종목 정보
 │
-└── WebSocket: wss://api.kiwoom.com:10000/api/dostk/websocket
-    → 실시간 시세, 체결 통보 (JSON 텍스트 프레임)
+└── WebSocket: wss://openapi.koreainvestment.com:9443/websocket/tryitout/H0STCNT0
+    → 실시간 체결가 (pipe-separated 텍스트 프레임)
 ```
-
-> **참고**: `api-id` 헤더가 한국투자증권의 `tr_id`에 해당하는 TR 코드 역할을 한다.
 
 ### 3.2 인증 흐름
 
 ```
-[로컬 서버] → POST /v1/auth/login
-  Headers: { api-id: "au10001", Content-Type: "application/json" }
-  Body: { app_key, secret_key }
-  Response: { access_token, ... }
+[로컬 서버] → POST /oauth2/token
+  Body: { grant_type: "client_credentials", appkey, appsecret }
+  Response: { access_token, token_type, expires_in }
                 ↓
 [로컬 서버] → 모든 REST 요청 헤더:
   Authorization: Bearer {access_token}
-  api-id: {tr코드}
-  Content-Type: application/json
+  appkey: {app_key}
+  tr_id: {트랜잭션 ID}
+  Content-Type: application/json; charset=utf-8
                 ↓
-[로컬 서버] → 만료 전 자동 갱신
+[로컬 서버] → 만료 5분 전 자동 갱신
 ```
 
 ### 3.3 모듈 구조
 
 ```
+sv_core/broker/
+├── __init__.py
+├── base.py            # BrokerAdapter ABC (증권사 무관)
+└── models.py          # OrderResult, BalanceResult, Position, QuoteEvent 등
+
 local_server/broker/
 ├── __init__.py
-├── base.py            # BrokerAdapter ABC + 공통 모델 (OrderResult, BalanceResult, ...)
-├── factory.py         # create_broker(config) → BrokerAdapter 인스턴스
-└── kiwoom/
-    ├── __init__.py
-    ├── adapter.py     # KiwoomAdapter — BrokerAdapter 구현체 (진입점)
-    ├── auth.py        # OAuth 토큰 발급/갱신/캐시
-    ├── order.py       # 주문 실행 (시장가/지정가/정정/취소)
-    ├── quote.py       # 현재가, 잔고, 보유종목 조회
-    ├── websocket.py   # WS 시세 수신 + 체결 통보
-    ├── rate_limiter.py # 초당 5건 큐 관리 (Token Bucket, 단일 관문)
-    ├── state_machine.py # 연결 상태 머신 (DISCONNECTED→...→READY→DEGRADED)
-    └── error_classifier.py # 오류 분류 (RETRYABLE / NON_RETRYABLE / FATAL)
+├── factory.py         # AdapterFactory → KisAdapter | MockAdapter
+├── kis/               # 한국투자증권 구현체
+│   ├── adapter.py     # KisAdapter — BrokerAdapter 구현체 (진입점)
+│   ├── auth.py        # OAuth 토큰 발급/갱신/캐시
+│   ├── order.py       # 주문 실행 (시장가/지정가/정정/취소)
+│   ├── quote.py       # 현재가, 잔고, 보유종목 조회
+│   ├── ws.py          # WS 실시간 시세 수신
+│   ├── rate_limiter.py # 초당 20건 큐 관리 (슬라이딩 윈도우)
+│   ├── state_machine.py # 연결 상태 머신
+│   ├── reconnect.py   # 지수 백오프 재연결
+│   ├── reconciler.py  # 미체결 대사
+│   ├── idempotency.py # 주문 멱등성
+│   └── error_classifier.py # 오류 분류
+└── mock/
+    └── adapter.py     # MockAdapter (테스트용)
 ```
 
-**핵심 변경**: 기존 `local_server/kiwoom/` → `local_server/broker/kiwoom/`으로 이동.
-공통 인터페이스(`base.py`)와 팩토리(`factory.py`)를 상위에 배치.
+**구조 원칙**: ABC(`sv_core/broker/`)는 증권사 무관. 구현체(`kis/`)만 교체하면 다른 증권사 지원 가능.
 
-### 3.4 KiwoomAdapter 6대 책임
+### 3.4 KisAdapter 6대 책임
 
-키움 API 특유의 불안정성(rate limit, 세션 종료, reconnect)을 시스템 레벨에서 흡수하기 위해
-KiwoomAdapter는 아래 6가지 책임을 반드시 구현한다.
+증권사 API 특유의 불안정성(rate limit, 세션 종료, reconnect)을 시스템 레벨에서 흡수하기 위해
+KisAdapter는 아래 6가지 책임을 반드시 구현한다.
 
 | # | 책임 | 설명 |
 |---|------|------|
@@ -156,223 +158,252 @@ KiwoomAdapter는 아래 6가지 책임을 반드시 구현한다.
 
 ## 4. API 상세
 
-### 4.1 토큰 발급
+### 4.1 토큰 발급 (`kis/auth.py`)
 
 ```python
-class KiwoomAuth:
-    def __init__(self, app_key: str, secret_key: str, is_mock: bool = True):
-        self._base_url = (
-            "https://mockapi.kiwoom.com"      # 모의투자
-            if is_mock else
-            "https://openapi.kiwoom.com"       # 실거래
-        )
-        self._token: str | None = None
-        self._token_expires_at: datetime | None = None
+class KisAuth:
+    """KIS OAuth 2.0 인증 관리자."""
 
-    async def get_token(self) -> str:
-        """유효한 토큰 반환. 만료 임박 시 자동 갱신."""
-        if self._is_token_valid():
-            return self._token
-        return await self._refresh_token()
+    def __init__(self, app_key: str, app_secret: str) -> None: ...
 
-    async def _refresh_token(self) -> str:
-        """POST /v1/auth/login (api-id: au10001) → Bearer Token 발급"""
+    async def get_access_token(self) -> str:
+        """유효한 액세스 토큰 반환. 만료 5분 전 자동 갱신 (asyncio.Lock 보호)."""
+        ...
+
+    async def _fetch_token(self) -> None:
+        """POST /oauth2/token
+        Body: { grant_type: "client_credentials", appkey, appsecret }
+        Response: { access_token, token_type, expires_in }
+        expires_in 기본값: 86400 (24시간)"""
+        ...
+
+    async def build_headers(self) -> dict[str, str]:
+        """일반 API 요청 헤더: Authorization(Bearer) + appkey + Content-Type."""
+        ...
+
+    def invalidate(self) -> None:
+        """캐시된 토큰 무효화 (인증 오류 시 호출)."""
         ...
 ```
 
-### 4.2 주문 실행
+### 4.2 주문 실행 (`kis/order.py`)
 
 ```python
-class KiwoomOrder:
-    async def send_order(
-        self,
-        account_no: str,
-        symbol: str,
-        side: Literal["BUY", "SELL"],
-        qty: int,
-        price: int = 0,          # 0 = 시장가
-        order_type: str = "0",    # 0=지정가, 3=시장가
+class KisOrder:
+    """KIS 주문 실행/취소/미체결 조회."""
+
+    # tr_id 매핑 (실전투자)
+    _ORDER_TR_ID = {
+        (BUY, MARKET): "TTTC0802U",  (BUY, LIMIT): "TTTC0801U",
+        (SELL, MARKET): "TTTC0801U", (SELL, LIMIT): "TTTC0801U",
+    }
+    TR_CANCEL = "TTTC0803U"
+    TR_OPEN_ORDERS = "TTTC8036R"
+
+    async def place_order(
+        self, client_order_id: str, symbol: str,
+        side: OrderSide, order_type: OrderType,
+        qty: int, limit_price: Optional[Decimal] = None,
     ) -> OrderResult:
-        """
-        POST /v1/order  (api-id: kt10000)
-        params:
-          dmst_stex_tp: 거래소 (KRX / NXT / SOR)
-          stk_cd: 종목코드
-          ord_qty: 주문수량
-          ord_uv: 주문단가 (시장가면 0)
-          trde_tp: 주문유형 (0=지정가, 3=시장가)
-        Response: { ord_no, return_code, return_msg }
-        """
+        """POST /uapi/domestic-stock/v1/trading/order-cash
+        헤더: tr_id, 바디: CANO, ACNT_PRDT_CD, PDNO, ORD_DVSN, ORD_QTY, ORD_UNPR
+        응답: { output: { ODNO: 주문번호 } }"""
+        ...
+
+    async def cancel_order(self, order_id: str, symbol: str, qty: int) -> OrderResult:
+        """POST /uapi/domestic-stock/v1/trading/order-rvsecncl
+        헤더: tr_id=TTTC0803U, RVSE_CNCL_DVSN_CD=02 (취소)"""
+        ...
+
+    async def get_open_orders(self) -> list[OrderResult]:
+        """GET /uapi/domestic-stock/v1/trading/inquire-psbl-rvsecncl
+        헤더: tr_id=TTTC8036R"""
         ...
 ```
 
-### 4.3 현재가/잔고 조회
+### 4.3 현재가/잔고 조회 (`kis/quote.py`)
 
 ```python
-class KiwoomQuote:
-    async def get_current_price(self, symbol: str) -> int:
-        """
-        기본 종목 정보 (api-id: ka10001)
-        또는 차트 데이터 (api-id: ka10080, api.kiwoom.com)
-        → 현재가 반환. 주문 전 가격 검증에 사용.
-        """
+class KisQuote:
+    """KIS 시세 및 잔고 조회."""
+
+    TR_PRICE_REAL = "FHKST01010100"  # 현재가 조회
+    TR_BALANCE_REAL = "TTTC8434R"    # 잔고 조회
+
+    async def get_price(self, symbol: str) -> QuoteEvent:
+        """GET /uapi/domestic-stock/v1/quotations/inquire-price
+        헤더: tr_id=FHKST01010100
+        파라미터: FID_COND_MRKT_DIV_CODE=J, FID_INPUT_ISCD=종목코드
+        응답: { output: { stck_prpr, acml_vol, bidp, askp } }"""
         ...
 
-    async def get_balance(self, account_no: str) -> BalanceResult:
-        """
-        GET /v1/account/balance
-        → 예수금, 보유종목 목록 반환
-        """
+    async def get_balance(self) -> BalanceResult:
+        """GET /uapi/domestic-stock/v1/trading/inquire-balance
+        헤더: tr_id=TTTC8434R
+        파라미터: CANO, ACNT_PRDT_CD, INQR_DVSN=02 (종목별)
+        응답: { output1: [보유종목], output2: [계좌합계] }"""
         ...
 ```
 
-### 4.4 WebSocket 시세 수신
+### 4.4 WebSocket 시세 수신 (`kis/ws.py`)
 
 ```python
-class KiwoomWebSocket:
-    WS_URL = "wss://api.kiwoom.com:10000/api/dostk/websocket"
+class KisWS:
+    """KIS WebSocket 실시간 체결/시세 스트림."""
 
-    async def connect(self):
-        """
-        WebSocket 연결 + 인증.
-        연결 후 LOGIN 패킷 전송:
-          { "trnm": "LOGIN", "token": access_token }
-        """
+    WS_URL = "wss://openapi.koreainvestment.com:9443/websocket/tryitout/H0STCNT0"
+    TR_SUBSCRIBE = "H0STCNT0"  # 주식 체결가
+
+    async def connect(self) -> None:
+        """WebSocket 연결 (ping_interval=30s, ping_timeout=10s).
+        연결 후 _recv_loop 태스크 시작."""
         ...
 
-    async def subscribe(self, symbols: list[str], data_type: str = "0B"):
-        """
-        실시간 시세 구독.
-        { "trnm": "REG", "grp_no": "1",
-          "data": [{"item": ["005930","000660"], "type": ["0B"]}] }
-
-        0B: 실시간 체결가
-        (기타 type 코드는 공식 문서 확인 필요)
-        """
+    async def subscribe(self, symbols: list[str]) -> None:
+        """종목 구독. JSON 메시지:
+        { header: { approval_key, custtype: "P", tr_type: "1" },
+          body: { input: { tr_id: "H0STCNT0", tr_key: "005930" } } }"""
         ...
 
-    async def unsubscribe(self, symbols: list[str], data_type: str):
-        """
-        구독 해제.
-        { "trnm": "REMOVE", ... }
-        """
+    async def unsubscribe(self, symbols: list[str]) -> None:
+        """구독 해제 (tr_type: "2")"""
         ...
 
-    async def _handle_ping(self, message: dict):
-        """서버 PING에 대한 PONG 응답 (keepalive)"""
-        ...
-
-    async def listen(self) -> AsyncIterator[QuoteEvent]:
-        """
-        이벤트 스트림. JSON 텍스트 프레임을 파싱하여 yield.
-        1시간 무활동 시 자동 연결 종료 → 재연결 로직 필요.
-        """
+    def _handle_realtime_data(self, raw_msg: str) -> None:
+        """실시간 데이터 파싱. 형식: "{tr_id}|{종목코드}|{필드수}|{데이터}"
+        데이터는 '^'로 구분된 필드:
+          [0]=종목코드, [2]=체결시간, [7]=매도호가, [8]=매수호가,
+          [10]=현재가, [12]=누적거래량"""
         ...
 ```
 
-### 4.5 Rate Limiter
+### 4.5 Rate Limiter (`kis/rate_limiter.py`)
 
 ```python
-class RateLimiter:
-    """Token Bucket 알고리즘. 초당 5건 제한."""
+class MultiEndpointRateLimiter:
+    """슬라이딩 윈도우. 초당 20건 제한 (KIS 기본값)."""
 
-    def __init__(self, rate: int = 5, per_seconds: float = 1.0):
-        self._rate = rate
-        self._per = per_seconds
-        self._queue: asyncio.Queue = asyncio.Queue()
+    def __init__(self, calls_per_second: int = 20): ...
 
-    async def acquire(self):
-        """호출 권한 획득. 제한 초과 시 대기."""
+    async def acquire(self) -> None:
+        """호출 권한 획득. 1초 내 호출 수가 limit 이상이면 대기."""
         ...
-
-    async def execute(self, coro):
-        """rate limit 적용하여 코루틴 실행."""
-        await self.acquire()
-        return await coro
 ```
 
 ---
 
 ## 5. 데이터 모델
 
-### 5.1 공통 모델 (`broker/base.py`)
+### 5.1 공통 모델 (`sv_core/broker/models.py`)
 
 모든 BrokerAdapter 구현체가 반환하는 공통 데이터 클래스.
-증권사별 원본 응답은 `raw_response`/`raw_data`에 보존.
+가격은 `Decimal`, 원본 응답은 `raw`에 보존.
 
 ```python
+class OrderSide(str, Enum):
+    BUY = "BUY"
+    SELL = "SELL"
+
+class OrderType(str, Enum):
+    MARKET = "MARKET"
+    LIMIT = "LIMIT"
+
+class OrderStatus(str, Enum):
+    NEW = "NEW"
+    SUBMITTED = "SUBMITTED"
+    PARTIAL_FILLED = "PARTIAL_FILLED"
+    FILLED = "FILLED"
+    CANCELLED = "CANCELLED"
+    REJECTED = "REJECTED"
+
+class ErrorCategory(str, Enum):
+    TRANSIENT = "TRANSIENT"
+    PERMANENT = "PERMANENT"
+    RATE_LIMIT = "RATE_LIMIT"
+    AUTH = "AUTH"
+    UNKNOWN = "UNKNOWN"
+
 @dataclass
 class OrderResult:
-    success: bool
-    order_no: str | None       # 주문번호
-    message: str               # 성공/실패 메시지
-    raw_response: dict         # 증권사 원본 응답
+    order_id: str                        # 브로커 주문 ID
+    client_order_id: str                 # 클라이언트 주문 ID (멱등성 키)
+    symbol: str
+    side: OrderSide
+    order_type: OrderType
+    qty: int
+    limit_price: Optional[Decimal]       # 시장가면 None
+    status: OrderStatus
+    filled_qty: int = 0
+    filled_avg_price: Optional[Decimal] = None
+    submitted_at: Optional[datetime] = None
+    raw: dict = field(default_factory=dict)
 
 @dataclass
 class BalanceResult:
-    deposit: int               # 예수금
-    total_eval: int            # 총평가금액
-    positions: list[Position]  # 보유종목 목록
+    cash: Decimal                        # 현금 잔고
+    total_eval: Decimal                  # 총 평가 금액
+    positions: list["Position"] = field(default_factory=list)
+    raw: dict = field(default_factory=dict)
 
 @dataclass
 class Position:
     symbol: str
-    name: str
     qty: int
-    avg_price: int
-    current_price: int
-    pnl: int                   # 평가손익
-    pnl_rate: float            # 수익률 %
+    avg_price: Decimal
+    current_price: Decimal
+    eval_amount: Decimal
+    unrealized_pnl: Decimal
+    unrealized_pnl_rate: Decimal         # %
 
 @dataclass
 class QuoteEvent:
-    event_type: str            # "quote" | "execution" | "order_status"
     symbol: str
-    price: int
-    volume: int | None
-    timestamp: datetime
-    raw_data: dict
+    price: Decimal
+    volume: int
+    bid_price: Optional[Decimal] = None
+    ask_price: Optional[Decimal] = None
+    timestamp: Optional[datetime] = None
+    raw: dict = field(default_factory=dict)
 ```
 
-### 5.2 BrokerAdapter ABC (`broker/base.py`)
+### 5.2 BrokerAdapter ABC (`sv_core/broker/base.py`)
 
 ```python
 class BrokerAdapter(ABC):
     """증권사 API 추상 인터페이스. 모든 구현체가 준수."""
 
+    # 라이프사이클
     @abstractmethod
-    async def authenticate(self) -> None: ...
+    async def connect(self) -> None: ...
+    @abstractmethod
+    async def disconnect(self) -> None: ...
+    @property
+    @abstractmethod
+    def is_connected(self) -> bool: ...
 
+    # 잔고/시세 조회
     @abstractmethod
-    async def is_authenticated(self) -> bool: ...
+    async def get_balance(self) -> BalanceResult: ...
+    @abstractmethod
+    async def get_quote(self, symbol: str) -> QuoteEvent: ...
 
+    # 실시간 구독
     @abstractmethod
-    async def send_order(
-        self, account_no: str, symbol: str,
-        side: Literal["BUY", "SELL"], qty: int,
-        price: int = 0, order_type: str = "market",
+    async def subscribe_quotes(self, symbols: list[str], callback: Callable) -> None: ...
+    @abstractmethod
+    async def unsubscribe_quotes(self, symbols: list[str]) -> None: ...
+
+    # 주문
+    @abstractmethod
+    async def place_order(
+        self, client_order_id: str, symbol: str,
+        side: OrderSide, order_type: OrderType,
+        qty: int, limit_price: Optional[Decimal] = None,
     ) -> OrderResult: ...
-
     @abstractmethod
-    async def cancel_order(self, order_no: str) -> OrderResult: ...
-
+    async def cancel_order(self, order_id: str) -> OrderResult: ...
     @abstractmethod
-    async def get_current_price(self, symbol: str) -> int: ...
-
-    @abstractmethod
-    async def get_balance(self, account_no: str) -> BalanceResult: ...
-
-    @abstractmethod
-    async def get_positions(self, account_no: str) -> list[Position]: ...
-
-    @abstractmethod
-    async def subscribe(self, symbols: list[str], data_type: str) -> None: ...
-
-    @abstractmethod
-    async def unsubscribe(self, symbols: list[str], data_type: str) -> None: ...
-
-    @abstractmethod
-    async def listen(self) -> AsyncIterator[QuoteEvent]: ...
+    async def get_open_orders(self) -> list[OrderResult]: ...
 ```
 
 ---
@@ -382,7 +413,7 @@ class BrokerAdapter(ABC):
 ### 6.1 인증
 
 - [ ] App Key/Secret으로 Bearer Token 발급 성공
-- [ ] 토큰 만료 1시간 전 자동 갱신
+- [ ] 토큰 만료 5분 전 자동 갱신
 - [ ] 모의투자/실거래 베이스 URL 전환
 
 ### 6.2 주문
@@ -390,11 +421,11 @@ class BrokerAdapter(ABC):
 - [ ] 모의투자 시장가 매수 10주 → 주문번호 수신
 - [ ] 모의투자 지정가 매도 → 주문번호 수신
 - [ ] 잔고 부족 시 에러 메시지 정상 반환
-- [ ] 초당 5건 이내 호출 준수
+- [ ] 초당 20건 이내 호출 준수
 
 ### 6.3 조회
 
-- [ ] 현재가 조회 → 정수 가격 반환
+- [ ] 현재가 조회 → Decimal 가격 반환
 - [ ] 잔고 조회 → 예수금 + 보유종목 반환
 
 ### 6.4 WebSocket
@@ -419,9 +450,11 @@ class BrokerAdapter(ABC):
 
 ### 포함
 
-- `local_server/broker/base.py` — BrokerAdapter ABC + 공통 모델
+- `sv_core/broker/base.py` — BrokerAdapter ABC
+- `sv_core/broker/models.py` — 공통 데이터 모델
 - `local_server/broker/factory.py` — 팩토리
-- `local_server/broker/kiwoom/` — KiwoomAdapter 구현체 (OAuth, REST, WS, Rate Limiter)
+- `local_server/broker/kis/` — KisAdapter 구현체 (OAuth, REST, WS, Rate Limiter)
+- `local_server/broker/mock/` — MockAdapter (테스트용)
 
 ### 미포함
 
@@ -433,21 +466,20 @@ class BrokerAdapter(ABC):
 
 ---
 
-## 8. 키움 REST API 제약
+## 8. KIS Open API+ 제약
 
 | 항목 | 제약 |
 |------|------|
-| 인증 | Bearer Token (POST /v1/auth/login) |
-| 실거래 URL | `https://openapi.kiwoom.com` |
-| 모의투자 URL | `https://mockapi.kiwoom.com` |
-| 데이터 API | `https://api.kiwoom.com` |
-| WS URL | `wss://api.kiwoom.com:10000/api/dostk/websocket` |
-| 조회/주문 제한 | 초당/분당 제한 (정확한 수치는 공식 문서 확인 필요) |
-| WS 타임아웃 | 1시간 무활동 시 자동 종료 |
-| 모의투자 | 별도 URL, 동일 api-id |
+| 인증 | Bearer Token (`POST /oauth2/token`, client_credentials) |
+| REST URL | `https://openapi.koreainvestment.com:9443` |
+| WS URL | `wss://openapi.koreainvestment.com:9443/websocket/tryitout/{tr_id}` |
+| 조회/주문 제한 | 초당 20회 (REST), 일 100,000회 |
+| 토큰 유효기간 | 24시간 (expires_in 필드로 확인) |
+| WS 데이터 형식 | pipe(`\|`) + caret(`^`) 구분 텍스트 |
 | 거래 시간 | 평일 09:00~15:30 KST |
 | HTS 불필요 | REST API는 HTS 설치/로그인 불필요 |
-| 종목코드 형식 | KRX: `005930`, NXT: `005930_NX` |
+| 종목코드 형식 | `005930` (6자리) |
+| tr_id 방식 | 헤더 `tr_id`로 트랜잭션 구분 |
 
 ---
 
@@ -462,28 +494,24 @@ class BrokerAdapter(ABC):
 
 ## 10. 미결 사항
 
-- [x] ~~키움 REST API 정확한 엔드포인트 URL 확인~~ → 3차 소스 기반 확인 완료 (§3.1)
-- [x] ~~WebSocket 바이너리 vs 텍스트 프레임 형식 확인~~ → JSON 텍스트 프레임
-- [ ] api-id(TR 코드) 전수 목록 확인 (공식 가이드 로그인 필요)
-- [ ] 토큰 유효 기간 정확한 확인 (24h? 다른 값?)
-- [ ] 조회/주문 제한 정확한 수치 (초당 N건, 분당 M건)
-- [ ] WS 실시간 type 코드 전수 확인 (0B 외 호가, 체결 통보 등)
-- [ ] 토큰 갱신 실패 시 사용자 알림 방식 (트레이? WS?)
-- [ ] IP 화이트리스트 자동 등록 가능 여부
-- [ ] 모의투자(mockapi.kiwoom.com)와 실거래의 api-id 동일 여부 확인
+- [x] ~~REST API 정확한 엔드포인트 URL 확인~~ → KIS Open API+ 확인 완료 (§3.1)
+- [x] ~~WebSocket 바이너리 vs 텍스트 프레임 형식 확인~~ → pipe+caret 구분 텍스트 프레임
 - [x] ~~리컨실리에이션 트리거 조합~~ → 재접속 직후 / 주문 후 10초 미수신 / 주기 300초 (§3.4 R4)
 - [x] ~~DEGRADED 상태에서의 엔진 정책~~ → STOP_NEW (평가 계속, 주문 차단)
 - [x] ~~오류 분류 최소 표준~~ → RETRYABLE/NON_RETRYABLE/FATAL 3등급 + 처리 정책 (§3.4 R6)
-- [ ] 오류 분류 매핑표: 키움 에러코드별 구체적 분류 (공식 문서 확인 후 작성)
+- [ ] KIS 모의투자 전용 tr_id 확인 (실전과 다를 수 있음 — 공식 문서 확인 필요)
+- [ ] WS 체결 통보 tr_id 확인 (H0STCNI0 등)
+- [ ] 토큰 갱신 실패 시 사용자 알림 방식 (트레이? WS?)
+- [ ] 오류 분류 매핑표: KIS rt_cd / msg_cd별 구체적 분류 (공식 문서 확인 후 작성)
 
 ---
 
 ## 참고
 
-- [키움 REST API 공식 포털](https://openapi.kiwoom.com)
+- [한국투자증권 KIS Developers](https://apiportal.koreainvestment.com)
 - `docs/architecture.md` §4.4 (BrokerAdapter), §4.5 (로컬 서버), §5.2 (키 분리)
 - `docs/development-plan-v2.md` Unit 1
 
 ---
 
-**마지막 갱신**: 2026-03-05
+**마지막 갱신**: 2026-03-07

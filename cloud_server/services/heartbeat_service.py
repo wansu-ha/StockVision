@@ -21,7 +21,7 @@ def record_heartbeat(user_id: str, payload: dict, db: Session) -> dict:
       "uuid": str,
       "version": str,
       "os": str,
-      "kiwoom_connected": bool,
+      "broker_connected": bool,
       "engine_running": bool,
       "active_rules_count": int,
       "timestamp": datetime
@@ -32,7 +32,7 @@ def record_heartbeat(user_id: str, payload: dict, db: Session) -> dict:
         user_id=user_id,
         version=payload.get("version"),
         os=payload.get("os"),
-        kiwoom_connected=payload.get("kiwoom_connected"),
+        broker_connected=payload.get("broker_connected"),
         engine_running=payload.get("engine_running"),
         active_rules_count=payload.get("active_rules_count"),
         timestamp=payload["timestamp"],

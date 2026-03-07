@@ -140,11 +140,11 @@ class TestConfigRouter:
         # app_key가 있는 경우를 시뮬레이션
         with patch("keyring.get_password", return_value="real_key"):
             resp = client.get("/api/config")
-        # kiwoom.app_key는 "" (config.json에 저장 안 함) — 마스킹 로직 확인
+        # kis.app_key는 "" (config.json에 저장 안 함) — 마스킹 로직 확인
         body = resp.json()
-        kiwoom = body["data"].get("kiwoom", {})
+        kis = body["data"].get("kis", {})
         # config.json에는 빈 문자열이 저장되므로 마스킹 안 됨
-        assert kiwoom.get("app_key") is not None  # 필드 존재 확인
+        assert kis.get("app_key") is not None  # 필드 존재 확인
 
 
 # ──────────────────────────────────────────────────────

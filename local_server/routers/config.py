@@ -2,7 +2,7 @@
 
 GET  /api/config          — 현재 설정 조회 (민감 정보 마스킹)
 PATCH /api/config         — 설정 변경 후 저장
-POST /api/config/kiwoom   — 키움 API Key + 계좌번호를 keyring에 저장
+POST /api/config/broker-keys — 증권사 API Key + 계좌번호를 keyring에 저장
 """
 from __future__ import annotations
 
@@ -31,12 +31,12 @@ class ConfigUpdateRequest(BaseModel):
     updates: dict[str, Any]
 
 
-class KiwoomConfigRequest(BaseModel):
-    """키움 API Key 등록 요청 바디."""
+class KisConfigRequest(BaseModel):
+    """KIS API Key 등록 요청 바디."""
 
-    app_key: str = Field(..., description="키움 앱 키")
-    app_secret: str = Field(..., description="키움 앱 시크릿")
-    account_no: str = Field(..., description="키움 계좌번호 (예: 12345678901)")
+    app_key: str = Field(..., description="KIS 앱 키")
+    app_secret: str = Field(..., description="KIS 앱 시크릿")
+    account_no: str = Field(..., description="KIS 계좌번호 (예: 12345678901)")
 
 
 @router.get(
@@ -65,29 +65,29 @@ async def patch_configuration(body: ConfigUpdateRequest) -> dict[str, Any]:
 
 
 @router.post(
-    "/kiwoom",
-    summary="키움 API Key 및 계좌번호 등록",
+    "/broker-keys",
+    summary="증권사 API Key 및 계좌번호 등록",
 )
-async def register_kiwoom_config(body: KiwoomConfigRequest) -> dict[str, Any]:
-    """키움 앱 키, 앱 시크릿, 계좌번호를 keyring에 저장한다.
+async def register_broker_keys(body: KisConfigRequest) -> dict[str, Any]:
+    """KIS 앱 키, 앱 시크릿, 계좌번호를 keyring에 저장한다.
 
     이 정보는 BrokerAdapter.connect() 호출 및 주문 발행에 사용된다.
-    저장 성공 여부만 반환하며, 실제 키움 인증(토큰 발급)은 별도로 수행된다.
+    저장 성공 여부만 반환하며, 실제 KIS 인증(토큰 발급)은 별도로 수행된다.
     """
     try:
         save_api_keys(body.app_key, body.app_secret)
         save_account_no(body.account_no)
-        logger.info("키움 API Key 및 계좌번호 등록 완료")
+        logger.info("KIS API Key 및 계좌번호 등록 완료")
         return {
             "success": True,
             "data": {
-                "message": "키움 API Key가 등록되었습니다.",
+                "message": "KIS API Key가 등록되었습니다.",
                 "has_key": has_credential(KEY_APP_KEY),
             },
             "count": 1,
         }
     except Exception as e:
-        logger.error("키움 API Key 저장 실패: %s", e)
+        logger.error("KIS API Key 저장 실패: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"API Key 저장 실패: {e}",

@@ -2,7 +2,7 @@
 전략 템플릿 모델 (어드민 관리)
 
 - StrategyTemplate: 관리자가 제공하는 공개 전략 템플릿
-- KiwoomServiceKey: 서비스 키움 API 키 (암호화 저장)
+- BrokerServiceKey: 서비스 증권사 API 키 (암호화 저장)
 """
 from datetime import datetime
 
@@ -32,9 +32,9 @@ class StrategyTemplate(Base):
     updated_at      = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=True)
 
 
-class KiwoomServiceKey(Base):
-    """서비스 키움 API 키 (어드민 관리, api_secret은 AES-256-GCM 암호화)"""
-    __tablename__ = "kiwoom_service_keys"
+class BrokerServiceKey(Base):
+    """서비스 증권사 API 키 (어드민 관리, api_secret은 AES-256-GCM 암호화)"""
+    __tablename__ = "broker_service_keys"
 
     id           = Column(Integer, primary_key=True, autoincrement=True)
     api_key      = Column(String(255), nullable=False)

@@ -1,6 +1,6 @@
-"""local_server.broker.kiwoom.error_classifier: API 에러 분류 모듈
+"""local_server.broker.kis.error_classifier: API 에러 분류 모듈
 
-키움 REST API 응답 코드를 분석하여 에러의 성격을 분류한다.
+KIS REST API 응답 코드를 분석하여 에러의 성격을 분류한다.
 TRANSIENT: 재시도 가능 (네트워크 오류, 서버 과부하 등)
 PERMANENT: 재시도 불가 (잘못된 파라미터, 권한 없음 등)
 RATE_LIMIT: 속도 제한 초과
@@ -16,8 +16,8 @@ from sv_core.broker.models import ErrorCategory
 
 logger = logging.getLogger(__name__)
 
-# 키움 응답 코드 → ErrorCategory 매핑
-# 키움 API는 HTTP 상태 코드 + rt_cd(응답 코드)를 함께 반환
+# KIS 응답 코드 → ErrorCategory 매핑
+# KIS API는 HTTP 상태 코드 + rt_cd(응답 코드)를 함께 반환
 _RT_CD_CATEGORY: dict[str, ErrorCategory] = {
     "0": ErrorCategory.TRANSIENT,   # 정상 (분류 필요 없음, 여기선 예외 처리 전용)
     "1": ErrorCategory.PERMANENT,   # 실패 (일반적 에러)
@@ -36,8 +36,8 @@ _HTTP_STATUS_CATEGORY: dict[int, ErrorCategory] = {
     504: ErrorCategory.TRANSIENT,   # Gateway Timeout
 }
 
-# 키움 msg_cd 기반 세부 분류 (일부 주요 코드)
-# 실제 키움 API 문서 기반으로 확장 필요
+# KIS msg_cd 기반 세부 분류 (일부 주요 코드)
+# 실제 KIS API 문서 기반으로 확장 필요
 _MSG_CD_CATEGORY: dict[str, ErrorCategory] = {
     "EGW00123": ErrorCategory.AUTH,        # 접근 토큰 만료
     "EGW00121": ErrorCategory.AUTH,        # 접근 토큰 오류
@@ -50,7 +50,7 @@ _MSG_CD_CATEGORY: dict[str, ErrorCategory] = {
 
 
 class ErrorClassifier:
-    """키움 API 에러 분류기.
+    """KIS API 에러 분류기.
 
     HTTP 응답 또는 응답 JSON에서 에러 카테고리를 결정한다.
     """
@@ -72,9 +72,9 @@ class ErrorClassifier:
         return category
 
     def classify_api_response(self, response_json: dict) -> ErrorCategory:
-        """키움 API 응답 JSON에서 에러를 분류한다.
+        """KIS API 응답 JSON에서 에러를 분류한다.
 
-        키움 API는 HTTP 200 응답이어도 rt_cd != '0'이면 에러다.
+        KIS API는 HTTP 200 응답이어도 rt_cd != '0'이면 에러다.
 
         Args:
             response_json: API 응답 JSON

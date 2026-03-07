@@ -1,6 +1,6 @@
-"""local_server.broker.kiwoom.rate_limiter: API 호출 속도 제한 모듈
+"""local_server.broker.kis.rate_limiter: API 호출 속도 제한 모듈
 
-키움 Open API+ 제한:
+KIS Open API+ 제한:
 - 초당 20회 (REST)
 - 일 100,000회
 """
@@ -11,7 +11,7 @@ import time
 
 logger = logging.getLogger(__name__)
 
-# 키움 API 기본 제한
+# KIS API 기본 제한
 DEFAULT_CALLS_PER_SECOND = 20
 DEFAULT_CALLS_PER_DAY = 100_000
 

@@ -1,5 +1,5 @@
 """
-키움 시세 수집기 (서비스 키 사용)
+KIS 시세 수집기 (서비스 키 사용)
 
 BrokerAdapter를 통해 실시간 시세 구독 및 이벤트 수신.
 수신된 시세는 MarketRepository를 통해 MinuteBar로 저장.
@@ -35,9 +35,9 @@ def get_major_symbols() -> list[str]:
     return _MAJOR_SYMBOLS.copy()
 
 
-class KiwoomCollector:
+class KisCollector:
     """
-    키움 실시간 시세 수집기
+    KIS 실시간 시세 수집기
 
     broker.subscribe_quotes(symbols, callback) 로 시세 이벤트 수신.
     콜백으로 수신된 이벤트를 asyncio.Queue를 통해 async generator로 노출.

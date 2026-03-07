@@ -1,10 +1,10 @@
-"""local_server.broker.kiwoom.reconnect: WebSocket 자동 재연결 관리 모듈"""
+"""local_server.broker.kis.reconnect: WebSocket 자동 재연결 관리 모듈"""
 
 import asyncio
 import logging
 from typing import Callable, Awaitable, Optional
 
-from local_server.broker.kiwoom.state_machine import ConnectionState, StateMachine
+from local_server.broker.kis.state_machine import ConnectionState, StateMachine
 
 logger = logging.getLogger(__name__)
 

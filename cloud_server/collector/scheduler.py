@@ -2,7 +2,7 @@
 데이터 수집 스케줄러 (APScheduler)
 
 스케줄:
-- 09:00 KST: 키움 WS 시작 (장 시작)
+- 09:00 KST: KIS WS 시작 (장 시작)
 - 16:00 KST: 일봉 저장 (장 마감 후)
 - 08:00 KST: 종목 마스터 갱신
 - 17:00 KST: yfinance 보조 수집
@@ -15,7 +15,7 @@ from datetime import date, datetime, timedelta
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from cloud_server.collector.kiwoom_collector import KiwoomCollector, get_major_symbols
+from cloud_server.collector.kis_collector import KisCollector, get_major_symbols
 from cloud_server.core.broker_factory import BrokerFactory
 from cloud_server.core.database import get_db_session
 from cloud_server.services.market_repository import MarketRepository
@@ -44,16 +44,16 @@ class CollectorScheduler:
 
     def __init__(self):
         self.scheduler = AsyncIOScheduler(timezone="Asia/Seoul")
-        self.kiwoom_collector: KiwoomCollector | None = None
+        self.kis_collector: KisCollector | None = None
         self._listen_task: asyncio.Task | None = None
 
     def start(self) -> None:
         """스케줄러 시작 (FastAPI startup에서 호출)"""
-        # 09:00 KST — 키움 WS 시작
+        # 09:00 KST — KIS WS 시작
         self.scheduler.add_job(
-            self.start_kiwoom_ws,
+            self.start_kis_ws,
             trigger=CronTrigger(hour=9, minute=0, timezone="Asia/Seoul"),
-            id="kiwoom_ws_start",
+            id="kis_ws_start",
             replace_existing=True,
         )
 
@@ -97,8 +97,8 @@ class CollectorScheduler:
         if self._listen_task and not self._listen_task.done():
             self._listen_task.cancel()
 
-        if self.kiwoom_collector:
-            self.kiwoom_collector.stop()
+        if self.kis_collector:
+            self.kis_collector.stop()
 
         if self.scheduler.running:
             self.scheduler.shutdown(wait=False)
@@ -106,16 +106,16 @@ class CollectorScheduler:
         _collector_status["status"] = "stopped"
         logger.info("수집 스케줄러 중지됨")
 
-    async def start_kiwoom_ws(self) -> None:
-        """키움 WS 시작 (서비스 키 로드 → 인증 → 구독 → 리스닝)"""
+    async def start_kis_ws(self) -> None:
+        """KIS WS 시작 (서비스 키 로드 → 인증 → 구독 → 리스닝)"""
         global _collector_status
         try:
             db = get_db_session()
-            from cloud_server.models.template import KiwoomServiceKey
+            from cloud_server.models.template import BrokerServiceKey
             from cloud_server.core.encryption import decrypt_value
 
-            service_key_row = db.query(KiwoomServiceKey).filter(
-                KiwoomServiceKey.is_active == True  # noqa: E712
+            service_key_row = db.query(BrokerServiceKey).filter(
+                BrokerServiceKey.is_active == True  # noqa: E712
             ).first()
             db.close()
 
@@ -123,37 +123,37 @@ class CollectorScheduler:
                 logger.warning("활성화된 서비스 키가 없습니다. WS 시작 생략.")
                 return
 
-            broker = BrokerFactory.create("kiwoom", {
+            broker = BrokerFactory.create("kis", {
                 "api_key": service_key_row.api_key,
                 "api_secret": decrypt_value(service_key_row.api_secret),
             })
             await broker.authenticate()
 
-            self.kiwoom_collector = KiwoomCollector(broker)
+            self.kis_collector = KisCollector(broker)
             symbols = get_major_symbols()
-            await self.kiwoom_collector.subscribe(symbols)
+            await self.kis_collector.subscribe(symbols)
 
             # 백그라운드 리스닝 태스크 시작
             self._listen_task = asyncio.create_task(self._listen_quotes())
             _collector_status["status"] = "running"
-            logger.info(f"키움 WS 시작: {len(symbols)}개 종목 구독")
+            logger.info(f"KIS WS 시작: {len(symbols)}개 종목 구독")
 
         except Exception as e:
             _collector_status["status"] = "error"
             _collector_status["last_error"] = str(e)
             _collector_status["error_count"] += 1
-            logger.error(f"키움 WS 시작 실패: {e}")
+            logger.error(f"KIS WS 시작 실패: {e}")
 
     async def _listen_quotes(self) -> None:
         """실시간 시세 수신 및 저장 (백그라운드 태스크)"""
         global _collector_status
-        if not self.kiwoom_collector:
+        if not self.kis_collector:
             return
 
         db = get_db_session()
         repo = MarketRepository(db)
         try:
-            async for event in self.kiwoom_collector.listen():
+            async for event in self.kis_collector.listen():
                 try:
                     repo.save_minute_bar(event)
                     _collector_status["last_quote_time"] = datetime.utcnow().isoformat()
@@ -172,14 +172,14 @@ class CollectorScheduler:
             db.close()
 
     async def save_daily_bars(self) -> None:
-        """일봉 저장 (키움 REST API로 당일 종가 수집)"""
+        """일봉 저장 (KIS REST API로 당일 종가 수집)"""
         logger.info("일봉 저장 시작")
         # TODO: BrokerAdapter.get_daily_bars() 사용 (Unit 1 완성 후)
         # 현재는 yfinance 폴백으로 처리
         await self.collect_yfinance()
 
     async def update_stock_master(self) -> None:
-        """종목 마스터 갱신 (키움 API로 상장 종목 조회)"""
+        """종목 마스터 갱신 (KIS API로 상장 종목 조회)"""
         logger.info("종목 마스터 갱신 시작 (stub)")
         # TODO: BrokerAdapter.get_listed_symbols() 사용 (Unit 1 완성 후)
 

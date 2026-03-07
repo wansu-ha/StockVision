@@ -1,4 +1,4 @@
-"""키움 API 자격증명 + 클라우드 토큰 저장소.
+"""한국투자증권 API 자격증명 + 클라우드 토큰 저장소.
 
 Windows Keyring을 사용하여 API Key / Secret 및 클라우드 JWT 토큰을 암호화 저장한다.
 keyring이 사용 불가능한 환경에서는 CredentialError를 발생시킨다.
@@ -15,11 +15,11 @@ logger = logging.getLogger(__name__)
 # keyring 서비스 이름
 _SERVICE_NAME = "stockvision-local-server"
 
-# keyring 키 이름 상수 — 키움 API
-KEY_APP_KEY = "kiwoom_app_key"
-KEY_APP_SECRET = "kiwoom_app_secret"
-KEY_ACCESS_TOKEN = "kiwoom_access_token"
-KEY_ACCOUNT_NO = "kiwoom_account_no"
+# keyring 키 이름 상수 — KIS API
+KEY_APP_KEY = "kis_app_key"
+KEY_APP_SECRET = "kis_app_secret"
+KEY_ACCESS_TOKEN = "kis_access_token"
+KEY_ACCOUNT_NO = "kis_account_no"
 
 # keyring 키 이름 상수 — 클라우드 JWT
 KEY_CLOUD_ACCESS_TOKEN = "sv_cloud_access_token"
@@ -82,13 +82,13 @@ def has_credential(name: str) -> bool:
 
 
 def save_api_keys(app_key: str, app_secret: str) -> None:
-    """키움 앱 키와 시크릿을 저장한다."""
+    """KIS 앱 키와 시크릿을 저장한다."""
     save_credential(KEY_APP_KEY, app_key)
     save_credential(KEY_APP_SECRET, app_secret)
 
 
 def load_api_keys() -> tuple[str | None, str | None]:
-    """키움 앱 키와 시크릿을 반환한다."""
+    """KIS 앱 키와 시크릿을 반환한다."""
     return load_credential(KEY_APP_KEY), load_credential(KEY_APP_SECRET)
 
 
@@ -119,16 +119,16 @@ def load_cloud_tokens() -> tuple[str | None, str | None]:
     )
 
 
-# ── 키움 계좌번호 ────────────────────────────────────────────────────────────
+# ── KIS 계좌번호 ─────────────────────────────────────────────────────────────
 
 
 def save_account_no(account_no: str) -> None:
-    """키움 계좌번호를 keyring에 저장한다."""
+    """KIS 계좌번호를 keyring에 저장한다."""
     save_credential(KEY_ACCOUNT_NO, account_no)
 
 
 def load_account_no() -> str | None:
-    """저장된 키움 계좌번호를 반환한다."""
+    """저장된 KIS 계좌번호를 반환한다."""
     return load_credential(KEY_ACCOUNT_NO)
 
 

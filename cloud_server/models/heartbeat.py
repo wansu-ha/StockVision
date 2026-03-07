@@ -25,7 +25,7 @@ class Heartbeat(Base):
     user_id           = Column(String(36), ForeignKey("users.id"), nullable=False)
     version           = Column(String(20), nullable=True)   # 로컬 서버 버전
     os                = Column(String(20), nullable=True)   # windows | mac | linux
-    kiwoom_connected  = Column(Boolean, nullable=True)       # 키움 연결 여부
+    broker_connected  = Column(Boolean, nullable=True)       # 증권사 연결 여부
     engine_running    = Column(Boolean, nullable=True)       # 엔진 실행 여부
     active_rules_count = Column(Integer, nullable=True)     # 활성 규칙 수
     timestamp         = Column(DateTime, nullable=False)     # 로컬 타임스탬프

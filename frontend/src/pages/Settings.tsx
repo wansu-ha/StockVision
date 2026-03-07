@@ -10,7 +10,7 @@ export default function Settings() {
   const { email } = useAuth()
   const addAlert = useAlertStore((s) => s.add)
 
-  // 키움 API Key
+  // 증권사 API Key
   const [appKey, setAppKey] = useState('')
   const [appSecret, setAppSecret] = useState('')
   const [config, setConfig] = useState<LocalConfig | null>(null)
@@ -24,7 +24,7 @@ export default function Settings() {
 
   const handleSaveKeys = async () => {
     try {
-      await localConfig.setKiwoomKeys(appKey, appSecret)
+      await localConfig.setBrokerKeys(appKey, appSecret)
       addAlert('API Key가 등록되었습니다', 'success')
       setAppKey('')
       setAppSecret('')
@@ -54,9 +54,9 @@ export default function Settings() {
     <div className="max-w-3xl mx-auto px-6 py-8 space-y-8">
       <h1 className="text-2xl font-bold text-gray-900">설정</h1>
 
-      {/* 키움 API 설정 */}
+      {/* 증권사 API 설정 */}
       <section className="bg-white rounded-2xl border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold mb-4">키움 API 설정</h2>
+        <h2 className="text-lg font-semibold mb-4">증권사 API 설정</h2>
         <p className="text-xs text-gray-500 mb-4">API Key는 이 PC에만 저장됩니다. 클라우드로 전송되지 않습니다.</p>
 
         <div className="space-y-3">

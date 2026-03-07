@@ -5,10 +5,10 @@ export type TrafficLightColor = 'green' | 'red' | 'yellow'
 export interface ServerStatus {
   cloud: TrafficLightColor
   local: TrafficLightColor
-  kiwoom: TrafficLightColor
+  broker: TrafficLightColor
   cloud_message?: string
   local_message?: string
-  kiwoom_message?: string
+  broker_message?: string
 }
 
 export type AlertType = 'info' | 'success' | 'warning' | 'error'

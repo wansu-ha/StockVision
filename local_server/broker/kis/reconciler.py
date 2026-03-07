@@ -1,6 +1,6 @@
-"""local_server.broker.kiwoom.reconciler: 미체결 주문 대사(Reconciliation) 모듈
+"""local_server.broker.kis.reconciler: 미체결 주문 대사(Reconciliation) 모듈
 
-로컬 상태(메모리)와 키움 서버 상태를 주기적으로 비교하여 불일치를 감지/수정한다.
+로컬 상태(메모리)와 KIS 서버 상태를 주기적으로 비교하여 불일치를 감지/수정한다.
 """
 
 import asyncio
@@ -11,7 +11,7 @@ from typing import Callable, Optional, TYPE_CHECKING
 from sv_core.broker.models import OrderResult, OrderStatus
 
 if TYPE_CHECKING:
-    from local_server.broker.kiwoom.order import KiwoomOrder
+    from local_server.broker.kis.order import KisOrder
 
 logger = logging.getLogger(__name__)
 
@@ -50,19 +50,19 @@ class ReconcileEvent:
 class Reconciler:
     """미체결 주문 대사 관리자.
 
-    로컬 주문 상태 저장소와 키움 서버 미체결 주문을 주기적으로 비교하여
+    로컬 주문 상태 저장소와 KIS 서버 미체결 주문을 주기적으로 비교하여
     불일치 이벤트를 발생시키고, 로컬 상태를 동기화한다.
     """
 
     def __init__(
         self,
-        order_client: "KiwoomOrder",
+        order_client: "KisOrder",
         interval: float = DEFAULT_RECONCILE_INTERVAL,
     ) -> None:
         """초기화.
 
         Args:
-            order_client: KiwoomOrder 인스턴스
+            order_client: KisOrder 인스턴스
             interval: 대사 주기 (초)
         """
         self._order_client = order_client
