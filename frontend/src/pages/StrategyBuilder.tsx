@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { rulesApi, conditionsToDsl } from '../services/rules'
-import { localRules } from '../services/localClient'
+import { conditionsToDsl } from '../services/rules'
 import type { Condition, Variable } from '../services/rules'
+import { cloudRules } from '../services/cloudClient'
+import { localRules } from '../services/localClient'
 import type { Rule, CreateRulePayload } from '../types/strategy'
+import { AVAILABLE_INDICATORS, CONTEXT_FIELDS } from '../types/strategy'
 import ConditionRow from '../components/ConditionRow'
 import RuleList from '../components/RuleList'
 
@@ -48,23 +50,18 @@ export default function StrategyBuilder() {
 
   const { data: rulesData } = useQuery({
     queryKey: ['rules'],
-    queryFn:  rulesApi.list,
+    queryFn:  cloudRules.list,
   })
-  const { data: varsData } = useQuery({
-    queryKey: ['variables'],
-    queryFn:  rulesApi.variables,
-  })
-
   const invalidate = () => qc.invalidateQueries({ queryKey: ['rules'] })
 
   const saveMut = useMutation({
     mutationFn: () => {
       const payload = formToPayload(form)
-      return editId ? rulesApi.update(editId, payload) : rulesApi.create(payload)
+      return editId ? cloudRules.update(editId, payload) : cloudRules.create(payload)
     },
     onSuccess: () => {
       invalidate(); setShowForm(false); setEditId(null); setForm(EMPTY_FORM); setError(null)
-      rulesApi.list().then((r) => localRules.sync(r.data)).catch(() => {})
+      cloudRules.list().then((rules) => localRules.sync(rules)).catch(() => {})
     },
     onError: (err: unknown) => {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
@@ -72,24 +69,25 @@ export default function StrategyBuilder() {
     },
   })
   const toggleMut = useMutation({
-    mutationFn: (rule: Rule) => rulesApi.toggle(rule.id, !rule.is_active),
+    mutationFn: (rule: Rule) => cloudRules.update(rule.id, { is_active: !rule.is_active }),
     onSuccess: () => {
       invalidate()
-      rulesApi.list().then((r) => localRules.sync(r.data)).catch(() => {})
+      cloudRules.list().then((rules) => localRules.sync(rules)).catch(() => {})
     },
   })
   const deleteMut = useMutation({
-    mutationFn: rulesApi.remove,
+    mutationFn: cloudRules.remove,
     onSuccess: () => {
       invalidate()
-      rulesApi.list().then((r) => localRules.sync(r.data)).catch(() => {})
+      cloudRules.list().then((rules) => localRules.sync(rules)).catch(() => {})
     },
   })
 
-  const rules  = rulesData?.data ?? []
-  const vars   = varsData?.data
-  const allVars = vars ? [...vars.market, ...vars.price] : []
-  const ops    = vars?.operators ?? ['>', '<', '>=', '<=', '==']
+  const rules  = rulesData ?? []
+  const allVars: Variable[] = [...AVAILABLE_INDICATORS, ...CONTEXT_FIELDS].map(ind => ({
+    key: ind.key, label: ind.name, current: null,
+  }))
+  const ops = ['>', '<', '>=', '<=', '==']
 
   const updateBuyCond = (i: number, c: Condition) => {
     const buyConditions = [...form.buyConditions]

@@ -50,10 +50,10 @@ export default function TrafficLightStatus() {
       const next: ServerStatus = {
         cloud: cloudOk ? 'green' : 'red',
         local: localRes ? 'green' : 'red',
-        broker: localRes?.data?.broker_connected ? 'green' : 'red',
+        broker: localRes?.data?.broker?.connected ? 'green' : 'red',
         cloud_message: cloudOk ? '정상' : '연결 불가',
         local_message: localRes ? '정상' : '연결 불가',
-        broker_message: localRes?.data?.broker_connected ? '연결됨' : '미연결',
+        broker_message: localRes?.data?.broker?.connected ? '연결됨' : '미연결',
       }
 
       // 상태 변화 감지 → 알림
