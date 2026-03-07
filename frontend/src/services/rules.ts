@@ -1,8 +1,6 @@
 import axios from 'axios'
+import cloudClient from './cloudClient'
 import type { Rule, CreateRulePayload, UpdateRulePayload } from '../types/strategy'
-
-const CLOUD_URL = import.meta.env.VITE_CLOUD_API_URL || 'http://localhost:4010'
-const cloud = axios.create({ baseURL: CLOUD_URL, timeout: 5000 })
 
 // v1 호환용 (로컬 서버)
 const LOCAL_URL = import.meta.env.VITE_LOCAL_API_URL || 'http://localhost:4020'
@@ -40,26 +38,26 @@ export function conditionsToDsl(
 export const rulesApi = {
   /** 규칙 목록 (클라우드 서버) */
   list: () =>
-    cloud.get<{ success: boolean; data: Rule[]; version: number; count: number }>('/api/v1/rules')
+    cloudClient.get<{ success: boolean; data: Rule[]; version: number; count: number }>('/api/v1/rules')
       .then(r => r.data),
 
   /** 규칙 생성 */
   create: (body: CreateRulePayload) =>
-    cloud.post<{ success: boolean; data: Rule }>('/api/v1/rules', body)
+    cloudClient.post<{ success: boolean; data: Rule }>('/api/v1/rules', body)
       .then(r => r.data),
 
   /** 규칙 수정 */
   update: (id: number, body: UpdateRulePayload) =>
-    cloud.put<{ success: boolean; data: Rule }>(`/api/v1/rules/${id}`, body)
+    cloudClient.put<{ success: boolean; data: Rule }>(`/api/v1/rules/${id}`, body)
       .then(r => r.data),
 
   /** 규칙 삭제 */
   remove: (id: number) =>
-    cloud.delete(`/api/v1/rules/${id}`).then(r => r.data),
+    cloudClient.delete(`/api/v1/rules/${id}`).then(r => r.data),
 
   /** 규칙 토글 (is_active) */
   toggle: (id: number, isActive: boolean) =>
-    cloud.put<{ success: boolean; data: Rule }>(`/api/v1/rules/${id}`, { is_active: isActive })
+    cloudClient.put<{ success: boolean; data: Rule }>(`/api/v1/rules/${id}`, { is_active: isActive })
       .then(r => r.data),
 
   /** 변수 목록 (로컬 서버 — v1 호환) */

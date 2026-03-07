@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
 import { cloudAuth } from '../services/cloudClient'
+import { localAuth } from '../services/localClient'
 
 interface AuthState {
   jwt: string | null
@@ -36,6 +37,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const d = res.data
           sessionStorage.setItem(STORAGE_KEY_JWT, d.access_token)
           localStorage.setItem(STORAGE_KEY_RT, d.refresh_token)
+          localAuth.setAuthToken(d.access_token, d.refresh_token)
           setState({
             jwt: d.access_token,
             refreshToken: d.refresh_token,
@@ -56,6 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionStorage.setItem(STORAGE_KEY_JWT, d.access_token)
     localStorage.setItem(STORAGE_KEY_RT, d.refresh_token)
     localStorage.setItem(STORAGE_KEY_EMAIL, email)
+    localAuth.setAuthToken(d.access_token, d.refresh_token)
     setState({
       jwt: d.access_token,
       refreshToken: d.refresh_token,
@@ -67,6 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     const rt = localStorage.getItem(STORAGE_KEY_RT)
     if (rt) await cloudAuth.logout(rt).catch(() => {})
+    localAuth.logout()
     sessionStorage.removeItem(STORAGE_KEY_JWT)
     localStorage.removeItem(STORAGE_KEY_RT)
     localStorage.removeItem(STORAGE_KEY_EMAIL)

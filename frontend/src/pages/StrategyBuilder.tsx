@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { rulesApi, conditionsToDsl } from '../services/rules'
+import { localRules } from '../services/localClient'
 import type { Condition, Variable } from '../services/rules'
 import type { Rule, CreateRulePayload } from '../types/strategy'
 import ConditionRow from '../components/ConditionRow'
@@ -63,6 +64,7 @@ export default function StrategyBuilder() {
     },
     onSuccess: () => {
       invalidate(); setShowForm(false); setEditId(null); setForm(EMPTY_FORM); setError(null)
+      rulesApi.list().then((r) => localRules.sync(r.data)).catch(() => {})
     },
     onError: (err: unknown) => {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
@@ -71,11 +73,17 @@ export default function StrategyBuilder() {
   })
   const toggleMut = useMutation({
     mutationFn: (rule: Rule) => rulesApi.toggle(rule.id, !rule.is_active),
-    onSuccess:  invalidate,
+    onSuccess: () => {
+      invalidate()
+      rulesApi.list().then((r) => localRules.sync(r.data)).catch(() => {})
+    },
   })
   const deleteMut = useMutation({
     mutationFn: rulesApi.remove,
-    onSuccess:  invalidate,
+    onSuccess: () => {
+      invalidate()
+      rulesApi.list().then((r) => localRules.sync(r.data)).catch(() => {})
+    },
   })
 
   const rules  = rulesData?.data ?? []

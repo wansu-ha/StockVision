@@ -87,6 +87,41 @@ export const cloudContext = {
     client.get<{ data: MarketContextData }>('/api/v1/context').then((r) => r.data.data ?? r.data),
 }
 
+/** 종목 검색/조회 — /api/v1/stocks */
+export interface StockMasterItem {
+  symbol: string
+  name: string
+  market: string
+  sector: string | null
+  is_active: boolean
+  updated_at: string | null
+}
+
+export const cloudStocks = {
+  search: (q: string, limit = 20) =>
+    client.get<{ data: StockMasterItem[] }>('/api/v1/stocks/search', { params: { q, limit } })
+      .then((r) => r.data.data ?? []),
+  get: (symbol: string) =>
+    client.get<{ data: StockMasterItem }>(`/api/v1/stocks/${symbol}`)
+      .then((r) => r.data.data ?? null),
+}
+
+/** 관심종목 — /api/v1/watchlist */
+export interface WatchlistItem {
+  id: number
+  symbol: string
+  added_at: string
+}
+
+export const cloudWatchlist = {
+  list: () =>
+    client.get<{ data: WatchlistItem[] }>('/api/v1/watchlist').then((r) => r.data.data ?? []),
+  add: (symbol: string) =>
+    client.post<{ data: WatchlistItem }>('/api/v1/watchlist', { symbol }).then((r) => r.data.data),
+  remove: (symbol: string) =>
+    client.delete(`/api/v1/watchlist/${symbol}`).then((r) => r.data),
+}
+
 /** 헬스 체크 — /health */
 export const cloudHealth = {
   check: () =>
