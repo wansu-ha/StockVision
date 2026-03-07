@@ -44,6 +44,25 @@ def fetch_and_cache(jwt: str) -> None:
         logger.warning(f"컨텍스트 fetch 실패 (이전 캐시 유지): {e}")
 
 
+async def fetch_and_cache_context(client: "CloudClient") -> None:
+    """CloudClient를 사용하여 비동기로 컨텍스트를 fetch하고 캐시한다.
+
+    하트비트 버전 감지에서 호출된다.
+    """
+    global _mem_cache, _mem_cache_time
+    try:
+        from local_server.cloud.client import CloudClient  # noqa: F811
+        data = await client._get("/api/context")
+        context = data.get("data", {}) if isinstance(data, dict) else {}
+        _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        _CACHE_FILE.write_text(json.dumps(context, ensure_ascii=False), encoding="utf-8")
+        _mem_cache = context
+        _mem_cache_time = time.time()
+        logger.info("시장 컨텍스트 캐시 갱신 완료 (async)")
+    except Exception as e:
+        logger.warning("컨텍스트 async fetch 실패 (이전 캐시 유지): %s", e)
+
+
 def get_context() -> dict:
     """캐시된 컨텍스트 반환 — 메모리 → 파일 순서로 조회"""
     global _mem_cache, _mem_cache_time

@@ -55,6 +55,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         heartbeat_task = asyncio.create_task(start_heartbeat())
         logger.info("클라우드 하트비트 시작: %s", cloud_url)
 
+    # 트레이 아이콘 초록으로 전환
+    if tray_thread is not None:
+        try:
+            from local_server.tray.tray_app import update_tray_status
+            update_tray_status("ok")
+        except Exception:
+            pass
+
     logger.info("로컬 서버 준비 완료 (port=%s)", cfg.get("server.port"))
 
     yield  # 앱 실행 중
