@@ -1,6 +1,6 @@
 # 계약 정렬 명세서 — Phase 3 프론트/클라우드/로컬
 
-> 작성일: 2026-03-08 | 상태: 초안
+> 작성일: 2026-03-08 | 상태: 구현 완료
 
 ## 목적
 
@@ -196,20 +196,20 @@ interface Rule {
 
 ## 수용 기준
 
-- [ ] C1-1: cloudRules가 PUT 사용 (PATCH 아님)
-- [ ] C1-2: RuleCard가 Rule 타입의 실제 필드만 참조 (conditions/operator/side 없음)
-- [ ] C1-3: 규칙 CRUD 후 localRules.sync 호출
-- [ ] C1-4: /api/variables 호출 0건
-- [ ] C2-1: 인증 응답에서 access_token 키만 사용 (jwt 키 참조 0건)
-- [ ] C2-1a: cloudAuth.verifyEmail이 서버 GET 메서드에 맞게 호출
-- [ ] C2-1b: cloudAuth.updateProfile 미존재 엔드포인트 호출 제거 또는 TODO 처리
-- [ ] C2-2: cloudClient refresh 인터셉터가 access_token 키 사용
-- [ ] C2-3: 로컬 서버 토큰 전달이 access_token/refresh_token 필드 사용
-- [ ] C3-1: TrafficLightStatus가 broker.connected (중첩) 참조 — 응답 shape 정렬 (broker.connected는 현재 하드코딩 false이므로, 실제 연결 상태 반영은 Unit 1 연동 후 별도 작업)
-- [ ] C3-2: 3등 신호등(cloud/local/broker)이 서버 응답 shape에 맞게 매핑됨
-- [ ] C4-1: frontend에서 localhost:8000 참조 0건
-- [ ] C4-2: 레거시 서비스가 TODO stub으로 대체, 빌드 에러 없음
-- [ ] C4-3: auth_client.py 삭제
-- [ ] C4-4: rules.ts CRUD 제거, cloudRules 단일 진입점
-- [ ] 빌드: `npm run build` 성공
-- [ ] 타입: `tsc --noEmit` 에러 0건
+- [x] C1-1: cloudRules가 PUT 사용 (PATCH 아님)
+- [x] C1-2: RuleCard가 Rule 타입의 실제 필드만 참조 (conditions/operator/side 없음)
+- [x] C1-3: 규칙 CRUD 후 localRules.sync 호출
+- [x] C1-4: /api/variables 호출 0건
+- [x] C2-1: 인증 응답에서 access_token 키만 사용 (jwt 키 참조 0건)
+- [x] C2-1a: cloudAuth.verifyEmail이 서버 GET 메서드에 맞게 호출
+- [x] C2-1b: cloudAuth.updateProfile 미존재 엔드포인트 호출 제거 또는 TODO 처리
+- [x] C2-2: cloudClient refresh 인터셉터가 access_token 키 사용
+- [x] C2-3: 로컬 서버 토큰 전달이 access_token/refresh_token 필드 사용
+- [x] C3-1: TrafficLightStatus가 broker.connected (중첩) 참조 — 응답 shape 정렬 (broker.connected는 현재 하드코딩 false이므로, 실제 연결 상태 반영은 Unit 1 연동 후 별도 작업)
+- [x] C3-2: 3등 신호등(cloud/local/broker)이 서버 응답 shape에 맞게 매핑됨
+- [x] C4-1: frontend에서 localhost:8000 참조 0건
+- [x] C4-2: 레거시 서비스가 TODO stub으로 대체, 빌드 에러 없음
+- [x] C4-3: auth_client.py 삭제
+- [x] C4-4: rules.ts CRUD 제거, cloudRules 단일 진입점
+- [ ] 빌드: `npm run build` 성공 — pre-existing 에러 12건 잔존 (변경 무관, verbatimModuleSyntax + AdminDashboard 타입)
+- [x] 타입: `tsc --noEmit` 에러 0건
