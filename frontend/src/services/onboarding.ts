@@ -1,12 +1,7 @@
-import axios from 'axios'
-
-const api = axios.create({ baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000' })
-
-api.interceptors.request.use(cfg => {
-  const token = localStorage.getItem('jwt')
-  if (token) cfg.headers.Authorization = `Bearer ${token}`
-  return cfg
-})
+/**
+ * 온보딩 서비스 — TODO stub
+ * 레거시 백엔드(:8000) 제거. 클라우드 서버 마이그레이션 후 재구현 예정.
+ */
 
 export interface OnboardingStatus {
   step_completed: number
@@ -14,8 +9,13 @@ export interface OnboardingStatus {
   is_complete: boolean
 }
 
+const STUB_WARN = (name: string) => console.warn(`[stub] ${name}: 레거시 백엔드 제거됨`)
+
 export const onboardingApi = {
-  getStatus: () => api.get<{ success: boolean; data: OnboardingStatus }>('/api/onboarding/status').then(r => r.data.data),
-  completeStep: (n: number) => api.post(`/api/onboarding/step/${n}`).then(r => r.data),
-  acceptRisk: () => api.post('/api/onboarding/accept-risk').then(r => r.data),
+  getStatus: async (): Promise<OnboardingStatus> => {
+    STUB_WARN('onboardingApi.getStatus')
+    return { step_completed: 0, risk_accepted: false, is_complete: false }
+  },
+  completeStep: async (_n: number) => { STUB_WARN('onboardingApi.completeStep'); return { success: true } },
+  acceptRisk: async () => { STUB_WARN('onboardingApi.acceptRisk'); return { success: true } },
 }

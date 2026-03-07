@@ -1,7 +1,8 @@
-import axios from 'axios'
-
-const LOCAL_URL = import.meta.env.VITE_LOCAL_API_URL || 'http://localhost:4020'
-const local = axios.create({ baseURL: LOCAL_URL, timeout: 3000 })
+/**
+ * 대시보드 서비스 — TODO stub
+ * /api/dashboard 엔드포인트 제거됨. MarketContext는 cloudContext로 전환 완료.
+ * 이 파일은 미사용 — 삭제 후보.
+ */
 
 export interface DashboardData {
   bridge_connected: boolean
@@ -14,7 +15,8 @@ export interface DashboardData {
 }
 
 export const dashboardApi = {
-  get: () =>
-    local.get<{ success: boolean; data: DashboardData }>('/api/dashboard')
-      .then(r => r.data),
+  get: async () => {
+    console.warn('[stub] dashboardApi.get: /api/dashboard 제거됨')
+    return { success: true, data: {} as DashboardData }
+  },
 }

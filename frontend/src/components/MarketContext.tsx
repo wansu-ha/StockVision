@@ -1,20 +1,19 @@
 import { useQuery } from '@tanstack/react-query'
-import { dashboardApi } from '../services/dashboard'
+import { cloudContext } from '../services/cloudClient'
 
 export default function MarketContext() {
-  const { data } = useQuery({
-    queryKey: ['dashboard'],
-    queryFn:  dashboardApi.get,
-    refetchInterval: 10_000,
+  const { data: ctx } = useQuery({
+    queryKey: ['market-context'],
+    queryFn:  cloudContext.get,
+    refetchInterval: 60_000,
     retry: false,
     staleTime: 60_000,
   })
 
-  const ctx = data?.data?.market_context
   if (!ctx) return null
 
-  const rsi = ctx.kospi_rsi_14
-  const trend = ctx.trend
+  const rsi = ctx.kospi_rsi ?? null
+  const trend = ctx.trend ?? null
 
   const rsiLabel =
     rsi === null ? '—' :

@@ -1,95 +1,10 @@
-import axios from 'axios'
+/**
+ * 레거시 백엔드(:8000) 서비스 — TODO stub
+ *
+ * Phase 3 전환으로 localhost:8000 의존을 제거.
+ * 각 API는 빈 데이터를 반환하며, 클라우드/로컬 서버 마이그레이션 후 삭제 예정.
+ */
 import type { ApiResponse, Stock, StockPrice, TechnicalIndicator, StockSummary } from '../types'
-
-const API_BASE_URL = 'http://localhost:8000/api/v1'
-
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 10000,
-})
-
-// 응답 인터셉터
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.code === 'ECONNABORTED') {
-      console.error('API 타임아웃:', error.message)
-      console.error('요청 URL:', error.config?.url)
-      console.error('요청 메서드:', error.config?.method)
-    } else if (error.response) {
-      console.error('API 응답 오류:', error.response.status, error.response.data)
-    } else if (error.request) {
-      console.error('API 요청 실패:', error.message)
-    } else {
-      console.error('API 오류:', error.message)
-    }
-    return Promise.reject(error)
-  }
-)
-
-export const stockApi = {
-  // 모든 주식 목록 조회
-  getStocks: async (): Promise<ApiResponse<Stock[]>> => {
-    const response = await api.get('/stocks/')
-    return response.data
-  },
-
-  // 특정 주식 상세 정보
-  getStock: async (symbol: string): Promise<ApiResponse<Stock>> => {
-    const response = await api.get(`/stocks/${symbol}`)
-    return response.data
-  },
-
-  // 주식 가격 데이터
-  getStockPrices: async (symbol: string, days: number = 30): Promise<ApiResponse<{ symbol: string; name: string; prices: StockPrice[] }>> => {
-    const response = await api.get(`/stocks/${symbol}/prices?days=${days}`)
-    return response.data
-  },
-
-  // 기술적 지표
-  getStockIndicators: async (symbol: string, days: number = 30, indicatorType?: string): Promise<ApiResponse<{ symbol: string; name: string; indicators: Record<string, TechnicalIndicator[]> }>> => {
-    const url = indicatorType 
-      ? `/stocks/${symbol}/indicators?days=${days}&indicator_type=${indicatorType}`
-      : `/stocks/${symbol}/indicators?days=${days}`
-    const response = await api.get(url)
-    return response.data
-  },
-
-  // 주식 요약 정보
-  getStockSummary: async (symbol: string): Promise<ApiResponse<StockSummary>> => {
-    const response = await api.get(`/stocks/${symbol}/summary`)
-    return response.data
-  },
-}
-
-// AI 분석 API
-export const aiAnalysisApi = {
-  // 전반적인 시장 분석
-  getMarketOverview: async () => {
-    const response = await api.get('/ai-analysis/market-overview')
-    return response.data
-  },
-
-  // 개별 주식 AI 분석
-  getStockAnalysis: async (symbol: string) => {
-    const response = await api.get(`/ai-analysis/stocks/${symbol}/analysis`)
-    return response.data
-  },
-
-  // 섹터별 AI 분석
-  getSectorAnalysis: async (sector: string) => {
-    const response = await api.get(`/ai-analysis/sectors/${sector}/analysis`)
-    return response.data
-  },
-
-  // 최신 AI 인사이트
-  getLatestInsights: async () => {
-    const response = await api.get('/ai-analysis/ai-insights/latest')
-    return response.data
-  },
-}
-
-// 가상 거래 API
 import type {
   VirtualAccount, AccountSummary, VirtualPosition, VirtualTrade,
   StockScore, BacktestResult, BacktestResultSummary, AutoTradingRule,
@@ -97,93 +12,44 @@ import type {
   CreateRuleRequest, UpdateRuleRequest,
 } from '../types/trading'
 
+const STUB_WARN = (name: string) => console.warn(`[stub] ${name}: 레거시 백엔드 제거됨`)
+
+const emptyResponse = <T>(data: T): ApiResponse<T> => ({ success: true, data, count: 0 })
+
+export const stockApi = {
+  getStocks: async (): Promise<ApiResponse<Stock[]>> => { STUB_WARN('stockApi.getStocks'); return emptyResponse([]) },
+  getStock: async (_symbol: string): Promise<ApiResponse<Stock>> => { STUB_WARN('stockApi.getStock'); return emptyResponse({} as Stock) },
+  getStockPrices: async (_symbol: string, _days = 30): Promise<ApiResponse<{ symbol: string; name: string; prices: StockPrice[] }>> => { STUB_WARN('stockApi.getStockPrices'); return emptyResponse({ symbol: '', name: '', prices: [] }) },
+  getStockIndicators: async (_symbol: string, _days = 30, _indicatorType?: string): Promise<ApiResponse<{ symbol: string; name: string; indicators: Record<string, TechnicalIndicator[]> }>> => { STUB_WARN('stockApi.getStockIndicators'); return emptyResponse({ symbol: '', name: '', indicators: {} }) },
+  getStockSummary: async (_symbol: string): Promise<ApiResponse<StockSummary>> => { STUB_WARN('stockApi.getStockSummary'); return emptyResponse({} as StockSummary) },
+}
+
+export const aiAnalysisApi = {
+  getMarketOverview: async () => { STUB_WARN('aiAnalysisApi.getMarketOverview'); return { success: true, data: null } },
+  getStockAnalysis: async (_symbol: string) => { STUB_WARN('aiAnalysisApi.getStockAnalysis'); return { success: true, data: null } },
+  getSectorAnalysis: async (_sector: string) => { STUB_WARN('aiAnalysisApi.getSectorAnalysis'); return { success: true, data: null } },
+  getLatestInsights: async () => { STUB_WARN('aiAnalysisApi.getLatestInsights'); return { success: true, data: null } },
+}
+
 export const tradingApi = {
-  // 계좌
-  createAccount: async (data: CreateAccountRequest): Promise<ApiResponse<VirtualAccount>> => {
-    const response = await api.post('/trading/accounts', data)
-    return response.data
-  },
-  getAccounts: async (): Promise<ApiResponse<VirtualAccount[]>> => {
-    const response = await api.get('/trading/accounts')
-    return response.data
-  },
-  getAccountDetail: async (accountId: number): Promise<ApiResponse<AccountSummary>> => {
-    const response = await api.get(`/trading/accounts/${accountId}`)
-    return response.data
-  },
-
-  // 주문
-  placeOrder: async (data: PlaceOrderRequest): Promise<ApiResponse<VirtualTrade>> => {
-    const response = await api.post('/trading/orders', data)
-    return response.data
-  },
-
-  // 포지션
-  getPositions: async (accountId: number): Promise<ApiResponse<VirtualPosition[]>> => {
-    const response = await api.get(`/trading/positions/${accountId}`)
-    return response.data
-  },
-
-  // 거래 내역
-  getTradeHistory: async (accountId: number, limit: number = 50): Promise<ApiResponse<VirtualTrade[]>> => {
-    const response = await api.get(`/trading/history/${accountId}?limit=${limit}`)
-    return response.data
-  },
-
-  // 스코어링
-  calculateScores: async (): Promise<ApiResponse<StockScore[]>> => {
-    const response = await api.post('/trading/scores/calculate')
-    return response.data
-  },
-  getScores: async (limit: number = 20): Promise<ApiResponse<StockScore[]>> => {
-    const response = await api.get(`/trading/scores?limit=${limit}`)
-    return response.data
-  },
-
-  // 백테스팅
-  runBacktest: async (data: RunBacktestRequest): Promise<ApiResponse<BacktestResult>> => {
-    const response = await api.post('/trading/backtest', data)
-    return response.data
-  },
-  getBacktestResult: async (resultId: number): Promise<ApiResponse<BacktestResult>> => {
-    const response = await api.get(`/trading/backtest/${resultId}`)
-    return response.data
-  },
-  getBacktestResults: async (limit: number = 20): Promise<ApiResponse<BacktestResultSummary[]>> => {
-    const response = await api.get(`/trading/backtest?limit=${limit}`)
-    return response.data
-  },
-
-  // 자동매매 규칙
-  createRule: async (data: CreateRuleRequest): Promise<ApiResponse<AutoTradingRule>> => {
-    const response = await api.post('/trading/rules', data)
-    return response.data
-  },
-  getRules: async (): Promise<ApiResponse<AutoTradingRule[]>> => {
-    const response = await api.get('/trading/rules')
-    return response.data
-  },
-  updateRule: async (ruleId: number, data: UpdateRuleRequest): Promise<ApiResponse<AutoTradingRule>> => {
-    const response = await api.patch(`/trading/rules/${ruleId}`, data)
-    return response.data
-  },
-  deleteRule: async (ruleId: number): Promise<ApiResponse<{ id: number; deleted: boolean }>> => {
-    const response = await api.delete(`/trading/rules/${ruleId}`)
-    return response.data
-  },
+  createAccount: async (_data: CreateAccountRequest): Promise<ApiResponse<VirtualAccount>> => { STUB_WARN('tradingApi.createAccount'); return emptyResponse({} as VirtualAccount) },
+  getAccounts: async (): Promise<ApiResponse<VirtualAccount[]>> => { STUB_WARN('tradingApi.getAccounts'); return emptyResponse([]) },
+  getAccountDetail: async (_accountId: number): Promise<ApiResponse<AccountSummary>> => { STUB_WARN('tradingApi.getAccountDetail'); return emptyResponse({} as AccountSummary) },
+  placeOrder: async (_data: PlaceOrderRequest): Promise<ApiResponse<VirtualTrade>> => { STUB_WARN('tradingApi.placeOrder'); return emptyResponse({} as VirtualTrade) },
+  getPositions: async (_accountId: number): Promise<ApiResponse<VirtualPosition[]>> => { STUB_WARN('tradingApi.getPositions'); return emptyResponse([]) },
+  getTradeHistory: async (_accountId: number, _limit = 50): Promise<ApiResponse<VirtualTrade[]>> => { STUB_WARN('tradingApi.getTradeHistory'); return emptyResponse([]) },
+  calculateScores: async (): Promise<ApiResponse<StockScore[]>> => { STUB_WARN('tradingApi.calculateScores'); return emptyResponse([]) },
+  getScores: async (_limit = 20): Promise<ApiResponse<StockScore[]>> => { STUB_WARN('tradingApi.getScores'); return emptyResponse([]) },
+  runBacktest: async (_data: RunBacktestRequest): Promise<ApiResponse<BacktestResult>> => { STUB_WARN('tradingApi.runBacktest'); return emptyResponse({} as BacktestResult) },
+  getBacktestResult: async (_resultId: number): Promise<ApiResponse<BacktestResult>> => { STUB_WARN('tradingApi.getBacktestResult'); return emptyResponse({} as BacktestResult) },
+  getBacktestResults: async (_limit = 20): Promise<ApiResponse<BacktestResultSummary[]>> => { STUB_WARN('tradingApi.getBacktestResults'); return emptyResponse([]) },
+  createRule: async (_data: CreateRuleRequest): Promise<ApiResponse<AutoTradingRule>> => { STUB_WARN('tradingApi.createRule'); return emptyResponse({} as AutoTradingRule) },
+  getRules: async (): Promise<ApiResponse<AutoTradingRule[]>> => { STUB_WARN('tradingApi.getRules'); return emptyResponse([]) },
+  updateRule: async (_ruleId: number, _data: UpdateRuleRequest): Promise<ApiResponse<AutoTradingRule>> => { STUB_WARN('tradingApi.updateRule'); return emptyResponse({} as AutoTradingRule) },
+  deleteRule: async (_ruleId: number): Promise<ApiResponse<{ id: number; deleted: boolean }>> => { STUB_WARN('tradingApi.deleteRule'); return emptyResponse({ id: 0, deleted: false }) },
 }
 
-// 백엔드 서버 상태 확인
 export const healthApi = {
-  checkHealth: async () => {
-    const response = await axios.get('http://localhost:8000/health')
-    return response.data
-  },
-  
-  getApiInfo: async () => {
-    const response = await axios.get('http://localhost:8000/api-info')
-    return response.data
-  }
+  checkHealth: async () => { STUB_WARN('healthApi.checkHealth'); return { status: 'stub' } },
+  getApiInfo: async () => { STUB_WARN('healthApi.getApiInfo'); return {} },
 }
-
-export default api
