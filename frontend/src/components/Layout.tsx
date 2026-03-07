@@ -12,7 +12,7 @@ interface LayoutProps {
 const navItems = [
   { path: '/', label: '대시보드' },
   { path: '/strategies', label: '전략' },
-  { path: '/stocks', label: '주식 목록' },
+  { path: '/stocks', label: '관심종목' },
   { path: '/trading', label: '가상 거래' },
   { path: '/portfolio', label: '포트폴리오' },
   { path: '/logs', label: '실행 로그' },

@@ -1,299 +1,137 @@
-import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   MagnifyingGlassIcon,
-  FunnelIcon,
-  ArrowUpIcon,
-  ArrowDownIcon,
-  MinusIcon
+  TrashIcon,
 } from '@heroicons/react/24/outline'
-import { Card, CardBody, CardHeader, Button, Chip, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem } from '@heroui/react'
-import { stockApi } from '../services/api'
+import { Card, CardBody, CardHeader, Chip } from '@heroui/react'
+import { cloudWatchlist, cloudStocks } from '../services/cloudClient'
+import type { StockMasterItem } from '../services/cloudClient'
 import StockSearch from '../components/StockSearch'
-import type { Stock } from '../types'
 
 const StockList = () => {
   const navigate = useNavigate()
-  const [searchTerm, setSearchTerm] = useState('')
-  const [selectedSector, setSelectedSector] = useState<string>('all')
-  const [sortBy, setSortBy] = useState<'symbol' | 'name' | 'market_cap' | 'sector'>('symbol')
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
+  const qc = useQueryClient()
 
-  const { data: stocksData, isLoading, error } = useQuery({
-    queryKey: ['stocks'],
-    queryFn: stockApi.getStocks,
-    retry: 3, // 3번 재시도
-    retryDelay: 1000, // 1초 후 재시도
-    staleTime: 5 * 60 * 1000, // 5분간 데이터 신선도 유지
-    gcTime: 10 * 60 * 1000, // 10분간 캐시 유지
+  const { data: watchlist = [], isLoading } = useQuery({
+    queryKey: ['watchlist'],
+    queryFn: cloudWatchlist.list,
   })
 
-  const stocks = useMemo(() => stocksData?.data || [], [stocksData?.data])
-
-  // 섹터 목록 추출
-  const sectors = useMemo(() => {
-    const sectorSet = new Set(stocks.map(stock => stock.sector).filter(Boolean))
-    return Array.from(sectorSet).sort()
-  }, [stocks])
-
-  // 필터링 및 정렬된 주식 목록
-  const filteredAndSortedStocks = useMemo(() => {
-    const filtered = stocks.filter(stock => {
-      const matchesSearch = !searchTerm ||
-        stock.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        stock.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (stock.sector?.toLowerCase() ?? '').includes(searchTerm.toLowerCase()) ||
-        (stock.industry?.toLowerCase() ?? '').includes(searchTerm.toLowerCase())
-
-      const matchesSector = selectedSector === 'all' || (stock.sector ?? '') === selectedSector
-      
-      return matchesSearch && matchesSector
-    })
-
-    // 정렬
-    const sorted = [...filtered].sort((a, b) => {
-      let aValue: string | number = a[sortBy] as string | number
-      let bValue: string | number = b[sortBy] as string | number
-
-      if (sortBy === 'market_cap') {
-        aValue = (aValue as number) || 0
-        bValue = (bValue as number) || 0
-      } else {
-        aValue = (aValue as string)?.toString().toLowerCase() || ''
-        bValue = (bValue as string)?.toString().toLowerCase() || ''
+  // 관심종목에 대한 종목 상세 정보 (symbol → name/market)
+  const { data: stockDetails = [] } = useQuery({
+    queryKey: ['watchlist-details', watchlist.map(w => w.symbol).join(',')],
+    queryFn: async () => {
+      const results: StockMasterItem[] = []
+      for (const item of watchlist) {
+        const stock = await cloudStocks.get(item.symbol)
+        if (stock) results.push(stock)
       }
+      return results
+    },
+    enabled: watchlist.length > 0,
+  })
 
-      if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1
-      if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1
-      return 0
-    })
+  const addMut = useMutation({
+    mutationFn: (symbol: string) => cloudWatchlist.add(symbol),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['watchlist'] }),
+  })
 
-    return sorted
-  }, [stocks, searchTerm, selectedSector, sortBy, sortOrder])
+  const removeMut = useMutation({
+    mutationFn: (symbol: string) => cloudWatchlist.remove(symbol),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['watchlist'] }),
+  })
 
-  const handleStockClick = (stock: Stock) => {
-    navigate(`/stocks/${stock.symbol}`)
-  }
-
-  const handleSort = (field: typeof sortBy) => {
-    if (sortBy === field) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
-    } else {
-      setSortBy(field)
-      setSortOrder('asc')
+  const handleAddStock = (stock: StockMasterItem) => {
+    if (!watchlist.some(w => w.symbol === stock.symbol)) {
+      addMut.mutate(stock.symbol)
     }
   }
 
-  const getSortIcon = (field: typeof sortBy) => {
-    if (sortBy !== field) return <MinusIcon className="w-4 h-4 text-gray-400" />
-    
-    return sortOrder === 'asc' 
-      ? <ArrowUpIcon className="w-4 h-4 text-blue-500" />
-      : <ArrowDownIcon className="w-4 h-4 text-blue-500" />
-  }
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 bg-blue-500 rounded-full mx-auto mb-6 flex items-center justify-center animate-pulse">
-            <MagnifyingGlassIcon className="w-6 h-6 text-white" />
-          </div>
-          <div className="text-gray-700 text-xl font-medium">주식 데이터를 불러오는 중...</div>
-        </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 bg-red-500 rounded-full mx-auto mb-6 flex items-center justify-center">
-            <MagnifyingGlassIcon className="w-6 h-6 text-white" />
-          </div>
-          <div className="text-gray-700 text-xl font-medium">데이터를 불러오는 중 오류가 발생했습니다</div>
-        </div>
-      </div>
-    )
-  }
+  const detailMap = new Map(stockDetails.map(s => [s.symbol, s]))
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
-      <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 py-8">
+      <div className="max-w-4xl mx-auto px-6 py-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">주식 목록</h1>
-          <p className="text-lg text-gray-600">등록된 모든 주식의 실시간 정보를 확인하세요</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">관심종목</h1>
+          <p className="text-gray-600">종목을 검색하여 관심목록에 추가하세요</p>
         </div>
 
-        {/* 검색 및 필터 */}
-        <Card className="mb-8 shadow-lg">
-          <CardBody className="p-6">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* 검색 */}
-              <div className="lg:col-span-2">
-                <StockSearch
-                  onStockSelect={(stock) => setSearchTerm(stock.symbol)}
-                  placeholder="주식 심볼, 회사명, 섹터로 검색..."
-                />
-              </div>
+        {/* 종목 추가 검색 */}
+        <div className="mb-8">
+          <StockSearch
+            onStockSelect={handleAddStock}
+            placeholder="종목 코드 또는 회사명 검색 → 클릭하여 추가"
+            enablePageTransition={false}
+          />
+          {addMut.isError && (
+            <p className="text-red-500 text-sm mt-2">추가 실패 — 이미 등록된 종목일 수 있습니다</p>
+          )}
+        </div>
 
-              {/* 섹터 필터 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  섹터별 필터
-                </label>
-                <Dropdown>
-                  <DropdownTrigger>
-                    <Button 
-                      variant="bordered" 
-                      className="w-full justify-between"
-                    >
-                      {selectedSector === 'all' ? '모든 섹터' : selectedSector}
-                      <FunnelIcon className="w-4 h-4" />
-                    </Button>
-                  </DropdownTrigger>
-                                     <DropdownMenu
-                     selectedKeys={[selectedSector]}
-                     onSelectionChange={(keys) => {
-                       const selected = Array.from(keys)[0] as string
-                       setSelectedSector(selected || 'all')
-                     }}
-                   >
-                    {['all', ...sectors].map((sector) => (
-                      <DropdownItem key={sector}>{sector === 'all' ? '모든 섹터' : sector}</DropdownItem>
-                    ))}
-                  </DropdownMenu>
-                </Dropdown>
-              </div>
-            </div>
-
-            {/* 검색 결과 요약 */}
-            <div className="mt-4 flex items-center justify-between text-sm text-gray-600">
-              <span>
-                총 {filteredAndSortedStocks.length}개 주식 (전체 {stocks.length}개)
-              </span>
-              {searchTerm && (
-                <span>
-                  "{searchTerm}" 검색 결과
-                </span>
-              )}
-            </div>
-          </CardBody>
-        </Card>
-
-        {/* 주식 목록 테이블 */}
+        {/* 관심종목 목록 */}
         <Card className="shadow-lg">
-          <CardHeader className="pb-6 p-6">
-            <h2 className="text-2xl font-bold text-foreground">주식 정보</h2>
+          <CardHeader className="p-6 pb-4">
+            <div className="flex items-center justify-between w-full">
+              <h2 className="text-xl font-bold">내 관심종목</h2>
+              <span className="text-sm text-gray-500">{watchlist.length}개</span>
+            </div>
           </CardHeader>
           <CardBody className="pt-0 px-6 pb-6">
-            <div className="overflow-x-auto">
-              <table className="min-w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th 
-                      className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                      onClick={() => handleSort('symbol')}
+            {isLoading ? (
+              <div className="text-center py-12 text-gray-500">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-3" />
+                불러오는 중...
+              </div>
+            ) : watchlist.length === 0 ? (
+              <div className="text-center py-12 text-gray-500">
+                <MagnifyingGlassIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                <p className="text-lg font-medium">관심종목이 없습니다</p>
+                <p className="text-sm mt-1">위 검색창에서 종목을 검색하여 추가하세요</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {watchlist.map((item) => {
+                  const detail = detailMap.get(item.symbol)
+                  return (
+                    <div
+                      key={item.symbol}
+                      className="flex items-center justify-between py-3 group"
                     >
-                      <div className="flex items-center space-x-2">
-                        <span>주식</span>
-                        {getSortIcon('symbol')}
-                      </div>
-                    </th>
-                    <th 
-                      className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                      onClick={() => handleSort('name')}
-                    >
-                      <div className="flex items-center space-x-2">
-                        <span>회사명</span>
-                        {getSortIcon('name')}
-                      </div>
-                    </th>
-                    <th 
-                      className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                      onClick={() => handleSort('sector')}
-                    >
-                      <div className="flex items-center space-x-2">
-                        <span>섹터</span>
-                        {getSortIcon('sector')}
-                      </div>
-                    </th>
-                    <th 
-                      className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                      onClick={() => handleSort('market_cap')}
-                    >
-                      <div className="flex items-center space-x-2">
-                        <span>시가총액</span>
-                        {getSortIcon('market_cap')}
-                      </div>
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      산업
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      상태
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {filteredAndSortedStocks.length > 0 ? (
-                    filteredAndSortedStocks.map((stock) => (
-                      <tr 
-                        key={stock.id} 
-                        className="hover:bg-gray-50 transition-colors cursor-pointer"
-                        onClick={() => handleStockClick(stock)}
+                      <div
+                        className="flex items-center space-x-3 cursor-pointer flex-1 min-w-0"
+                        onClick={() => navigate(`/stocks/${item.symbol}`)}
                       >
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
-                            <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white font-bold text-sm">
-                              {stock.symbol[0]}
-                            </div>
-                            <div className="ml-3">
-                              <div className="text-sm font-medium text-gray-900">{stock.symbol}</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{stock.name}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <Chip size="sm" variant="flat" color="primary">
-                            {stock.sector}
-                          </Chip>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">
-                            {stock.market_cap ? (stock.market_cap / 1e8 >= 10000 ? (stock.market_cap / 1e12).toFixed(1) + '조' : (stock.market_cap / 1e8).toFixed(0) + '억') : 'N/A'}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-600">{stock.industry}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            <div className="w-2 h-2 bg-green-400 rounded-full mr-2"></div>
-                            활성
-                          </span>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
-                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                          <MagnifyingGlassIcon className="w-8 h-8 text-gray-400" />
+                        <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white font-bold text-sm shrink-0">
+                          {item.symbol[0]}
                         </div>
-                        <div className="text-lg font-medium">검색 결과가 없습니다</div>
-                        <div className="text-sm">검색어나 필터를 변경해보세요</div>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                        <div className="min-w-0">
+                          <div className="font-medium text-gray-900 group-hover:text-blue-600 transition-colors">
+                            {item.symbol}
+                          </div>
+                          <div className="text-sm text-gray-500 truncate">
+                            {detail?.name ?? '...'}
+                          </div>
+                        </div>
+                        {detail?.market && (
+                          <Chip size="sm" variant="flat" color="primary">{detail.market}</Chip>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => removeMut.mutate(item.symbol)}
+                        disabled={removeMut.isPending}
+                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors shrink-0"
+                        title="관심종목에서 제거"
+                      >
+                        <TrashIcon className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </CardBody>
         </Card>
       </div>
