@@ -35,7 +35,7 @@ client.interceptors.response.use(
       if (rt) {
         try {
           const { data } = await axios.post(`${CLOUD_URL}/api/v1/auth/refresh`, { refresh_token: rt })
-          const newJwt = data.data?.jwt ?? data.jwt
+          const newJwt = data.data?.access_token ?? data.access_token
           const newRt = data.data?.refresh_token ?? data.refresh_token
           if (!newJwt || !newRt) throw new Error('Invalid refresh response')
           sessionStorage.setItem(JWT_KEY, newJwt)
@@ -63,10 +63,13 @@ export const cloudAuth = {
     client.post('/api/v1/auth/refresh', { refresh_token: refreshToken }).then((r) => r.data),
   logout: (refreshToken: string) =>
     client.post('/api/v1/auth/logout', { refresh_token: refreshToken }).then((r) => r.data),
-  verifyEmail: (email: string, code: string) =>
-    client.post('/api/v1/auth/verify-email', { email, code }).then((r) => r.data),
-  updateProfile: (nickname: string) =>
-    client.patch('/api/v1/auth/profile', { nickname }).then((r) => r.data),
+  verifyEmail: (token: string) =>
+    client.get('/api/v1/auth/verify-email', { params: { token } }).then((r) => r.data),
+  updateProfile: (_nickname: string) => {
+    // TODO: 서버에 /api/v1/auth/profile 엔드포인트 없음 — 클라우드 서버 구현 후 연결
+    console.warn('cloudAuth.updateProfile: 서버 엔드포인트 미구현')
+    return Promise.resolve({ success: false, message: 'not implemented' })
+  },
 }
 
 /** 규칙 CRUD — /api/v1/rules */
@@ -76,7 +79,7 @@ export const cloudRules = {
   create: (payload: CreateRulePayload) =>
     client.post<{ data: Rule }>('/api/v1/rules', payload).then((r) => r.data.data ?? r.data),
   update: (id: number, payload: UpdateRulePayload) =>
-    client.patch<{ data: Rule }>(`/api/v1/rules/${id}`, payload).then((r) => r.data.data ?? r.data),
+    client.put<{ data: Rule }>(`/api/v1/rules/${id}`, payload).then((r) => r.data.data ?? r.data),
   remove: (id: number) =>
     client.delete(`/api/v1/rules/${id}`).then((r) => r.data),
 }
