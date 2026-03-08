@@ -8,6 +8,7 @@ from datetime import datetime
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from cloud_server.core.config import settings
 from cloud_server.models.heartbeat import Heartbeat
 from cloud_server.models.rule import TradingRule
 from cloud_server.services.stock_service import get_stock_master_version
@@ -55,5 +56,8 @@ def record_heartbeat(user_id: str, payload: dict, db: Session) -> dict:
         "context_version": context_version,
         "watchlist_version": get_watchlist_version(db, user_id),
         "stock_master_version": get_stock_master_version(db),
+        "latest_version": settings.LOCAL_SERVER_LATEST_VERSION,
+        "min_version": settings.LOCAL_SERVER_MIN_SUPPORTED,
+        "download_url": settings.LOCAL_SERVER_DOWNLOAD_URL,
         "timestamp": datetime.utcnow().isoformat(),
     }
