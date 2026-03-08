@@ -127,87 +127,78 @@ class MockBrokerAdapter:
 # RuleEvaluator 테스트
 # ═══════════════════════════════════════
 
+def _buy_rule(operator: str = "AND", conditions: list | None = None) -> dict:
+    """v2 buy_conditions 규칙 헬퍼."""
+    return {"buy_conditions": {"operator": operator, "conditions": conditions or []}}
+
+
 class TestRuleEvaluator:
+    """v2 API: evaluate() → (buy, sell)."""
+
     def setup_method(self) -> None:
         self.evaluator = RuleEvaluator()
 
     def test_and_all_true(self) -> None:
-        rule = {
-            "operator": "AND",
-            "conditions": [
-                {"type": "price", "field": "price", "operator": ">", "value": 100},
-                {"type": "price", "field": "price", "operator": "<", "value": 200},
-            ],
-        }
-        market = {"price": Decimal("150")}
-        assert self.evaluator.evaluate(rule, market, {}) is True
+        rule = _buy_rule("AND", [
+            {"type": "price", "field": "price", "operator": ">", "value": 100},
+            {"type": "price", "field": "price", "operator": "<", "value": 200},
+        ])
+        buy, sell = self.evaluator.evaluate(rule, {"price": Decimal("150")}, {})
+        assert buy is True
+        assert sell is False
 
     def test_and_one_false(self) -> None:
-        rule = {
-            "operator": "AND",
-            "conditions": [
-                {"type": "price", "field": "price", "operator": ">", "value": 100},
-                {"type": "price", "field": "price", "operator": "<", "value": 120},
-            ],
-        }
-        market = {"price": Decimal("150")}
-        assert self.evaluator.evaluate(rule, market, {}) is False
+        rule = _buy_rule("AND", [
+            {"type": "price", "field": "price", "operator": ">", "value": 100},
+            {"type": "price", "field": "price", "operator": "<", "value": 120},
+        ])
+        buy, _ = self.evaluator.evaluate(rule, {"price": Decimal("150")}, {})
+        assert buy is False
 
     def test_or_one_true(self) -> None:
-        rule = {
-            "operator": "OR",
-            "conditions": [
-                {"type": "price", "field": "price", "operator": ">", "value": 200},
-                {"type": "price", "field": "price", "operator": "<", "value": 200},
-            ],
-        }
-        market = {"price": Decimal("150")}
-        assert self.evaluator.evaluate(rule, market, {}) is True
+        rule = _buy_rule("OR", [
+            {"type": "price", "field": "price", "operator": ">", "value": 200},
+            {"type": "price", "field": "price", "operator": "<", "value": 200},
+        ])
+        buy, _ = self.evaluator.evaluate(rule, {"price": Decimal("150")}, {})
+        assert buy is True
 
     def test_or_all_false(self) -> None:
-        rule = {
-            "operator": "OR",
-            "conditions": [
-                {"type": "price", "field": "price", "operator": ">", "value": 200},
-                {"type": "price", "field": "price", "operator": "==", "value": 300},
-            ],
-        }
-        market = {"price": Decimal("150")}
-        assert self.evaluator.evaluate(rule, market, {}) is False
+        rule = _buy_rule("OR", [
+            {"type": "price", "field": "price", "operator": ">", "value": 200},
+            {"type": "price", "field": "price", "operator": "==", "value": 300},
+        ])
+        buy, _ = self.evaluator.evaluate(rule, {"price": Decimal("150")}, {})
+        assert buy is False
 
     def test_empty_conditions(self) -> None:
-        rule = {"operator": "AND", "conditions": []}
-        assert self.evaluator.evaluate(rule, {}, {}) is False
+        rule = _buy_rule("AND", [])
+        buy, sell = self.evaluator.evaluate(rule, {}, {})
+        assert buy is False
+        assert sell is False
 
     def test_context_condition(self) -> None:
-        rule = {
-            "operator": "AND",
-            "conditions": [
-                {"type": "context", "field": "kospi_rsi", "operator": "<", "value": 70},
-            ],
-        }
-        context = {"kospi_rsi": 55}
-        assert self.evaluator.evaluate(rule, {}, context) is True
+        rule = _buy_rule("AND", [
+            {"type": "context", "field": "kospi_rsi", "operator": "<", "value": 70},
+        ])
+        buy, _ = self.evaluator.evaluate(rule, {}, {"kospi_rsi": 55})
+        assert buy is True
 
     def test_missing_field_returns_false(self) -> None:
-        rule = {
-            "operator": "AND",
-            "conditions": [
-                {"type": "price", "field": "nonexistent", "operator": ">", "value": 0},
-            ],
-        }
-        assert self.evaluator.evaluate(rule, {}, {}) is False
+        rule = _buy_rule("AND", [
+            {"type": "price", "field": "nonexistent", "operator": ">", "value": 0},
+        ])
+        buy, _ = self.evaluator.evaluate(rule, {}, {})
+        assert buy is False
 
     def test_all_comparison_operators(self) -> None:
         for op, expected in [("==", True), ("!=", False), ("<", False),
                              ("<=", True), (">", False), (">=", True)]:
-            rule = {
-                "operator": "AND",
-                "conditions": [
-                    {"type": "price", "field": "price", "operator": op, "value": 100},
-                ],
-            }
-            assert self.evaluator.evaluate(rule, {"price": 100}, {}) is expected, f"op={op}"
+            rule = _buy_rule("AND", [
+                {"type": "price", "field": "price", "operator": op, "value": 100},
+            ])
+            buy, _ = self.evaluator.evaluate(rule, {"price": 100}, {})
+            assert buy is expected, f"op={op}"
 
 
 # ═══════════════════════════════════════
@@ -215,35 +206,37 @@ class TestRuleEvaluator:
 # ═══════════════════════════════════════
 
 class TestSignalManager:
+    """v2 API: 매수/매도 독립 상태. side 파라미터 필수."""
+
     def setup_method(self) -> None:
         self.sm = SignalManager()
 
     def test_initial_state_idle(self) -> None:
-        assert self.sm.get_state(1) == "IDLE"
-        assert self.sm.can_trigger(1) is True
+        assert self.sm.get_state(1, "BUY") == "IDLE"
+        assert self.sm.can_trigger(1, "BUY") is True
 
     def test_triggered_blocks_retry(self) -> None:
-        self.sm.mark_triggered(1)
-        assert self.sm.can_trigger(1) is False
+        self.sm.mark_triggered(1, "BUY")
+        assert self.sm.can_trigger(1, "BUY") is False
 
     def test_filled_blocks_retry(self) -> None:
-        self.sm.mark_triggered(1)
-        self.sm.mark_filled(1)
-        assert self.sm.can_trigger(1) is False
+        self.sm.mark_triggered(1, "BUY")
+        self.sm.mark_filled(1, "BUY")
+        assert self.sm.can_trigger(1, "BUY") is False
 
-    def test_failed_blocks_retry(self) -> None:
-        self.sm.mark_triggered(1)
-        self.sm.mark_failed(1)
-        assert self.sm.can_trigger(1) is False
+    def test_failed_returns_to_idle(self) -> None:
+        self.sm.mark_triggered(1, "BUY")
+        self.sm.mark_failed(1, "BUY")
+        assert self.sm.can_trigger(1, "BUY") is True
 
     def test_independent_rules(self) -> None:
-        self.sm.mark_triggered(1)
-        assert self.sm.can_trigger(2) is True
+        self.sm.mark_triggered(1, "BUY")
+        assert self.sm.can_trigger(2, "BUY") is True
 
     def test_reset_all(self) -> None:
-        self.sm.mark_triggered(1)
+        self.sm.mark_triggered(1, "BUY")
         self.sm.reset_all()
-        assert self.sm.can_trigger(1) is True
+        assert self.sm.can_trigger(1, "BUY") is True
 
 
 # ═══════════════════════════════════════
@@ -435,48 +428,49 @@ class TestOrderExecutor:
         executor = OrderExecutor(broker, sm, pv, lc, sg)
         return executor, broker
 
+    def _balance(self, cash: Decimal = Decimal("10000000")) -> BalanceResult:
+        return BalanceResult(cash=cash, total_eval=cash, positions=[])
+
     def test_successful_order(self) -> None:
         executor, broker = self._make_executor()
-        rule = {"id": 1, "symbol": "005930", "side": "BUY", "qty": 1, "order_type": "MARKET"}
+        rule = {"id": 1, "symbol": "005930", "qty": 1, "order_type": "MARKET"}
         market = {"price": Decimal("50000")}
-        result = asyncio.run(executor.execute(rule, market, Decimal("10000000"), 0))
+        result = asyncio.run(executor.execute(rule, "BUY", market, self._balance()))
         assert result.status == ExecutionStatus.SUCCESS
         assert result.order_id is not None
         assert len(broker._orders) == 1
 
     def test_duplicate_rejected(self) -> None:
         executor, _ = self._make_executor()
-        rule = {"id": 1, "symbol": "005930", "side": "BUY", "qty": 1, "order_type": "MARKET"}
+        rule = {"id": 1, "symbol": "005930", "qty": 1, "order_type": "MARKET"}
         market = {"price": Decimal("50000")}
-        asyncio.run(executor.execute(rule, market, Decimal("10000000"), 0))
-        result = asyncio.run(executor.execute(rule, market, Decimal("10000000"), 0))
+        asyncio.run(executor.execute(rule, "BUY", market, self._balance()))
+        result = asyncio.run(executor.execute(rule, "BUY", market, self._balance()))
         assert result.status == ExecutionStatus.REJECTED
         assert "이미 실행" in result.message
 
     def test_price_mismatch_rejected(self) -> None:
-        # REST가 55000 반환, WS는 50000 → 10% 괴리
         executor, _ = self._make_executor(quote_price=Decimal("55000"))
-        rule = {"id": 1, "symbol": "005930", "side": "BUY", "qty": 1, "order_type": "MARKET"}
+        rule = {"id": 1, "symbol": "005930", "qty": 1, "order_type": "MARKET"}
         market = {"price": Decimal("50000")}
-        result = asyncio.run(executor.execute(rule, market, Decimal("10000000"), 0))
+        result = asyncio.run(executor.execute(rule, "BUY", market, self._balance()))
         assert result.status == ExecutionStatus.REJECTED
         assert "가격 검증 실패" in result.message
 
     def test_budget_exceeded_rejected(self) -> None:
         executor, _ = self._make_executor()
-        rule = {"id": 1, "symbol": "005930", "side": "BUY", "qty": 100, "order_type": "MARKET"}
+        rule = {"id": 1, "symbol": "005930", "qty": 100, "order_type": "MARKET"}
         market = {"price": Decimal("50000")}
-        # 50000 * 100 = 5M > 10M * 0.1 = 1M
-        result = asyncio.run(executor.execute(rule, market, Decimal("10000000"), 0))
+        result = asyncio.run(executor.execute(rule, "BUY", market, self._balance()))
         assert result.status == ExecutionStatus.REJECTED
         assert "예산" in result.message
 
     def test_kill_switch_rejected(self) -> None:
         executor, _ = self._make_executor()
         executor._safeguard.set_kill_switch(KillSwitchLevel.STOP_NEW)
-        rule = {"id": 1, "symbol": "005930", "side": "BUY", "qty": 1, "order_type": "MARKET"}
+        rule = {"id": 1, "symbol": "005930", "qty": 1, "order_type": "MARKET"}
         market = {"price": Decimal("50000")}
-        result = asyncio.run(executor.execute(rule, market, Decimal("10000000"), 0))
+        result = asyncio.run(executor.execute(rule, "BUY", market, self._balance()))
         assert result.status == ExecutionStatus.REJECTED
         assert "Kill Switch" in result.message
 
