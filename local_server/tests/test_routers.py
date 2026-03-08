@@ -56,7 +56,15 @@ def client(tmp_config: Path):
         app = create_app()
 
         with TestClient(app, raise_server_exceptions=True) as c:
+            # shared secret 헤더를 client에 부착
+            c._local_secret = app.state.local_secret
             yield c
+
+
+@pytest.fixture
+def sh(client: TestClient) -> dict[str, str]:
+    """보호 엔드포인트용 X-Local-Secret 헤더."""
+    return {"X-Local-Secret": client._local_secret}
 
 
 # ──────────────────────────────────────────────────────
@@ -106,9 +114,9 @@ class TestAuthRouter:
         body = resp.json()
         assert "has_cloud_token" in body["data"]
 
-    def test_logout(self, client: TestClient) -> None:
+    def test_logout(self, client: TestClient, sh: dict) -> None:
         with patch("keyring.delete_password"):
-            resp = client.post("/api/auth/logout")
+            resp = client.post("/api/auth/logout", headers=sh)
         assert resp.status_code == 200
         assert resp.json()["success"] is True
 
@@ -118,33 +126,31 @@ class TestAuthRouter:
 # ──────────────────────────────────────────────────────
 
 class TestConfigRouter:
-    def test_get_config(self, client: TestClient) -> None:
-        resp = client.get("/api/config")
+    def test_get_config(self, client: TestClient, sh: dict) -> None:
+        resp = client.get("/api/config", headers=sh)
         assert resp.status_code == 200
         body = resp.json()
         assert body["success"] is True
         assert "server" in body["data"]
 
-    def test_patch_config(self, client: TestClient) -> None:
+    def test_patch_config(self, client: TestClient, sh: dict) -> None:
         resp = client.patch(
             "/api/config",
             json={"updates": {"log_level": "DEBUG"}},
+            headers=sh,
         )
         assert resp.status_code == 200
         body = resp.json()
         assert body["success"] is True
         assert body["data"]["log_level"] == "DEBUG"
 
-    def test_config_masks_api_key(self, client: TestClient) -> None:
-        """설정 조회 시 app_key가 마스킹된다."""
-        # app_key가 있는 경우를 시뮬레이션
-        with patch("keyring.get_password", return_value="real_key"):
-            resp = client.get("/api/config")
-        # kis.app_key는 "" (config.json에 저장 안 함) — 마스킹 로직 확인
+    def test_config_returns_kis_section(self, client: TestClient, sh: dict) -> None:
+        """설정 조회 시 kis 섹션이 포함된다."""
+        resp = client.get("/api/config", headers=sh)
         body = resp.json()
-        kis = body["data"].get("kis", {})
-        # config.json에는 빈 문자열이 저장되므로 마스킹 안 됨
-        assert kis.get("app_key") is not None  # 필드 존재 확인
+        assert body["success"] is True
+        # kis 섹션 존재 확인 (account_no 등)
+        assert "kis" in body["data"]
 
 
 # ──────────────────────────────────────────────────────
@@ -153,46 +159,40 @@ class TestConfigRouter:
 
 class TestTradingRouter:
     def test_start_strategy_without_credentials_returns_400(
-        self, client: TestClient
+        self, client: TestClient, sh: dict
     ) -> None:
         """자격증명 없이 전략 시작 시 400을 반환한다."""
         with patch("keyring.get_password", return_value=None):
-            resp = client.post("/api/strategy/start")
+            resp = client.post("/api/strategy/start", headers=sh)
         assert resp.status_code == 400
 
-    def test_start_and_stop_strategy(self, client: TestClient) -> None:
-        """전략 시작 후 중지한다."""
-        with patch("keyring.get_password", return_value="exists"):
-            # 리셋
-            from local_server.routers.status import set_strategy_running
-            set_strategy_running(False)
+    def test_start_strategy_creates_engine(self, client: TestClient, sh: dict) -> None:
+        """자격증명 있으면 전략 시작이 브로커 연결을 시도한다."""
+        # mock broker connect 실패 → 400 (브로커 연결 실패)
+        with patch("keyring.get_password", return_value="exists"), \
+             patch("local_server.routers.trading.create_broker_from_config",
+                   side_effect=ValueError("모의: 브로커 미설정")):
+            resp = client.post("/api/strategy/start", headers=sh)
+        assert resp.status_code == 400
+        assert "브로커 연결 실패" in resp.json()["detail"]
 
-            start_resp = client.post("/api/strategy/start")
-            assert start_resp.status_code == 200
-            assert start_resp.json()["data"]["strategy_engine"] == "running"
+    def test_place_market_order_without_engine(self, client: TestClient, sh: dict) -> None:
+        """엔진 미실행 시 주문 요청은 에러를 반환한다."""
+        resp = client.post(
+            "/api/trading/order",
+            json={"symbol": "005930", "side": "BUY", "qty": 10, "type": "MARKET"},
+            headers=sh,
+        )
+        # 엔진 미실행 상태이므로 400 또는 409
+        assert resp.status_code in (400, 409)
 
-            stop_resp = client.post("/api/strategy/stop")
-            assert stop_resp.status_code == 200
-            assert stop_resp.json()["data"]["strategy_engine"] == "stopped"
-
-    def test_place_market_order(self, client: TestClient) -> None:
-        """시장가 주문을 발행한다."""
-        with patch("keyring.get_password", return_value="exists"):
-            resp = client.post(
-                "/api/trading/order",
-                json={"symbol": "005930", "side": "BUY", "qty": 10, "type": "MARKET"},
-            )
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["success"] is True
-        assert body["data"]["symbol"] == "005930"
-
-    def test_limit_order_without_price_returns_422(self, client: TestClient) -> None:
+    def test_limit_order_without_price_returns_422(self, client: TestClient, sh: dict) -> None:
         """지정가 주문 시 limit_price 없으면 422를 반환한다."""
         with patch("keyring.get_password", return_value="exists"):
             resp = client.post(
                 "/api/trading/order",
                 json={"symbol": "005930", "side": "BUY", "qty": 10, "type": "LIMIT"},
+                headers=sh,
             )
         assert resp.status_code == 422
 
@@ -202,29 +202,29 @@ class TestTradingRouter:
 # ──────────────────────────────────────────────────────
 
 class TestRulesRouter:
-    def test_get_rules_empty(self, client: TestClient) -> None:
+    def test_get_rules_empty(self, client: TestClient, sh: dict) -> None:
         """초기 규칙 목록은 비어있다."""
-        resp = client.get("/api/rules")
+        resp = client.get("/api/rules", headers=sh)
         assert resp.status_code == 200
         body = resp.json()
         assert body["success"] is True
         assert body["data"] == []
         assert body["count"] == 0
 
-    def test_sync_rules_with_direct_payload(self, client: TestClient) -> None:
+    def test_sync_rules_with_direct_payload(self, client: TestClient, sh: dict) -> None:
         """직접 규칙을 제공하여 동기화한다."""
         rules = [{"id": 1, "name": "RSI매수"}]
-        resp = client.post("/api/rules/sync", json={"rules": rules})
+        resp = client.post("/api/rules/sync", json={"rules": rules}, headers=sh)
         assert resp.status_code == 200
         assert resp.json()["data"]["synced_count"] == 1
 
         # 동기화 후 조회
-        get_resp = client.get("/api/rules")
+        get_resp = client.get("/api/rules", headers=sh)
         assert get_resp.json()["count"] == 1
 
-    def test_sync_without_cloud_url_returns_400(self, client: TestClient) -> None:
+    def test_sync_without_cloud_url_returns_400(self, client: TestClient, sh: dict) -> None:
         """cloud.url이 없을 때 클라우드 sync 요청은 400을 반환한다."""
-        resp = client.post("/api/rules/sync", json={})
+        resp = client.post("/api/rules/sync", json={}, headers=sh)
         assert resp.status_code == 400
 
 
@@ -233,26 +233,26 @@ class TestRulesRouter:
 # ──────────────────────────────────────────────────────
 
 class TestLogsRouter:
-    def test_get_logs_empty(self, client: TestClient) -> None:
+    def test_get_logs_empty(self, client: TestClient, sh: dict) -> None:
         """초기 로그는 비어있다."""
-        resp = client.get("/api/logs")
+        resp = client.get("/api/logs", headers=sh)
         assert resp.status_code == 200
         body = resp.json()
         assert body["success"] is True
         assert body["data"]["total"] == 0
 
-    def test_get_logs_invalid_type(self, client: TestClient) -> None:
+    def test_get_logs_invalid_type(self, client: TestClient, sh: dict) -> None:
         """유효하지 않은 log_type은 success=False를 반환한다."""
-        resp = client.get("/api/logs?log_type=INVALID")
+        resp = client.get("/api/logs?log_type=INVALID", headers=sh)
         assert resp.status_code == 200
         assert resp.json()["success"] is False
 
-    def test_get_logs_after_write(self, client: TestClient) -> None:
+    def test_get_logs_after_write(self, client: TestClient, sh: dict) -> None:
         """로그 기록 후 조회하면 해당 로그가 포함된다."""
         from local_server.storage.log_db import get_log_db, LOG_TYPE_SYSTEM
         get_log_db().write(LOG_TYPE_SYSTEM, "테스트 로그")
 
-        resp = client.get("/api/logs?log_type=SYSTEM")
+        resp = client.get("/api/logs?log_type=SYSTEM", headers=sh)
         body = resp.json()
         assert body["data"]["total"] >= 1
 

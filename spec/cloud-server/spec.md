@@ -578,16 +578,16 @@ class StrategyTemplate(Base):
 
 ### 12.1 인증
 
-- [ ] 회원가입 → 인증 이메일 수신 → 이메일 인증 완료
-- [ ] 로그인 → JWT + Refresh Token 발급
-- [ ] Refresh Token으로 JWT 자동 갱신
-- [ ] 비밀번호 재설정 완료
+- [x] 회원가입 → 인증 이메일 수신 → 이메일 인증 완료
+- [x] 로그인 → JWT + Refresh Token 발급
+- [x] Refresh Token으로 JWT 자동 갱신
+- [x] 비밀번호 재설정 완료
 
 ### 12.2 규칙
 
-- [ ] 규칙 생성 → DB 저장 → 조회 확인
-- [ ] 규칙 수정/삭제 정상 동작
-- [ ] 조건 JSON 검증 (잘못된 형식 → 400 에러)
+- [x] 규칙 생성 → DB 저장 → 조회 확인
+- [x] 규칙 수정/삭제 정상 동작
+- [x] 조건 JSON 검증 (잘못된 형식 → 400 에러)
 
 ### 12.3 시세 수집
 
@@ -604,21 +604,21 @@ class StrategyTemplate(Base):
 
 ### 12.5 어드민
 
-- [ ] admin 유저로 유저 목록 조회
-- [ ] 일반 유저로 어드민 API 접근 → 403
+- [x] admin 유저로 유저 목록 조회
+- [x] 일반 유저로 어드민 API 접근 → 403
 - [ ] 서비스 키 등록 → 토큰 발급 → 시세 수신 성공
 
 ### 12.6 로컬 서버 통신
 
-- [ ] 로컬 서버가 JWT로 하트비트 전송 → 응답에 rules_version, context_version 포함
-- [ ] rules_version 변경 시 규칙 fetch 성공
-- [ ] 로컬 서버가 규칙 sync (업로드) → DB 반영 + version 증가
-- [ ] Refresh Token 갱신 정상 동작
+- [x] 로컬 서버가 JWT로 하트비트 전송 → 응답에 rules_version, context_version 포함
+- [x] rules_version 변경 시 규칙 fetch 성공
+- [x] 로컬 서버가 규칙 sync (업로드) → DB 반영 + version 증가
+- [x] Refresh Token 갱신 정상 동작
 
 ### 12.7 종목/관심종목
 
-- [ ] 종목 검색 → 이름/코드 매칭 결과 반환
-- [ ] 관심종목 등록/해제 정상 동작
+- [x] 종목 검색 → 이름/코드 매칭 결과 반환
+- [x] 관심종목 등록/해제 정상 동작
 - [ ] 공공데이터포털 수집 → StockMaster 갱신 확인
 
 ---

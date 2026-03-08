@@ -12,7 +12,6 @@ from typing import Any
 
 from local_server.cloud.client import CloudClient, CloudClientError
 from local_server.config import get_config
-from local_server.routers.status import is_strategy_running
 
 logger = logging.getLogger(__name__)
 
@@ -20,12 +19,21 @@ logger = logging.getLogger(__name__)
 _WARN_THRESHOLD = 10   # 10 * 30s = 5분
 _ERROR_THRESHOLD = 60  # 60 * 30s = 30분
 
+# 엔진 상태 — main.py lifespan에서 갱신
+_engine_running = False
+
+
+def set_engine_running(running: bool) -> None:
+    """엔진 실행 상태를 갱신한다. 엔진 시작/중지 시 호출."""
+    global _engine_running
+    _engine_running = running
+
 
 def _build_heartbeat_payload() -> dict[str, Any]:
     """현재 로컬 서버 상태를 담은 하트비트 페이로드를 생성한다."""
     return {
         "status": "online",
-        "strategy_engine": "running" if is_strategy_running() else "stopped",
+        "strategy_engine": "running" if _engine_running else "stopped",
     }
 
 
@@ -65,6 +73,9 @@ async def start_heartbeat() -> None:
                 last_watchlist_version, last_stock_master_version,
             )
 
+            # 서버 버전 업데이트 알림
+            _check_server_version(resp)
+
             # 버전 갱신
             if resp.get("rules_version") is not None:
                 last_rules_version = resp["rules_version"]
@@ -95,6 +106,52 @@ async def start_heartbeat() -> None:
             _handle_failure(consecutive_failures)
 
         await asyncio.sleep(interval)
+
+
+_version_notified: str | None = None  # 이미 알림 보낸 버전
+
+
+def _check_server_version(resp: dict[str, Any]) -> None:
+    """하트비트 응답에서 최신/최소 버전을 확인하여 토스트 알림을 보낸다."""
+    global _version_notified
+
+    latest = resp.get("latest_version")
+    min_ver = resp.get("min_version")
+    if not latest:
+        return
+
+    from local_server.config import get_config
+    current = get_config().get("server.version", "1.0.0")
+
+    if current == latest or _version_notified == latest:
+        return
+
+    try:
+        from packaging.version import Version
+        cur_v = Version(current)
+        latest_v = Version(latest)
+        min_v = Version(min_ver) if min_ver else None
+    except Exception:
+        return
+
+    if cur_v >= latest_v:
+        return
+
+    _version_notified = latest
+    download_url = resp.get("download_url", "")
+
+    if min_v and cur_v < min_v:
+        _send_toast(
+            "StockVision 업데이트 필수",
+            f"현재 버전({current})은 더 이상 지원되지 않습니다. {latest}로 업데이트하세요.",
+        )
+        logger.warning("서버 버전 %s → 최소 지원 %s 미달", current, min_ver)
+    else:
+        _send_toast(
+            "StockVision 업데이트 가능",
+            f"새 버전 {latest}이 있습니다. (현재: {current})",
+        )
+        logger.info("새 버전 사용 가능: %s → %s", current, latest)
 
 
 async def _check_version_changes(

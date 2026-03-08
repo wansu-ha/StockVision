@@ -89,19 +89,19 @@ def _on_open_status(icon: Any, item: Any) -> None:
 
 def _on_toggle_engine(icon: Any, item: Any) -> None:
     """엔진 시작/중지 토글."""
-    from local_server.routers.status import is_strategy_running, set_strategy_running
-    if is_strategy_running():
-        set_strategy_running(False)
+    from local_server.cloud.heartbeat import _engine_running, set_engine_running
+    if _engine_running:
+        set_engine_running(False)
         logger.info("트레이에서 엔진 중지")
     else:
-        set_strategy_running(True)
+        set_engine_running(True)
         logger.info("트레이에서 엔진 시작")
 
 
 def _on_kill_switch(icon: Any, item: Any) -> None:
     """긴급 정지 (Kill Switch)."""
-    from local_server.routers.status import set_strategy_running
-    set_strategy_running(False)
+    from local_server.cloud.heartbeat import set_engine_running
+    set_engine_running(False)
     update_tray_status("warning")
     logger.warning("트레이 Kill Switch 발동: 전략 엔진 중지")
 
@@ -110,6 +110,26 @@ def _on_kill_switch(icon: Any, item: Any) -> None:
         show_toast("StockVision 긴급 정지", "전략 엔진이 중지되었습니다.")
     except Exception:
         pass
+
+
+def _on_toggle_autostart(icon: Any, item: Any) -> None:
+    """자동 시작 토글."""
+    from local_server.utils.autostart import is_autostart_enabled, enable_autostart, disable_autostart
+    if is_autostart_enabled():
+        disable_autostart()
+        logger.info("자동 시작 해제")
+    else:
+        enable_autostart()
+        logger.info("자동 시작 등록")
+
+
+def _autostart_checked(_item: Any) -> bool:
+    """자동 시작 메뉴 체크 상태."""
+    try:
+        from local_server.utils.autostart import is_autostart_enabled
+        return is_autostart_enabled()
+    except Exception:
+        return False
 
 
 def _on_quit(icon: Any, item: Any) -> None:
@@ -121,8 +141,8 @@ def _on_quit(icon: Any, item: Any) -> None:
 
 def _engine_label(_item: Any) -> str:
     """엔진 토글 메뉴 동적 라벨."""
-    from local_server.routers.status import is_strategy_running
-    return "엔진 중지" if is_strategy_running() else "엔진 시작"
+    from local_server.cloud.heartbeat import _engine_running
+    return "엔진 중지" if _engine_running else "엔진 시작"
 
 
 def start_tray() -> threading.Thread | None:
@@ -145,6 +165,8 @@ def start_tray() -> threading.Thread | None:
         pystray.MenuItem(_engine_label, _on_toggle_engine),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("긴급 정지 (Kill Switch)", _on_kill_switch),
+        pystray.Menu.SEPARATOR,
+        pystray.MenuItem("시작 시 자동 실행", _on_toggle_autostart, checked=_autostart_checked),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("종료", _on_quit),
     )

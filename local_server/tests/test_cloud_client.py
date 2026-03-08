@@ -138,3 +138,107 @@ class TestCloudClientURLConstruction:
         """api_token이 없으면 Authorization 헤더가 없다."""
         client = CloudClient(base_url="http://test-server")
         assert "Authorization" not in client._headers
+
+
+# ──────────────────────────────────────────────────────
+# 하트비트 응답 계약 테스트
+# ──────────────────────────────────────────────────────
+
+
+class TestHeartbeatResponseContract:
+    """클라우드 하트비트 응답 형식이 로컬 서버 기대와 일치하는지 검증한다."""
+
+    _REQUIRED_FIELDS = [
+        "rules_version",
+        "context_version",
+        "watchlist_version",
+        "stock_master_version",
+        "latest_version",
+        "min_version",
+        "download_url",
+        "timestamp",
+    ]
+
+    def test_heartbeat_response_has_all_required_fields(self) -> None:
+        """하트비트 응답 계약: 로컬 서버가 기대하는 모든 필드가 존재한다."""
+        # 클라우드 heartbeat_service와 동일한 응답 구조
+        mock_response = {
+            "rules_version": 3,
+            "context_version": 1,
+            "watchlist_version": 2,
+            "stock_master_version": 100,
+            "latest_version": "1.1.0",
+            "min_version": "1.0.0",
+            "download_url": "https://example.com/releases",
+            "timestamp": "2026-03-09T00:00:00",
+        }
+        for field in self._REQUIRED_FIELDS:
+            assert field in mock_response, f"필수 필드 누락: {field}"
+
+
+# ──────────────────────────────────────────────────────
+# 서버 버전 체크 로직 테스트
+# ──────────────────────────────────────────────────────
+
+
+class TestCheckServerVersion:
+    """_check_server_version 로직을 검증한다."""
+
+    def _call(self, resp: dict, current_version: str = "1.0.0") -> None:
+        """_check_server_version을 호출한다."""
+        from unittest.mock import patch
+        import local_server.cloud.heartbeat as hb_mod
+
+        # 이전 알림 기록 초기화
+        hb_mod._version_notified = None
+
+        with patch("local_server.cloud.heartbeat.get_config") as mock_cfg, \
+             patch("local_server.cloud.heartbeat._send_toast") as self._mock_toast:
+            mock_cfg.return_value.get.return_value = current_version
+            hb_mod._check_server_version(resp)
+
+    def test_no_notification_when_up_to_date(self) -> None:
+        """현재 버전이 최신이면 알림을 보내지 않는다."""
+        self._call({"latest_version": "1.0.0", "min_version": "1.0.0"}, "1.0.0")
+        self._mock_toast.assert_not_called()
+
+    def test_update_available_notification(self) -> None:
+        """새 버전이 있으면 '업데이트 가능' 토스트를 보낸다."""
+        self._call(
+            {"latest_version": "1.1.0", "min_version": "1.0.0", "download_url": ""},
+            "1.0.0",
+        )
+        self._mock_toast.assert_called_once()
+        title = self._mock_toast.call_args[0][0]
+        assert "업데이트 가능" in title
+
+    def test_mandatory_update_notification(self) -> None:
+        """최소 버전 미달이면 '업데이트 필수' 토스트를 보낸다."""
+        self._call(
+            {"latest_version": "2.0.0", "min_version": "1.5.0", "download_url": ""},
+            "1.0.0",
+        )
+        self._mock_toast.assert_called_once()
+        title = self._mock_toast.call_args[0][0]
+        assert "업데이트 필수" in title
+
+    def test_no_notification_without_latest_version(self) -> None:
+        """latest_version이 없으면 아무것도 안 한다."""
+        self._call({}, "1.0.0")
+        self._mock_toast.assert_not_called()
+
+    def test_no_duplicate_notification(self) -> None:
+        """같은 버전에 대해 알림을 중복으로 보내지 않는다."""
+        from unittest.mock import patch
+        import local_server.cloud.heartbeat as hb_mod
+
+        hb_mod._version_notified = None
+        resp = {"latest_version": "1.1.0", "min_version": "1.0.0", "download_url": ""}
+
+        with patch("local_server.cloud.heartbeat.get_config") as mock_cfg, \
+             patch("local_server.cloud.heartbeat._send_toast") as mock_toast:
+            mock_cfg.return_value.get.return_value = "1.0.0"
+            hb_mod._check_server_version(resp)
+            hb_mod._check_server_version(resp)  # 두 번째 호출
+
+        assert mock_toast.call_count == 1

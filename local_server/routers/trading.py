@@ -138,6 +138,9 @@ async def start_strategy(request: Request, _: None = Depends(require_local_secre
 
     await engine.start()
 
+    from local_server.cloud.heartbeat import set_engine_running
+    set_engine_running(True)
+
     get_log_db().write(LOG_TYPE_STRATEGY, "전략 엔진 시작")
     logger.info("전략 엔진 시작")
     return {"success": True, "data": {"strategy_engine": "running"}, "count": 1}
@@ -164,6 +167,9 @@ async def stop_strategy(request: Request, _: None = Depends(require_local_secret
         request.app.state.broker = None
 
     request.app.state.engine = None
+
+    from local_server.cloud.heartbeat import set_engine_running
+    set_engine_running(False)
 
     get_log_db().write(LOG_TYPE_STRATEGY, "전략 엔진 중지")
     logger.info("전략 엔진 중지")
