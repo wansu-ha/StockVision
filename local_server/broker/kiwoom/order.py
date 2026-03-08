@@ -4,8 +4,8 @@ KIS와 주요 차이:
 - 전부 POST /api/dostk/ordr (KIS: /uapi/.../order-cash)
 - api-id로 매수/매도/취소 구분 (KIS: tr_id)
 - 계좌번호 불필요 (서버 자동 매핑)
-- 거래소 구분: dmst_stex_tp (01=KOSPI, 02=KOSDAQ)
-- 주문유형: trde_tp (00=지정가, 01=시장가)
+- 거래소 구분: dmst_stex_tp (KRX=한국거래소, NXT=넥스트, SOR=최선주문)
+- 주문유형: trde_tp (0=보통/지정가, 3=시장가)
 """
 
 import logging
@@ -41,8 +41,8 @@ _SIDE_API_ID: dict[OrderSide, str] = {
 
 # 주문 유형 → trde_tp 매핑
 _ORDER_TYPE_CODE: dict[OrderType, str] = {
-    OrderType.LIMIT: "00",    # 지정가
-    OrderType.MARKET: "01",   # 시장가
+    OrderType.LIMIT: "0",     # 보통(지정가)
+    OrderType.MARKET: "3",    # 시장가
 }
 
 
@@ -72,11 +72,11 @@ class KiwoomOrder:
         headers = await self._auth.build_headers(api_id)
 
         body = {
-            "dmst_stex_tp": "01",  # 기본 KOSPI (추후 종목별 자동 판별)
+            "dmst_stex_tp": "KRX",  # 한국거래소 (KOSPI/KOSDAQ 통합)
             "stk_cd": symbol,
-            "ord_qty": qty,
+            "ord_qty": str(qty),
             "trde_tp": _ORDER_TYPE_CODE[order_type],
-            "ord_uv": int(limit_price) if limit_price else 0,
+            "ord_uv": str(int(limit_price)) if limit_price else "0",
         }
 
         url = f"{self._auth.base_url}/api/dostk/ordr"
@@ -119,10 +119,10 @@ class KiwoomOrder:
         headers = await self._auth.build_headers(API_ID_CANCEL)
 
         body = {
-            "dmst_stex_tp": "01",
+            "dmst_stex_tp": "KRX",
             "orig_ord_no": order_id,
             "stk_cd": symbol,
-            "cncl_qty": 0,  # 잔량 전부 취소
+            "cncl_qty": "0",  # 잔량 전부 취소
         }
 
         url = f"{self._auth.base_url}/api/dostk/ordr"
@@ -174,8 +174,8 @@ class KiwoomOrder:
             side_str = item.get("sell_tp", "")
             side = OrderSide.SELL if side_str == "1" else OrderSide.BUY
 
-            trde_tp = item.get("trde_tp", "00")
-            order_type = OrderType.MARKET if trde_tp == "01" else OrderType.LIMIT
+            trde_tp = item.get("trde_tp", "0")
+            order_type = OrderType.MARKET if trde_tp == "3" else OrderType.LIMIT
 
             price_str = item.get("ord_uv", "0")
             limit_price = Decimal(price_str) if price_str and price_str != "0" else None
