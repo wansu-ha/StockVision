@@ -1,6 +1,6 @@
 # DataProvider 구현 계획서
 
-> 작성일: 2026-03-07 | 상태: 초안 | 범위: spec/data-provider/spec.md Step 1~3
+> 작성일: 2026-03-07 | 상태: 구현 완료 | 범위: spec/data-provider/spec.md Step 1~3
 
 ---
 
