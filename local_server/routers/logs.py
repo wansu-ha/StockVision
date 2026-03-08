@@ -7,7 +7,9 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
+
+from local_server.core.local_auth import require_local_secret
 
 from local_server.storage.log_db import (
     get_log_db,
@@ -44,6 +46,7 @@ async def query_logs(
     symbol: str | None = Query(None, description="종목 코드 필터"),
     limit: int = Query(100, ge=1, le=1000, description="최대 조회 수"),
     offset: int = Query(0, ge=0, description="건너뛸 수"),
+    _: None = Depends(require_local_secret),
 ) -> dict[str, Any]:
     """체결/에러 로그를 조회한다.
 

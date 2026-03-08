@@ -26,7 +26,9 @@ import json
 import logging
 from typing import Any
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+import hmac
+
+from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
 logger = logging.getLogger(__name__)
 
@@ -95,12 +97,17 @@ def get_connection_manager() -> ConnectionManager:
 
 
 @router.websocket("/ws")
-async def websocket_endpoint(ws: WebSocket) -> None:
+async def websocket_endpoint(ws: WebSocket, sec: str = Query("")) -> None:
     """WebSocket 엔드포인트.
 
+    연결 시 sec query param으로 local_secret을 검증한다.
     연결 즉시 welcome 메시지를 전송하고,
     클라이언트 메시지를 수신하여 에코/처리한다.
     """
+    expected = ws.app.state.local_secret
+    if not sec or not hmac.compare_digest(sec, expected):
+        await ws.close(code=4003, reason="Invalid local secret")
+        return
     await manager.connect(ws)
     try:
         # 연결 확인 메시지

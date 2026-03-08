@@ -9,7 +9,9 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
+
+from local_server.core.local_auth import require_local_secret
 from pydantic import BaseModel, Field
 
 from local_server.storage.config_store import read_config, update_config
@@ -43,7 +45,7 @@ class KisConfigRequest(BaseModel):
     "",
     summary="현재 설정 조회",
 )
-async def get_configuration() -> dict[str, Any]:
+async def get_configuration(_: None = Depends(require_local_secret)) -> dict[str, Any]:
     """현재 서버 설정을 반환한다. 민감 정보(API Key 등)는 마스킹된다."""
     config_data = read_config()
     return {"success": True, "data": config_data, "count": 1}
@@ -53,7 +55,7 @@ async def get_configuration() -> dict[str, Any]:
     "",
     summary="설정 변경",
 )
-async def patch_configuration(body: ConfigUpdateRequest) -> dict[str, Any]:
+async def patch_configuration(body: ConfigUpdateRequest, _: None = Depends(require_local_secret)) -> dict[str, Any]:
     """설정을 부분 업데이트하고 저장한다.
 
     중첩 딕셔너리를 그대로 전달하면 해당 키만 업데이트된다.
@@ -68,7 +70,7 @@ async def patch_configuration(body: ConfigUpdateRequest) -> dict[str, Any]:
     "/broker-keys",
     summary="증권사 API Key 및 계좌번호 등록",
 )
-async def register_broker_keys(body: KisConfigRequest) -> dict[str, Any]:
+async def register_broker_keys(body: KisConfigRequest, _: None = Depends(require_local_secret)) -> dict[str, Any]:
     """KIS 앱 키, 앱 시크릿, 계좌번호를 keyring에 저장한다.
 
     이 정보는 BrokerAdapter.connect() 호출 및 주문 발행에 사용된다.

@@ -8,18 +8,37 @@ import type { LocalConfig } from '../types/settings'
 
 const LOCAL_URL = import.meta.env.VITE_LOCAL_API_URL || 'http://localhost:4020'
 
+let localSecret: string | null = null
+
 const client: AxiosInstance = axios.create({
   baseURL: `${LOCAL_URL}/api`,
   timeout: 5000,
 })
 
+// X-Local-Secret 자동 첨부
+client.interceptors.request.use((config) => {
+  if (localSecret) {
+    config.headers['X-Local-Secret'] = localSecret
+  }
+  return config
+})
+
 /** 인증 — JWT를 로컬 서버에 전달 */
 export const localAuth = {
-  setAuthToken: (accessToken: string, refreshToken: string) =>
-    client.post('/auth/token', { access_token: accessToken, refresh_token: refreshToken })
-      .then((r) => r.data)
-      .catch(() => null),
-  logout: () => client.post('/auth/logout').then((r) => r.data).catch(() => null),
+  setAuthToken: async (accessToken: string, refreshToken: string) => {
+    try {
+      const res = await client.post('/auth/token', { access_token: accessToken, refresh_token: refreshToken })
+      localSecret = res.data?.data?.local_secret ?? null
+      return res.data
+    } catch {
+      return null
+    }
+  },
+  logout: () => {
+    const result = client.post('/auth/logout').then((r) => r.data).catch(() => null)
+    localSecret = null
+    return result
+  },
   status: () => client.get('/auth/status').then((r) => r.data).catch(() => null),
 }
 

@@ -15,6 +15,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from local_server.config import get_config
+from local_server.core.local_auth import generate_secret
 from local_server.routers import auth, config as config_router, logs, rules, status, trading, ws
 
 logger = logging.getLogger(__name__)
@@ -31,6 +32,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # --- 시작 훅 ---
     logger.info("로컬 서버 시작 중...")
+
+    # shared secret 생성 (CSRF 방어)
+    app.state.local_secret = generate_secret()
+    logger.info("local_secret 생성 완료")
+
+    # token.dat → Keyring 마이그레이션 (H1)
+    _migrate_token_dat()
 
     # 수면 방지 활성화
     if cfg.get("sleep_prevent"):
@@ -95,6 +103,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("수면 방지 해제")
 
     logger.info("로컬 서버 종료 완료")
+
+
+def _migrate_token_dat() -> None:
+    """기존 token.dat가 있으면 Keyring으로 이전 후 파일 삭제 (H1)."""
+    from pathlib import Path
+    import os
+    token_dat = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming")) / "StockVision" / "token.dat"
+    if not token_dat.exists():
+        return
+    token = token_dat.read_text(encoding="utf-8").strip()
+    if token:
+        from local_server.storage.credential import save_credential, KEY_CLOUD_REFRESH_TOKEN
+        save_credential(KEY_CLOUD_REFRESH_TOKEN, token)
+    token_dat.unlink()
+    logger.info("token.dat → Keyring 마이그레이션 완료")
 
 
 def create_app() -> FastAPI:

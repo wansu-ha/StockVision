@@ -8,7 +8,9 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
+
+from local_server.core.local_auth import require_local_secret
 from pydantic import BaseModel
 
 from local_server.config import get_config
@@ -30,7 +32,7 @@ class RulesSyncRequest(BaseModel):
     "/sync",
     summary="클라우드에서 매매 규칙 동기화",
 )
-async def sync_rules(body: RulesSyncRequest | None = None) -> dict[str, Any]:
+async def sync_rules(body: RulesSyncRequest | None = None, _: None = Depends(require_local_secret)) -> dict[str, Any]:
     """클라우드 서버에서 매매 규칙을 가져와 로컬 캐시에 저장한다.
 
     body.rules가 있으면 직접 제공된 규칙으로 캐시를 갱신한다.
@@ -75,7 +77,7 @@ async def sync_rules(body: RulesSyncRequest | None = None) -> dict[str, Any]:
     "",
     summary="현재 캐시된 규칙 목록 조회",
 )
-async def get_rules() -> dict[str, Any]:
+async def get_rules(_: None = Depends(require_local_secret)) -> dict[str, Any]:
     """로컬에 캐시된 매매 규칙 목록을 반환한다."""
     cache = get_rules_cache()
     rules = cache.get_rules()
