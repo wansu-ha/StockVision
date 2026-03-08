@@ -140,3 +140,54 @@ def create_adapter(broker_type: str | None = None, **kwargs) -> BrokerAdapter:
         BrokerAdapter: 어댑터 인스턴스
     """
     return AdapterFactory.create(broker_type, **kwargs)
+
+
+def create_broker_from_config() -> BrokerAdapter:
+    """config.json + keyring 자격증명으로 BrokerAdapter를 생성한다.
+
+    config.json의 broker.type에 따라 keyring에서 자격증명을 읽고
+    적절한 어댑터를 생성한다. 환경변수보다 keyring을 우선한다.
+
+    Raises:
+        ValueError: 자격증명 미등록 또는 지원하지 않는 브로커 타입
+    """
+    from local_server.config import get_config
+    from local_server.storage.credential import (
+        load_credential,
+        KEY_APP_KEY,
+        KEY_APP_SECRET,
+        KEY_ACCOUNT_NO,
+        KEY_KIWOOM_APP_KEY,
+        KEY_KIWOOM_SECRET_KEY,
+    )
+
+    cfg = get_config()
+    broker_type = cfg.get("broker.type", BROKER_TYPE_KIWOOM)
+    is_mock = cfg.get("broker.is_mock", True)
+
+    if broker_type == BROKER_TYPE_KIS:
+        app_key = load_credential(KEY_APP_KEY)
+        app_secret = load_credential(KEY_APP_SECRET)
+        account_no = load_credential(KEY_ACCOUNT_NO)
+        if not app_key or not app_secret:
+            raise ValueError("KIS API Key가 등록되지 않았습니다.")
+        return AdapterFactory.create(
+            BROKER_TYPE_KIS,
+            app_key=app_key, app_secret=app_secret,
+            account_no=account_no or "", is_mock=is_mock,
+        )
+
+    if broker_type == BROKER_TYPE_KIWOOM:
+        app_key = load_credential(KEY_KIWOOM_APP_KEY)
+        secret_key = load_credential(KEY_KIWOOM_SECRET_KEY)
+        if not app_key or not secret_key:
+            raise ValueError("키움 API Key가 등록되지 않았습니다.")
+        return AdapterFactory.create(
+            BROKER_TYPE_KIWOOM,
+            app_key=app_key, secret_key=secret_key, is_mock=is_mock,
+        )
+
+    if broker_type == BROKER_TYPE_MOCK:
+        return AdapterFactory.create(BROKER_TYPE_MOCK)
+
+    raise ValueError(f"지원하지 않는 브로커: {broker_type}")

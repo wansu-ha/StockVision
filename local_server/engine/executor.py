@@ -43,6 +43,7 @@ class ExecutionResult:
     side: str
     message: str
     order_id: str | None = None
+    realized_pnl: Decimal | None = None  # 매도 시 실현손익
 
 
 class OrderExecutor:
@@ -179,9 +180,16 @@ class OrderExecutor:
             self._signal.mark_filled(rule_id, side, trigger_policy)
             self._limit.record_execution(order_amount)
 
+            # 매도 시 실현손익 추정 (v1: 시장가 기준)
+            pnl: Decimal | None = None
+            if side == "SELL":
+                pos = next((p for p in balance.positions if p.symbol == symbol), None)
+                if pos and pos.avg_price:
+                    pnl = (ws_price - pos.avg_price) * qty
+
             logger.info(
-                "주문 성공: Rule %d, %s %s %d주, order_id=%s",
-                rule_id, side, symbol, qty, result.order_id,
+                "주문 성공: Rule %d, %s %s %d주, order_id=%s, pnl=%s",
+                rule_id, side, symbol, qty, result.order_id, pnl,
             )
 
             return ExecutionResult(
@@ -189,6 +197,7 @@ class OrderExecutor:
                 rule_id=rule_id, symbol=symbol, side=side,
                 order_id=result.order_id,
                 message="주문 성공",
+                realized_pnl=pnl,
             )
 
         except Exception as e:

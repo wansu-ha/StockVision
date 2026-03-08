@@ -156,12 +156,18 @@ class StrategyEngine:
             if not active_rules:
                 return
 
-            # Kill Switch 체크
-            trading_enabled = self._safeguard.is_trading_enabled()
-
             # 잔고 조회 (ABC: 파라미터 없음)
             balance = await self._broker.get_balance()
             holding_symbols = {p.symbol for p in balance.positions}
+
+            # 최대 손실 제한 체크 (당일 실현손익 from logs.db)
+            if self._safeguard.is_trading_enabled():
+                from local_server.storage.log_db import get_log_db
+                today_pnl = get_log_db().today_realized_pnl()
+                self._safeguard.check_max_loss(today_pnl, balance.cash + balance.total_eval)
+
+            # Kill Switch / 손실 락 포함 최종 거래 가능 여부
+            trading_enabled = self._safeguard.is_trading_enabled()
 
             for rule in active_rules:
                 await self._evaluate_rule(rule, balance, holding_symbols, trading_enabled)

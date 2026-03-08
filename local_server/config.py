@@ -24,6 +24,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "url": "",           # 클라우드 서버 URL (비어있으면 클라우드 연동 비활성화)
         "heartbeat_interval": 30,  # 하트비트 전송 간격 (초)
     },
+    "broker": {
+        "type": "kiwoom",    # "kis" | "kiwoom" | "mock"
+        "is_mock": True,     # 모의투자 여부
+    },
     "kis": {
         "account_no": "",    # 한국투자증권 계좌번호 (앱 키/시크릿은 keyring 전용)
     },

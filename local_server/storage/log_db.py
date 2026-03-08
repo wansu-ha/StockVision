@@ -140,6 +140,26 @@ class LogDB:
         ]
         return items, total
 
+    def today_realized_pnl(self) -> "Decimal":
+        """당일 FILL 로그의 실현손익(realized_pnl)을 합산한다."""
+        from decimal import Decimal
+
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        with sqlite3.connect(str(self._path)) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                "SELECT meta FROM logs WHERE log_type = ? AND ts >= ?",
+                (LOG_TYPE_FILL, today),
+            ).fetchall()
+
+        total = Decimal("0")
+        for row in rows:
+            meta = json.loads(row["meta"] or "{}")
+            pnl = meta.get("realized_pnl")
+            if pnl:
+                total += Decimal(str(pnl))
+        return total
+
 
 # 전역 싱글턴
 _log_db_instance: LogDB | None = None
