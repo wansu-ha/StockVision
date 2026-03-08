@@ -44,6 +44,9 @@ class Settings:
     # 클라우드 서버 공개 URL (이메일 링크용)
     CLOUD_URL: str = os.environ.get("CLOUD_URL", "http://localhost:4010")
 
+    # DART OpenAPI (금융감독원 전자공시)
+    DART_API_KEY: str = os.environ.get("DART_API_KEY", "")
+
     # AI (Claude API)
     ANTHROPIC_API_KEY: str = os.environ.get("ANTHROPIC_API_KEY", "")
     CLAUDE_MODEL: str = os.environ.get("CLAUDE_MODEL", "claude-opus-4-6")
