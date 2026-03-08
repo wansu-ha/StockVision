@@ -27,6 +27,7 @@ from cloud_server.api.context import router as context_router
 from cloud_server.api.sync import router as sync_router
 from cloud_server.api.stocks import router as stocks_router
 from cloud_server.api.watchlist import router as watchlist_router
+from cloud_server.api.market_data import router as market_data_router
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,14 @@ async def lifespan(app: FastAPI):
         init_db()
     except Exception as e:
         logger.error(f"DB 초기화 실패: {e}")
+
+    # DataAggregator 초기화
+    try:
+        from cloud_server.data.factory import create_aggregator, set_aggregator
+        set_aggregator(create_aggregator())
+        logger.info("[OK] DataAggregator 초기화 완료")
+    except Exception as e:
+        logger.error(f"DataAggregator 초기화 실패: {e}")
 
     try:
         from cloud_server.collector.scheduler import CollectorScheduler
@@ -113,6 +122,7 @@ app.include_router(version_router)
 app.include_router(admin_router)
 app.include_router(context_router)
 app.include_router(sync_router)
+app.include_router(market_data_router)
 app.include_router(stocks_router)
 app.include_router(watchlist_router)
 

@@ -89,6 +89,14 @@ class CollectorScheduler:
             replace_existing=True,
         )
 
+        # 08:30 KST 월요일 — DART corp_code 매핑 갱신
+        self.scheduler.add_job(
+            self.update_corp_codes,
+            trigger=CronTrigger(day_of_week="mon", hour=8, minute=30, timezone="Asia/Seoul"),
+            id="corp_code_update",
+            replace_existing=True,
+        )
+
         self.scheduler.start()
         logger.info("수집 스케줄러 시작됨")
 
@@ -172,11 +180,38 @@ class CollectorScheduler:
             db.close()
 
     async def save_daily_bars(self) -> None:
-        """일봉 저장 (KIS REST API로 당일 종가 수집)"""
+        """일봉 저장 — DataAggregator 경유 (우선순위 기반 수집)."""
         logger.info("일봉 저장 시작")
-        # TODO: BrokerAdapter.get_daily_bars() 사용 (Unit 1 완성 후)
-        # 현재는 yfinance 폴백으로 처리
-        await self.collect_yfinance()
+        try:
+            from cloud_server.data.factory import get_aggregator
+            agg = get_aggregator()
+
+            today = date.today()
+            symbols = get_major_symbols()
+
+            db = get_db_session()
+            repo = MarketRepository(db)
+            try:
+                saved = 0
+                for symbol in symbols:
+                    if repo.has_daily_bar(symbol, today):
+                        continue
+                    bars = await agg.get_daily_bars(symbol, today, today)
+                    for bar in bars:
+                        repo.save_daily_bar(symbol, bar.date, {
+                            "open": int(bar.open) if bar.open else None,
+                            "high": int(bar.high) if bar.high else None,
+                            "low": int(bar.low) if bar.low else None,
+                            "close": int(bar.close) if bar.close else None,
+                            "volume": bar.volume,
+                        })
+                        saved += 1
+                logger.info("일봉 저장 완료: %d건", saved)
+            finally:
+                db.close()
+        except Exception as e:
+            _collector_status["error_count"] += 1
+            logger.error("일봉 저장 실패: %s", e)
 
     async def update_stock_master(self) -> None:
         """종목 마스터 갱신 (공공데이터포털 KRX 상장종목 API)"""
@@ -213,6 +248,40 @@ class CollectorScheduler:
         except Exception as e:
             _collector_status["error_count"] += 1
             logger.error(f"yfinance 수집 실패: {e}")
+
+    async def update_corp_codes(self) -> None:
+        """DART corp_code 매핑 갱신 (주 1회, 신규 상장 종목 대응)."""
+        logger.info("DART corp_code 매핑 갱신 시작")
+        try:
+            from cloud_server.core.config import settings
+            if not settings.DART_API_KEY:
+                logger.info("DART_API_KEY 미설정, corp_code 갱신 생략")
+                return
+
+            from cloud_server.data.dart_provider import DartProvider
+            dart = DartProvider(settings.DART_API_KEY)
+            mapping = await dart.fetch_corp_codes()
+            if not mapping:
+                logger.warning("DART corp_code 매핑 비어있음")
+                return
+
+            from cloud_server.models.market import StockMaster
+            db = get_db_session()
+            try:
+                updated = 0
+                stocks = db.query(StockMaster).filter(StockMaster.corp_code.is_(None)).all()
+                for stock in stocks:
+                    corp_code = mapping.get(stock.symbol)
+                    if corp_code:
+                        stock.corp_code = corp_code
+                        updated += 1
+                db.commit()
+                logger.info("corp_code 매핑 갱신 완료: %d건", updated)
+            finally:
+                db.close()
+        except Exception as e:
+            _collector_status["error_count"] += 1
+            logger.error("corp_code 매핑 갱신 실패: %s", e)
 
     async def check_data_integrity(self) -> None:
         """결측 거래일 감지 및 재수집"""
