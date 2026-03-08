@@ -28,11 +28,13 @@ class StockMaster(Base):
     name       = Column(String(100), nullable=False)
     market     = Column(String(10), nullable=True)   # KOSPI | KOSDAQ | OVERSEAS
     sector     = Column(String(50), nullable=True)
+    corp_code  = Column(String(10), nullable=True)   # DART 기업 고유번호
     is_active  = Column(Boolean, default=True, nullable=False)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
 
     __table_args__ = (
         Index("idx_stock_market", "market"),
+        Index("idx_stock_corp_code", "corp_code"),
     )
 
 
