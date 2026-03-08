@@ -226,7 +226,7 @@ src/
 
 **localhost WS 통합**:
 - `hooks/useLocalBridgeWS.ts` (기존 개선/완성)
-  - WebSocket 연결: ws://localhost:8765/ws
+  - WebSocket 연결: ws://localhost:4020/ws
   - 자동 재연결 (1s → 5s → 30s 백오프)
   - 시세 + 체결 이벤트 수신
   - 타입 안전 메시지 파싱
@@ -774,7 +774,7 @@ npm run dev       # http://localhost:5173
 
 **API 서버** (병렬):
 - 클라우드: `http://localhost:8000/api/v1`
-- 로컬: `http://localhost:8765` (WS: `ws://localhost:8765/ws`)
+- 로컬: `http://localhost:4020` (WS: `ws://localhost:4020/ws`)
 
 **테스트**:
 - 로컬 서버 모의 API 제공 스크립트 (향후)

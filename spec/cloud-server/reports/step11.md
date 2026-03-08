@@ -29,7 +29,7 @@
 | TradingRule CRUD | `cloud_server/api/rules.py` |
 | 하트비트 API | `cloud_server/api/heartbeat.py` |
 | 버전 체크 API | `cloud_server/api/version.py` |
-| 시세 수집기 | `cloud_server/collector/kiwoom_collector.py` |
+| 시세 수집기 | `cloud_server/collector/kis_collector.py` |
 | 시장 데이터 저장 | `cloud_server/services/market_repository.py` |
 | APScheduler | `cloud_server/collector/scheduler.py` |
 | sv_core stub | `sv_core/broker/base.py` |

@@ -171,44 +171,41 @@ class EngineScheduler:
         self._running = False
 ```
 
-### 4.2 조건 평가
+### 4.2 조건 평가 (DSL 파서)
 
 > 규칙 데이터 모델 상세: `spec/rule-model/spec.md` 참조
+> DSL 파서 구현: `sv_core/parsing/` (lexer → parser → AST → evaluator)
 
 ```python
+from sv_core.parsing import parse, evaluate as dsl_evaluate
+
 class RuleEvaluator:
-    """규칙 조건을 현재 데이터로 평가."""
+    """규칙 조건을 현재 데이터로 평가.
 
-    def evaluate(self, rule: dict, market_data: dict, context: dict) -> bool:
+    v2: DSL script → sv_core.parsing.evaluate → (buy, sell)
+    v1 폴백: JSON conditions → 기존 AND/OR 평가 → (buy, sell)
+    """
+
+    def __init__(self) -> None:
+        self._ast_cache: dict[int, tuple[str, Script]] = {}  # {rule_id: (hash, ast)}
+        self._cross_states: dict[int, dict] = {}  # 상향돌파/하향돌파 state
+
+    def evaluate(self, rule: dict, market_data: dict, context: dict) -> tuple[bool, bool]:
+        """규칙 평가 → (매수 결과, 매도 결과).
+
+        DSL script가 있으면 파싱 → AST 캐시 → 평가.
+        없으면 JSON conditions 폴백.
+        context: {"현재가": float, "거래량": int, "RSI": Callable, "MA": Callable, ...}
         """
-        rule: { operator: "AND", conditions: [...] }
-        market_data: { price, volume, rsi_14, ... }  (BrokerAdapter WS에서)
-        context: { market_kospi_rsi, ... }  (AI 컨텍스트 캐시에서)
-        """
-        conditions = rule.get("conditions", [])
-        op = rule.get("operator", "AND")
-
-        results = [self._eval_single(c, market_data, context) for c in conditions]
-
-        if op == "AND":
-            return all(results)
-        return any(results)
-
-    def _eval_single(self, condition: dict, market_data: dict, context: dict) -> bool:
-        cond_type = condition["type"]
-
-        if cond_type in ("price", "indicator", "volume"):
-            value = market_data.get(condition["field"])
-        elif cond_type == "context":
-            value = context.get(condition["field"])
-        else:
-            return False
-
-        if value is None:
-            return False
-
-        return self._compare(value, condition["operator"], condition["value"])
+        ...
 ```
+
+**DSL 파서 모듈 구조** (`sv_core/parsing/`):
+- `lexer.py` — 토큰화
+- `parser.py` — 토큰 → AST
+- `ast_nodes.py` — AST 노드 (Script, BuyBlock, SellBlock, Comparison, FuncCall 등)
+- `evaluator.py` — AST를 시세 컨텍스트에서 평가
+- `builtins.py` — 내장 필드/함수/패턴 (RSI, MA, 상향돌파 등)
 
 ### 4.3 신호 관리 (중복 방지)
 
@@ -416,7 +413,7 @@ class OrderExecutor:
 - 로컬 서버 기반 구조 (Unit 2)
 - 프론트엔드 UI (Unit 5)
 - 백테스팅 (v2)
-- AI 기반 신호 (v3+)
+- Custom LLM 기반 신호 (v2)
 
 ---
 
@@ -454,4 +451,4 @@ class OrderExecutor:
 
 ---
 
-**마지막 갱신**: 2026-03-06
+**마지막 갱신**: 2026-03-09

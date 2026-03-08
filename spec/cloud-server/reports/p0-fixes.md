@@ -7,7 +7,7 @@
 ### C1 — QuoteEvent import 경로 수정
 
 **대상 파일:**
-- `cloud_server/collector/kiwoom_collector.py`
+- `cloud_server/collector/kis_collector.py`
 - `cloud_server/services/market_repository.py`
 
 **변경 내용:**
@@ -85,7 +85,7 @@ class _KiwoomStub(BrokerAdapter):
     async def get_open_orders(self) -> list[OrderResult]  # OK
 ```
 
-**연쇄 수정 — KiwoomCollector (kiwoom_collector.py):**
+**연쇄 수정 — KiwoomCollector (kis_collector.py):**
 C5의 ABC 변경으로 인해 `KiwoomCollector`의 broker 호출도 업데이트:
 - `broker.subscribe(symbols, data_type)` → `broker.subscribe_quotes(symbols, self._on_quote)` (콜백 패턴)
 - `broker.unsubscribe(symbols, "quote")` → `broker.unsubscribe_quotes(symbols)`
@@ -149,7 +149,7 @@ def get_settings() -> Settings:
 
 | 파일 | 수정 항목 |
 |------|----------|
-| `cloud_server/collector/kiwoom_collector.py` | C1, C5 연쇄 (subscribe_quotes 콜백 패턴) |
+| `cloud_server/collector/kis_collector.py` | C1, C5 연쇄 (subscribe_quotes 콜백 패턴) |
 | `cloud_server/services/market_repository.py` | C1, C2/C3 (timestamp None 가드) |
 | `cloud_server/core/broker_factory.py` | C4, C5 (_KiwoomStub 전면 재작성) |
 | `cloud_server/api/auth.py` | A7 (jwt → access_token, 2개소) |

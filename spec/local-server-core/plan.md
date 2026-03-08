@@ -69,20 +69,20 @@ local_server/
 ```
 
 **구현 내용**:
-1. FastAPI 앱 초기화 (127.0.0.1:8765 바인딩)
-2. CORS 미들웨어 설정 (allowlist: localhost:5173, 127.0.0.1:8765)
+1. FastAPI 앱 초기화 (127.0.0.1:4020 바인딩)
+2. CORS 미들웨어 설정 (allowlist: localhost:5173, 127.0.0.1:4020)
 3. 기본 health check 엔드포인트 (`GET /api/status` stub)
 4. 로거 설정 (uvicorn 호환)
 5. uvicorn 설정 (127.0.0.1만, 0.0.0.0 금지)
 
 **검증**:
-- [ ] `python main.py` → 5초 이내 127.0.0.1:8765 서빙 시작
-- [ ] `GET http://127.0.0.1:8765/api/status` → 응답 확인
+- [ ] `python main.py` → 5초 이내 127.0.0.1:4020 서빙 시작
+- [ ] `GET http://127.0.0.1:4020/api/status` → 응답 확인
 - [ ] 0.0.0.0 바인딩 확인 금지 (netstat)
 
 ---
 
-### Step 2: 저장소 계층 (CredentialStore, RuleCache, ConfigManager, LogDB)
+### Step 2: 저장소 계층 (CredentialManager, RuleCache, ConfigManager, LogDB)
 
 **목표**: 민감 데이터 및 설정 저장/로드 인프라 구축
 
@@ -90,7 +90,7 @@ local_server/
 ```
 local_server/app/storage/
 ├── __init__.py
-├── credential_store.py        # keyring (API Key + Refresh Token)
+├── credential.py        # keyring (API Key + Refresh Token)
 ├── rule_cache.py              # JSON 규칙 캐시
 ├── watchlist_cache.py         # 관심종목 캐시 (JSON)
 ├── stock_master_cache.py      # 종목 마스터 캐시 (JSON)
@@ -101,7 +101,7 @@ local_server/app/storage/
 
 **구현 내용**:
 
-1. **CredentialStore** (`credential_store.py`)
+1. **CredentialManager** (`credential.py`)
    - `save_api_key(app_key, app_secret)` → Credential Manager
    - `get_api_key()` → tuple[str, str] | None
    - `delete_api_key()`
@@ -112,34 +112,34 @@ local_server/app/storage/
 2. **RuleCache** (`rule_cache.py`)
    - `load()` → list[dict] | None (JSON 파일에서)
    - `save(rules: list[dict])` → JSON 파일 저장
-   - 파일 경로: `%APPDATA%\StockVision\strategies.json`
+   - 파일 경로: `~/.stockvision/strategies.json`
    - 인코딩: UTF-8
 
 3. **ConfigManager** (`config_manager.py`)
-   - 파일 경로: `%APPDATA%\StockVision\config.json`
+   - 파일 경로: `~/.stockvision/config.json`
    - `get(key: str, default=None)` → Any
    - `set(key: str, value)` → None
    - `save()` → 파일에 반영
-   - 기본 스키마:
+   - 기본 스키마: `local_server/config.py` DEFAULT_CONFIG 참조
      ```json
      {
-       "kiwoom_mode": "mock",
-       "auto_start": false,
-       "engine_interval_sec": 60,
-       "broker": "kiwoom"
+       "server": { "host": "127.0.0.1", "port": 4020 },
+       "broker": { "type": "kiwoom", "is_mock": true },
+       "cloud": { "url": "", "heartbeat_interval": 30 },
+       "cors": { "origins": ["http://localhost:5173"] }
      }
      ```
 
 4. **WatchlistCache** (`watchlist_cache.py`)
    - `load()` → list[dict] | None
    - `save(watchlist: list[dict])` → JSON 파일 저장
-   - 파일 경로: `%APPDATA%\StockVision\watchlist.json`
+   - 파일 경로: `~/.stockvision/watchlist.json`
 
 5. **StockMasterCache** (`stock_master_cache.py`)
    - `load()` → list[dict] | None
    - `save(stocks: list[dict])` → JSON 파일 저장
    - `search(query: str)` → list[dict] (로컬 검색)
-   - 파일 경로: `%APPDATA%\StockVision\stock_master.json`
+   - 파일 경로: `~/.stockvision/stock_master.json`
    - `stock_detail_cache.json`: 한번이라도 상세 조회한 종목 정보
 
 6. **SyncQueue** (`sync_queue.py`)
@@ -147,12 +147,12 @@ local_server/app/storage/
    - `dequeue()` → 하나 꺼냄
    - `peek_all()` → 전체 조회
    - `flush()` → 클라우드 연결 시 전부 전송
-   - 파일 경로: `%APPDATA%\StockVision\sync_queue.json`
+   - 파일 경로: `~/.stockvision/sync_queue.json`
    - action 형식: `{ "type": "rule_create|rule_update|watchlist_add|watchlist_delete", "data": {...}, "timestamp": "..." }`
    - last-write-wins 충돌 해결 (timestamp 기반)
 
 7. **LogDB** (`log_db.py`)
-   - SQLite 파일: `%APPDATA%\StockVision\logs.db`
+   - SQLite 파일: `~/.stockvision/logs.db`
    - 모델 (SQLAlchemy):
      ```python
      class ExecutionLog:
@@ -232,13 +232,13 @@ local_server/app/routers/
      응답: { "success": true, "data": config }
 
    PATCH /api/config
-     요청: { "kiwoom_mode": "real" }
+     요청: { "broker": { "is_mock": false } }
      응답: { "success": true, "data": updated_config }
 
    POST /api/config/kiwoom
      요청: { "app_key": "...", "app_secret": "..." }
      응답: { "success": true }
-     동작: CredentialStore에 저장
+     동작: CredentialManager에 저장
    ```
 
 3. **status.py** — 서버 + 키움 + 엔진 상태
@@ -555,9 +555,9 @@ local_server/app/cloud_client/
 1. **client.py** — HTTP 클라이언트 래퍼
    ```python
    class CloudClient:
-       def __init__(self, base_url: str, credential_store: CredentialStore):
+       def __init__(self, base_url: str, cred_store: CredentialManager):
            self._base_url = base_url        # "https://api.stockvision.app"
-           self._cred_store = credential_store
+           self._cred_store = cred_store
            self._access_token = None        # 메모리 저장
            self._http = httpx.AsyncClient()
 
@@ -777,7 +777,7 @@ local_server/app/cloud_client/
        logger.info("Initializing local server...")
 
        # 1. 저장소 초기화
-       credential_store = CredentialStore()
+       cred_store = CredentialManager()
        rule_cache = RuleCache()
        config_manager = ConfigManager()
        log_db = LogDB()
@@ -786,18 +786,18 @@ local_server/app/cloud_client/
        config = config_manager.get_all()
 
        # 3. FastAPI 앱 설정 (의존성 주입)
-       app.state.cred_store = credential_store
+       app.state.cred_store = cred_store
        app.state.rule_cache = rule_cache
        app.state.config_manager = config_manager
        app.state.log_db = log_db
 
        # 4. 클라우드 클라이언트 초기화
-       cloud_client = CloudClient("https://api.stockvision.app", credential_store)
+       cloud_client = CloudClient("https://api.stockvision.app", cred_store)
        app.state.cloud_client = cloud_client
 
        # 5. 자동 로그인 시도
        try:
-           refresh_token = credential_store.get_refresh_token()
+           refresh_token = cred_store.get_refresh_token()
            if refresh_token:
                resp = await cloud_client._refresh_token(refresh_token)
                cloud_client._access_token = resp["access_token"]
@@ -811,7 +811,7 @@ local_server/app/cloud_client/
        broker_name = config.get("broker", "kiwoom")
        if broker_name == "kiwoom":
            # Unit 1에서 정의한 KiwoomAdapter 주입
-           broker = KiwoomAdapter(credential_store, config)
+           broker = KiwoomAdapter(cred_store, config)
            try:
                await broker.authenticate()
            except Exception as e:
@@ -889,7 +889,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 # 환경별 allowlist
 CORS_ALLOWLIST = {
-    "dev": ["http://localhost:5173", "http://127.0.0.1:8765"],
+    "dev": ["http://localhost:5173"],
     "prod": ["https://stockvision.app"],  # 프론트 호스팅 도메인
 }
 
@@ -1112,7 +1112,7 @@ pywin32==305
 
 **검증**:
 - [ ] `pyinstaller build_exe.spec` → stockvision.exe 생성 확인
-- [ ] .exe 실행 → 정상 작동 (127.0.0.1:8765 서빙)
+- [ ] .exe 실행 → 정상 작동 (127.0.0.1:4020 서빙)
 - [ ] .exe 파일 크기 < 100MB
 - [ ] 레지스트리 등록 후 PC 재부팅 → 자동 실행 확인
 
@@ -1135,7 +1135,7 @@ local_server/            ← 로컬 서버 (신규)
   ├── main.py
   ├── app/
   │   ├── routers/       # auth, config, status, trading, rules, watchlist, stocks, logs, ws
-  │   ├── storage/       # credential_store, rule_cache, watchlist_cache, stock_master_cache, sync_queue, config_manager, log_db
+  │   ├── storage/       # cred_store, rule_cache, watchlist_cache, stock_master_cache, sync_queue, config_manager, log_db
   │   ├── cloud_client/  # client, heartbeat, rule_syncer, context_fetcher, watchlist_syncer, stock_master_syncer
   │   ├── tray.py
   │   └── core/
@@ -1189,7 +1189,7 @@ local_server/
 │   │   └── ws.py                          # WebSocket /ws
 │   ├── storage/
 │   │   ├── __init__.py
-│   │   ├── credential_store.py            # keyring
+│   │   ├── credential.py            # keyring
 │   │   ├── rule_cache.py                  # JSON
 │   │   ├── watchlist_cache.py             # 관심종목 JSON 캐시
 │   │   ├── stock_master_cache.py          # 종목 마스터 JSON 캐시
@@ -1244,7 +1244,7 @@ local_server/
 | Step | 커밋 메시지 |
 |------|-----------|
 | 1 | `feat: Step 1 — 로컬 서버 구조 + FastAPI 스켈레톤` |
-| 2 | `feat: Step 2 — 저장소 계층 (CredentialStore, RuleCache, ConfigManager, LogDB)` |
+| 2 | `feat: Step 2 — 저장소 계층 (CredentialManager, RuleCache, ConfigManager, LogDB)` |
 | 3 | `feat: Step 3 — REST API 라우터 (auth, config, status, trading, logs)` |
 | 4 | `feat: Step 4 — WebSocket 엔드포인트 (/ws)` |
 | 5 | `feat: Step 5 — pystray 시스템 트레이` |

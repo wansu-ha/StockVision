@@ -441,7 +441,7 @@ def post_heartbeat(user_id: int, payload: dict) -> dict:
 **목표**: 서비스 키로 실시간 시세 수신 (키움 WS, REST)
 
 **파일:**
-- `cloud_server/collector/kiwoom_collector.py` (키움 WS 수신기)
+- `cloud_server/collector/kis_collector.py` (키움 WS 수신기)
 - `cloud_server/core/broker_factory.py` (BrokerAdapter 팩토리)
 - `cloud_server/models/kiwoom_service_key.py` (서비스 키 설정)
 
@@ -475,7 +475,7 @@ class BrokerFactory:
         raise ValueError(f"Unknown broker: {broker_type}")
 
 # 4. 키움 시세 수집기
-class KiwoomCollector:
+class KISCollector:
     def __init__(self, broker: BrokerAdapter):
         self.broker = broker
         self.subscribed_symbols = set()
@@ -493,7 +493,7 @@ class KiwoomCollector:
             yield event
 
 # 5. 시작: BrokerAdapter 인증 후 구독
-async def start_kiwoom_collector():
+async def start_kis_collector():
     service_key = db.query(KiwoomServiceKey).filter_by(is_active=True).first()
     broker = BrokerFactory.create("kiwoom", {
         "api_key": service_key.api_key,
@@ -502,7 +502,7 @@ async def start_kiwoom_collector():
 
     await broker.authenticate()
 
-    collector = KiwoomCollector(broker)
+    collector = KISCollector(broker)
 
     # 코스피/코스닥 주요 200종목 구독
     symbols = get_major_symbols()
@@ -837,7 +837,7 @@ from apscheduler.triggers.cron import CronTrigger
 class CollectorScheduler:
     def __init__(self):
         self.scheduler = AsyncIOScheduler()
-        self.kiwoom_collector = None
+        self.kis_collector = None
         self.broker = None
 
     def start(self):
@@ -884,9 +884,9 @@ class CollectorScheduler:
         self.broker = BrokerFactory.create("kiwoom", service_key=...)
         await self.broker.authenticate()
 
-        self.kiwoom_collector = KiwoomCollector(self.broker)
+        self.kis_collector = KISCollector(self.broker)
         symbols = get_major_symbols()
-        await self.kiwoom_collector.subscribe(symbols)
+        await self.kis_collector.subscribe(symbols)
 
         # 비동기 리스닝 시작 (배경 태스크)
         asyncio.create_task(self.listen_quotes())
@@ -894,7 +894,7 @@ class CollectorScheduler:
     async def listen_quotes(self):
         """실시간 시세 수신 및 저장"""
         repo = MarketRepository(get_db())
-        async for event in self.kiwoom_collector.listen():
+        async for event in self.kis_collector.listen():
             await repo.save_minute_bar(event.symbol, event)
 
     async def save_daily_bars(self):
@@ -1427,7 +1427,7 @@ class SyncService:
 | 4 | `cloud_server/models/heartbeat.py` | Heartbeat |
 | 4 | `cloud_server/api/heartbeat.py` | 하트비트 API |
 | 4 | `cloud_server/api/version.py` | 버전 체크 API |
-| 5 | `cloud_server/collector/kiwoom_collector.py` | 키움 WS 수신 |
+| 5 | `cloud_server/collector/kis_collector.py` | 키움 WS 수신 |
 | 5 | `cloud_server/core/broker_factory.py` | BrokerAdapter 팩토리 |
 | 6 | `cloud_server/models/market.py` | StockMaster, DailyBar, MinuteBar |
 | 6 | `cloud_server/services/market_repository.py` | 시장 데이터 레이어 |

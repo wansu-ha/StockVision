@@ -49,7 +49,7 @@ cloud_server/
 │   ├── ai_service.py                # Claude API stub (v1)
 │   └── admin_service.py             # 어드민 비즈니스 로직
 └── collector/
-    ├── kiwoom_collector.py          # KiwoomCollector
+    ├── kis_collector.py          # KiwoomCollector
     └── scheduler.py                 # APScheduler (5개 cron)
 
 sv_core/   (Unit 1 stub — cloud_server 의존성 해소용)

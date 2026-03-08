@@ -1,8 +1,21 @@
 # 온보딩 플로우 명세서 (onboarding)
 
-> 작성일: 2026-03-04 | 상태: **→ Unit 5 (frontend)에 통합**
+> 작성일: 2026-03-04 | 상태: **SUPERSEDED** | → Unit 5 (frontend)에 통합
 >
-> 이 spec의 내용은 `spec/frontend/`에서 통합 구현합니다.
+> **⚠ 이 문서는 Phase 2 (로컬 브릿지, COM/pykiwoom, magic link) 기준으로 작성되었으며,
+> Phase 3 아키텍처(3프로세스, BrokerAdapter REST, .exe 번들)와 맞지 않습니다.**
+>
+> **Phase 3 온보딩 흐름은 `docs/architecture.md` §10 참조.**
+> Phase 3에서 달라진 핵심 사항:
+> - "로컬 브릿지" → **"로컬 서버"** (.exe 단일 번들, PyInstaller)
+> - `pip install stockvision-bridge` → **다운로드 + 실행** 방식
+> - magic link 인증 → **이메일 + 비밀번호 + 인증 링크** (cloud-server §4)
+> - XChaCha20 암호화 → **Windows Credential Manager** (keyring)
+> - 포트 9090 → **4020**
+> - `backend/app/services/` → **`cloud_server/`** + **`local_server/`**
+>
+> 이 문서의 온보딩 단계 구조(Step 0~6)는 참고용으로 유지하되,
+> 구현 시 Phase 3 아키텍처에 맞게 재설계 필요.
 
 ---
 
@@ -1108,5 +1121,5 @@ def get_health() -> dict:
 
 ---
 
-**마지막 갱신**: 2026-03-04
-**상태**: 초안 검토 대기
+**마지막 갱신**: 2026-03-09
+**상태**: SUPERSEDED (Phase 2 기준 — Phase 3 재설계 필요)

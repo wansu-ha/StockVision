@@ -96,8 +96,7 @@ cloud_server/
 │   ├── stock_service.py       # 종목 메타데이터 비즈니스 로직
 │   └── watchlist_service.py   # 관심종목 비즈니스 로직
 ├── collector/
-│   ├── kiwoom_collector.py    # 키움 WS 시세 수신 (서비스 키)
-│   ├── yfinance_collector.py  # yfinance 보조 수집
+│   ├── kis_collector.py       # KIS WS 시세 수신 (서비스 키)
 │   └── scheduler.py           # 수집 스케줄 관리
 ├── models/
 │   ├── user.py                # User, RefreshToken, EmailVerification
@@ -121,8 +120,10 @@ Unit 1의 키움 클라이언트를 `sv_core` 공유 패키지로 재사용.
 ```
 sv_core/                       # 공유 패키지 (pip install -e)
 ├── broker/
-│   ├── adapter.py             # BrokerAdapter ABC
-│   └── kiwoom/                # KiwoomAdapter 구현
+│   ├── base.py                # BrokerAdapter ABC
+│   ├── kis/                   # KIS(한국투자증권) 구현
+│   └── kiwoom/                # 키움증권 구현
+├── parsing/                   # DSL 파서 (lexer, parser, evaluator)
 └── models/                    # OrderResult, QuoteEvent 등
 ```
 
@@ -699,4 +700,4 @@ class StrategyTemplate(Base):
 
 ---
 
-**마지막 갱신**: 2026-03-06
+**마지막 갱신**: 2026-03-09
