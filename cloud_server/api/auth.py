@@ -12,7 +12,7 @@ POST /api/v1/auth/reset-password  새 비밀번호 설정
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 from sqlalchemy.orm import Session
 
 from cloud_server.core.database import get_db
@@ -30,11 +30,20 @@ router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
 # ── Pydantic 스키마 ──────────────────────────────────────────────────
 
+MIN_PASSWORD_LENGTH = 8
+
 
 class RegisterBody(BaseModel):
     email: EmailStr
     password: str
     nickname: str | None = None
+
+    @field_validator("password")
+    @classmethod
+    def password_min_length(cls, v: str) -> str:
+        if len(v) < MIN_PASSWORD_LENGTH:
+            raise ValueError(f"비밀번호는 최소 {MIN_PASSWORD_LENGTH}자 이상이어야 합니다.")
+        return v
 
 
 class LoginBody(BaseModel):
@@ -57,6 +66,13 @@ class ForgotPasswordBody(BaseModel):
 class ResetPasswordBody(BaseModel):
     token: str
     new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def password_min_length(cls, v: str) -> str:
+        if len(v) < MIN_PASSWORD_LENGTH:
+            raise ValueError(f"비밀번호는 최소 {MIN_PASSWORD_LENGTH}자 이상이어야 합니다.")
+        return v
 
 
 # ── 회원가입 ──────────────────────────────────────────────────────────
