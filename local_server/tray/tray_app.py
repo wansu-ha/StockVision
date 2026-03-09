@@ -32,6 +32,17 @@ except ImportError:
 
 TrayStatus = Literal["ok", "warning", "error"]
 
+# 로컬 API 인증 정보 (main.py lifespan에서 설정)
+_local_secret: str | None = None
+_local_port: int = 4020
+
+
+def set_tray_auth(port: int, secret: str) -> None:
+    """main.py lifespan에서 호출. 트레이 → API 호출에 필요한 인증 정보 설정."""
+    global _local_secret, _local_port
+    _local_secret, _local_port = secret, port
+
+
 # 상태별 아이콘 색상
 _STATUS_COLORS: dict[TrayStatus, tuple[int, int, int, int]] = {
     "ok": (34, 197, 94, 255),       # green-500
@@ -88,14 +99,37 @@ def _on_open_status(icon: Any, item: Any) -> None:
 
 
 def _on_toggle_engine(icon: Any, item: Any) -> None:
-    """엔진 시작/중지 토글."""
-    from local_server.cloud.heartbeat import _engine_running, set_engine_running
-    if _engine_running:
-        set_engine_running(False)
-        logger.info("트레이에서 엔진 중지")
-    else:
-        set_engine_running(True)
-        logger.info("트레이에서 엔진 시작")
+    """엔진 시작/중지 토글 — 로컬 API를 호출하여 실제 엔진을 제어한다."""
+    from local_server.cloud.heartbeat import _engine_running
+    action = "stop" if _engine_running else "start"
+    threading.Thread(
+        target=_call_engine_api,
+        args=(action,),
+        daemon=True,
+    ).start()
+
+
+def _call_engine_api(action: str) -> None:
+    """로컬 서버 전략 엔진 API를 호출한다."""
+    try:
+        import httpx
+    except ImportError:
+        logger.error("httpx 미설치 — 트레이 엔진 제어 불가")
+        return
+
+    url = f"http://127.0.0.1:{_local_port}/api/strategy/{action}"
+    headers = {"X-Local-Secret": _local_secret or ""}
+    try:
+        resp = httpx.post(url, headers=headers, timeout=10)
+        resp.raise_for_status()
+        logger.info("트레이 엔진 %s 성공", action)
+    except Exception as e:
+        logger.error("트레이 엔진 %s 실패: %s", action, e)
+        try:
+            from local_server.utils.toast import show_toast
+            show_toast("엔진 제어 실패", str(e))
+        except Exception:
+            pass
 
 
 def _on_kill_switch(icon: Any, item: Any) -> None:

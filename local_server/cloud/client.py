@@ -86,8 +86,8 @@ class CloudClient:
         Returns:
             규칙 목록 (딕셔너리 리스트)
         """
-        logger.debug("클라우드에서 규칙 fetch: %s/api/rules", self._base_url)
-        result = await self._get("/api/rules")
+        logger.debug("클라우드에서 규칙 fetch: %s/api/v1/rules", self._base_url)
+        result = await self._get("/api/v1/rules")
 
         # 응답 형식 { success, data, count } 기준으로 파싱
         if isinstance(result, dict) and "data" in result:
@@ -109,7 +109,7 @@ class CloudClient:
             서버 응답
         """
         logger.debug("하트비트 전송: %s", self._base_url)
-        result = await self._post("/api/local/heartbeat", payload)
+        result = await self._post("/api/v1/heartbeat", payload)
         return result if isinstance(result, dict) else {"raw": result}
 
     async def health_check(self) -> bool:

@@ -23,6 +23,22 @@ services:
       - redis_data:/data
     restart: unless-stopped
 
+  cloud_server:
+    build:
+      context: .
+      dockerfile: cloud_server/Dockerfile
+    container_name: stockvision_cloud
+    ports:
+      - "4010:4010"
+    environment:
+      - DATABASE_URL=postgresql://stockvision_user:stockvision_pass@postgres:5432/stockvision
+      - SECRET_KEY=${SECRET_KEY}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5173}
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   redis_data:

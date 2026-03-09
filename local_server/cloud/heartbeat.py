@@ -30,10 +30,28 @@ def set_engine_running(running: bool) -> None:
 
 
 def _build_heartbeat_payload() -> dict[str, Any]:
-    """현재 로컬 서버 상태를 담은 하트비트 페이로드를 생성한다."""
+    """현재 로컬 서버 상태를 담은 하트비트 페이로드를 생성한다.
+
+    서버 HeartbeatBody 스키마에 맞춰 uuid, timestamp, engine_running 등을 전송한다.
+    """
+    from datetime import datetime, timezone
+    import platform
+    cfg = get_config()
+
+    # UUID: 최초 생성 후 config에 저장
+    uuid = cfg.get("server.uuid")
+    if not uuid:
+        from uuid import uuid4
+        uuid = str(uuid4())
+        cfg.set("server.uuid", uuid)
+        cfg.save()
+
     return {
-        "status": "online",
-        "strategy_engine": "running" if _engine_running else "stopped",
+        "uuid": uuid,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "engine_running": _engine_running,
+        "version": cfg.get("server.version", "1.0.0"),
+        "os": platform.system(),
     }
 
 
