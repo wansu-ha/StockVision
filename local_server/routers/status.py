@@ -10,6 +10,7 @@ from typing import Any
 from fastapi import APIRouter, Request
 
 from local_server.engine.safeguard import KillSwitchLevel
+from local_server.storage.credential import has_credential, KEY_CLOUD_ACCESS_TOKEN
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,7 @@ async def get_status(request: Request) -> dict[str, Any]:
             "server": "running",
             "broker": {
                 "connected": broker_connected,
+                "has_credentials": has_credential(KEY_CLOUD_ACCESS_TOKEN),
             },
             "strategy_engine": {
                 "running": engine_running,
