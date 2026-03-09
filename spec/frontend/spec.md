@@ -1,6 +1,7 @@
 # 프론트엔드 명세서 (frontend)
 
 > 작성일: 2026-03-04 | 상태: 초안 | Unit 5 (Phase 3-B)
+> 갱신: 2026-03-09 — 싱글 페이지 확정, Trading/Portfolio 삭제
 >
 > **병합 대상**: `spec/strategy-builder/`, `spec/user-dashboard/`, `spec/notification/`,
 > `spec/onboarding/`, `spec/portfolio/`, `spec/execution-log/` → 본 spec에 통합.
@@ -31,16 +32,18 @@ React SPA로 StockVision의 사용자 인터페이스를 구현한다.
 | ID | 요구사항 | 우선순위 |
 |----|---------|---------|
 | F1 | 회원가입 + 로그인 (클라우드 서버) | P0 |
-| F2 | 대시보드: 실시간 시세 + 체결 알림 + 통합 신호등 | P0 |
-| F3 | 전략 빌더: 매수/매도 조건 UI로 구성 | P0 |
-| F4 | 전략 목록 관리 (생성, 수정, 삭제, ON/OFF) | P0 |
-| F5 | 실행 로그 뷰어 (logs.db에서 조회) | P0 |
-| F6 | 설정: 키움 API Key 등록 (→ localhost) | P0 |
-| F7 | localhost WS 연결 (실시간 시세 + 체결) | P0 |
-| F8 | 로그인 후 JWT + Refresh Token을 localhost에 전달 | P0 |
-| F9 | 규칙 저장 후 localhost에 sync | P0 |
-| F10 | 통합 신호등 (green/yellow/red — 거래 가능 여부) | P0 |
-| F11 | 온보딩 화면 (첫 설치 안내) | P2 |
+| F2 | 대시보드: 엔진 상태 + 관심종목 테이블 + 체결 피드 + 신호등 | P0 |
+| F3 | 종목 상세 패널: 현재가 + 지표 + 규칙 목록 (슬라이드 패널) | P0 |
+| F4 | 규칙 편집 모달: 매수/매도 조건 UI 구성 | P0 |
+| F5 | 규칙 관리: 생성, 수정, 삭제, ON/OFF | P0 |
+| F6 | 실행 로그 뷰어 (logs.db에서 조회) | P0 |
+| F7 | 설정: KIS API Key 등록 (→ localhost) | P0 |
+| F8 | localhost WS 연결 (실시간 시세 + 체결) | P0 |
+| F9 | 로그인 후 JWT + Refresh Token을 localhost에 전달 | P0 |
+| F10 | 규칙 저장 후 localhost에 sync | P0 |
+| F11 | 통합 신호등 (green/yellow/red — 거래 가능 여부) | P0 |
+| F12 | 엔진 시작/중지/Kill Switch 제어 | P0 |
+| F13 | 온보딩 화면 (첫 설치 안내) | P2 |
 
 ### 2.2 비기능적 요구사항
 
@@ -61,14 +64,15 @@ React SPA로 StockVision의 사용자 인터페이스를 구현한다.
 /                           → 메인 (로그인 필요, 싱글 페이지)
 /login                      → 로그인
 /register                   → 회원가입
-/verify-email               → 이메일 인증
-/forgot-password            → 비밀번호 재설정
+/forgot-password             → 비밀번호 재설정 요청
+/reset-password              → 비밀번호 재설정
+/onboarding                  → 온보딩
 /settings                   → 설정 (API Key, 모드, 프로필)
 /logs                       → 실행 로그
 /admin/*                    → 어드민 (Unit 6)
 ```
 
-> **싱글 페이지 원칙**: 대시보드·내 종목·종목 상세·규칙 편집이 모두 `/` 하나에서 동작.
+> **싱글 페이지 원칙**: 대시보드·관심종목·종목 상세·규칙 편집이 모두 `/` 하나에서 동작.
 > 사이드바 없음. 설정·로그는 유저 메뉴에서 접근.
 
 ### 3.2 레이아웃
@@ -78,26 +82,23 @@ React SPA로 StockVision의 사용자 인터페이스를 구현한다.
 │  StockVision ●●●  │  🔍 종목 검색...    │  🔔  홍길동 ▼  │
 ├──────────────────────────────────────────────────────────┤
 │                                                          │
-│  [엔진 시작/중지]                                         │
-│                                                          │
-│  ── 내 종목 ──────────────────────────────────────────── │
-│  삼성전자  72,400 +1.2%  규칙 3개 활성                    │
-│  SK하이닉스  185,000 -0.5%  규칙 1개                      │
-│                                                          │
-│  (v2: 주목 종목 — docs/v2-ideas.md 참조)                 │
+│  (메인 콘텐츠 — 싱글 페이지)                               │
 │                                                          │
 └──────────────────────────────────────────────────────────┘
 
 상단 바 구성:
-  좌측: 로고 + 신호등 ●●● (hover → 툴팁: "클라우드: 연결됨")
+  좌측: 로고 + 신호등 ●●● (hover → 툴팁: "클라우드: 연결됨, KIS: 연결됨")
   중앙: 검색바 (클릭 → 오버레이, 페이지 전환 없음)
   우측: 알림 벨 + 유저명 (클릭 → 드롭다운: 실행 로그, 설정, 로그아웃)
+
+※ 기존 navbar 메뉴(대시보드, 전략, 관심종목 등) 제거.
+  모든 기능은 `/` 싱글 페이지 내에서 패널/모달로 접근.
 ```
 
 ### 3.3 종목 중심 UX
 
 ```
-종목 검색/클릭 → 종목 상세 패널:
+종목 검색/클릭 → 종목 상세 패널 (우측 슬라이드):
   - 현재가 + 등락률
   - 현재 지표 값 (RSI, MACD 등 — 조건 설정 시 참고)
   - 이 종목에 걸린 규칙 목록
@@ -114,7 +115,7 @@ React SPA로 StockVision의 사용자 인터페이스를 구현한다.
 
 ### 4.1 메인 화면 (`/`)
 
-싱글 페이지. 대시보드 + 내 종목 + 종목 상세가 하나의 화면에서 동작.
+싱글 페이지. 엔진 상태 + 관심종목 + 최근 체결이 하나의 화면에서 동작.
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -129,15 +130,23 @@ React SPA로 StockVision의 사용자 인터페이스를 구현한다.
 │  │ 삼성전자   │ 72400│ +1.2% │ 3개 활성  │ 매수 @72400 │   │
 │  │ SK하이닉스 │185000│ -0.5% │ 1개 활성  │ —          │   │
 │  └──────────┴──────┴───────┴──────────┴─────────────┘   │
+│                                      [+ 종목 추가]        │
 │                                                          │
-│  (v2: 주목 종목 — docs/v2-ideas.md 참조)                 │
+│  ── 최근 체결 ──────────────────────────────────────────  │
+│  10:30:15  삼성전자   매수  10주  72,400  성공             │
+│  10:15:02  SK하이닉스  매도   5주  185,000  성공           │
 │                                                          │
 └──────────────────────────────────────────────────────────┘
 ```
 
-### 4.2 종목 상세 패널
+**구성요소:**
+1. **엔진 상태 바** — 엔진 실행 상태 + 시작/중지 버튼 + Kill Switch + 오늘 체결 수
+2. **관심종목 테이블** — 종목명, 현재가(실시간), 변동률, 활성 규칙 수, 최근 체결
+3. **최근 체결 피드** — 시각, 종목, 방향, 수량, 가격, 상태
 
-종목 클릭 또는 검색 결과 선택 시 표시. 오버레이/슬라이드 패널.
+### 4.2 종목 상세 패널 (슬라이드)
+
+관심종목 행 클릭 또는 검색 결과 선택 시 우측에서 슬라이드 인.
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -148,9 +157,9 @@ React SPA로 StockVision의 사용자 인터페이스를 구현한다.
 │  RSI(14): 34  │  MACD: -0.5  │  거래량배수: 1.8x    │
 ├─────────────────────────────────────────────────────┤
 │  ■ 규칙 (3개)                                        │
-│  ✅ RSI 30 이하 → 매수 10주         [수정] [삭제]    │
-│  ✅ RSI 70 이상 → 매도 전량         [수정] [삭제]    │
-│  ⏸ 거래량 급증 → 매수 5주          [수정] [삭제]    │
+│  ✅ RSI ≤ 30 → 매수 10주              [수정] [삭제]   │
+│  ✅ RSI ≥ 70 → 매도 전량              [수정] [삭제]   │
+│  ⏸ 거래량 급증 → 매수 5주             [수정] [삭제]   │
 │                                                      │
 │  [+ 규칙 추가]                                       │
 ├─────────────────────────────────────────────────────┤
@@ -158,7 +167,7 @@ React SPA로 StockVision의 사용자 인터페이스를 구현한다.
 └─────────────────────────────────────────────────────┘
 ```
 
-### 4.3 규칙 편집 (인라인 또는 모달)
+### 4.3 규칙 편집 모달
 
 종목 상세에서 "규칙 추가" 또는 "수정" 클릭 시 표시.
 
@@ -185,7 +194,7 @@ React SPA로 StockVision의 사용자 인터페이스를 구현한다.
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│  ■ 키움 API 설정                                     │
+│  ■ KIS API 설정                                      │
 │                                                      │
 │  App Key:    [                              ]        │
 │  App Secret: [                              ]        │
@@ -240,6 +249,7 @@ React SPA로 StockVision의 사용자 인터페이스를 구현한다.
     ├── JWT 전달 (로그인 직후)
     ├── 규칙 sync (저장 직후)
     ├── API Key 등록
+    ├── 엔진 시작/중지/Kill Switch
     ├── 상태 조회
     ├── 로그 조회
     └── WS: 실시간 시세 + 체결
@@ -259,11 +269,11 @@ async function onLoginSuccess(jwt: string, refreshToken: string) {
 // 규칙 변경 시 — 저장 후 localhost에 sync
 async function onRuleSave(rule: Rule) {
   // 1. 클라우드 서버에 저장
-  await apiClient.saveRule(rule);
+  await cloudClient.saveRule(rule);
 
   // 2. localhost에 즉시 sync
-  await localClient.syncRules(await apiClient.getRules());
-  // (브라우저 닫혀도 WS push로 로컬 서버가 자동 re-fetch)
+  await localClient.syncRules();
+  // (브라우저 닫혀도 하트비트로 로컬 서버가 자동 re-fetch)
 }
 ```
 
@@ -273,13 +283,13 @@ async function onRuleSave(rule: Rule) {
 type TrafficLightColor = "green" | "yellow" | "red";
 
 // 단일 신호등: "지금 거래 가능한가?"
-// 🟢 로컬 + 키움 정상 (거래 가능)
-// 🟡 로컬만 연결 (키움 안 됨 — 툴팁으로 원인 안내)
+// 🟢 로컬 + KIS 정상 (거래 가능)
+// 🟡 로컬만 연결 (KIS 안 됨 — 툴팁으로 원인 안내)
 // 🔴 로컬 미연결 (규칙 관리만 가능)
 
 function getTrafficLight(localStatus: LocalStatus | null): TrafficLightColor {
   if (!localStatus) return "red";           // 로컬 서버 미연결
-  if (!localStatus.kiwoom_connected) return "yellow";  // 키움 안 됨
+  if (!localStatus.kiwoom_connected) return "yellow";  // KIS 안 됨
   return "green";                           // 전부 정상
 }
 
@@ -302,68 +312,117 @@ useInterval(() => {
 
 ---
 
-## 6. 수용 기준
+## 6. 컴포넌트 구조
 
-### 6.1 인증
+### 6.1 신규 컴포넌트
+
+| 컴포넌트 | 위치 | 용도 |
+|---------|------|------|
+| `EngineControl` | 대시보드 상단 | 엔진 시작/중지/Kill Switch + 오늘 체결 수 |
+| `WatchlistTable` | 대시보드 중앙 | 관심종목 테이블 (실시간 가격, 규칙 수, 최근 체결) |
+| `StockDetailPanel` | 대시보드 우측 슬라이드 | 종목 상세 (지표 + 규칙 목록) |
+| `RuleEditModal` | 모달 오버레이 | 규칙 생성/수정 (조건 편집기 + 실행 설정) |
+
+### 6.2 기존 컴포넌트 재사용
+
+| 컴포넌트 | 변경 | 용도 |
+|---------|------|------|
+| `Layout` | 수정: navbar 메뉴 제거, 상단바만 | 레이아웃 |
+| `TrafficLightStatus` | 유지 | 신호등 (통합 1개) |
+| `StockSearch` | 유지 | 상단바 검색 + 종목 추가 |
+| `ConditionEditor` | 유지 | RuleEditModal에서 사용 |
+| `ConditionRow` | 유지 | ConditionEditor 하위 |
+| `ExecutionFeed` | 유지 | 대시보드 체결 피드 |
+| `RuleCard` | 유지 | StockDetailPanel 규칙 목록 |
+| `NotificationCenter` | 유지 | 상단바 알림 벨 |
+| `UserMenu` | 수정: 로그/설정 링크 추가 | 유저 드롭다운 |
+| `AdminGuard` | 유지 | 어드민 권한 가드 |
+
+### 6.3 삭제 대상 (Phase 2 레거시)
+
+| 파일 | 이유 |
+|------|------|
+| `pages/Trading.tsx` | Spec 범위 외 (가상 거래 제거) |
+| `pages/Portfolio.tsx` | Spec 범위 외 (포트폴리오 제거) |
+| `pages/StockList.tsx` | 대시보드 WatchlistTable로 통합 |
+| `pages/StockDetail.tsx` | StockDetailPanel(슬라이드)로 전환 |
+| `pages/StrategyBuilder.tsx` | RuleEditModal(모달)로 전환 |
+| `pages/Templates.tsx` | 어드민으로 이동 (Unit 6) |
+| `pages/AdminDashboard.tsx` | Admin/ 서브라우트로 재편 (Unit 6) |
+| `services/portfolio.ts` | Portfolio 삭제에 따라 |
+| `services/dashboard.ts` | 대시보드 API 불필요 |
+| `services/templates.ts` | 어드민으로 이동 |
+| `types/dashboard.ts` | 불필요 |
+| `types/trading.ts` | Trading 삭제에 따라 |
+| `components/VolumeChart.tsx` | StockDetail 페이지 삭제에 따라 |
+| `components/StockChart.tsx` | StockDetail 페이지 삭제에 따라 |
+| `components/PriceTable.tsx` | WatchlistTable로 대체 |
+| `components/MarketContext.tsx` | v2 범위 |
+| `components/AIStockAnalysis.tsx` | v2 범위 |
+| `components/BridgeInstaller.tsx` | 온보딩에 통합 |
+
+---
+
+## 7. 수용 기준
+
+### 7.1 인증
 
 - [ ] 회원가입 → 이메일 인증 → 로그인 성공
 - [ ] JWT 만료 시 Refresh Token 자동 갱신
+- [ ] 로그인 후 JWT → localhost 전달
 
-### 6.2 대시보드
+### 7.2 대시보드
 
-- [ ] localhost WS 연결 → 실시간 시세 표시
-- [ ] 체결 발생 → 알림 즉시 표시
+- [ ] 엔진 시작/중지/Kill Switch 동작
+- [ ] 관심종목 테이블에 실시간 가격 표시 (WS)
+- [ ] 체결 발생 → 피드 갱신 + Toast 알림
 - [ ] 통합 신호등 정상 표시 (green/yellow/red)
 
-### 6.3 전략 빌더
+### 7.3 종목 상세 패널
+
+- [ ] 관심종목 클릭 → 우측 슬라이드 패널 열림
+- [ ] 현재 지표 값 표시 (RSI, MACD 등)
+- [ ] 이 종목의 규칙 목록 표시
+
+### 7.4 규칙 편집
 
 - [ ] 매수/매도 조건을 UI로 구성 가능
 - [ ] AND/OR 연산자 선택 가능
 - [ ] 저장 → 클라우드 서버 + localhost sync
 
-### 6.4 JWT 전달 + 규칙 sync
+### 7.5 JWT 전달 + 규칙 sync
 
 - [ ] 로그인 후 → JWT + Refresh Token을 localhost에 전달
 - [ ] 규칙 저장 후 → localhost에 즉시 sync
 - [ ] localhost 미연결 시 → 경고 표시 (규칙은 API에 저장됨)
 
-### 6.5 설정
+### 7.6 설정
 
 - [ ] API Key 입력 → localhost에 저장 (서버 미전송)
 - [ ] 모의투자/실거래 모드 전환
 
 ---
 
-## 7. 범위
+## 8. 범위
 
 ### 포함
 
 - 인증 UI (로그인, 회원가입, 비밀번호 재설정)
-- 대시보드 (시세, 체결, 신호등)
-- 전략 빌더
+- 싱글 페이지 대시보드 (엔진 상태, 관심종목, 체결 피드)
+- 종목 상세 슬라이드 패널
+- 규칙 편집 모달
 - 실행 로그 뷰어
 - 설정 (API Key, 모드)
 - 듀얼 연결 (클라우드 서버 + localhost)
-- 브릿지 로직
+- 브릿지 로직 (JWT 전달, 규칙 sync)
 
-### 미포함
+### 미포함 (삭제/이동)
 
-- 어드민 페이지 (Unit 6)
-- 로컬 서버 (Unit 2)
-- 커뮤니티, 백테스팅 UI, 스크리닝 (→ `docs/v2-ideas.md`)
-
----
-
-## 8. 기존 spec과의 관계
-
-| 기존 | 상태 |
-|------|------|
-| `spec/strategy-builder/` | **병합** — §4.2 전략 빌더 |
-| `spec/user-dashboard/` | **병합** — §4.1 대시보드 |
-| `spec/notification/` | **병합** — 체결 알림 + 신호등 |
-| `spec/onboarding/` | **병합** — §4.3 온보딩 |
-| `spec/portfolio/` | **병합** — 대시보드 잔고 표시 (localhost 제공) |
-| `spec/execution-log/` | **병합** — 실행 로그 뷰어 |
+- ~~가상 거래 (Trading)~~ — **삭제**
+- ~~포트폴리오~~ — **삭제**
+- 어드민 페이지 (Unit 6으로 이동)
+- 커뮤니티, 백테스팅 UI, 스크리닝 (→ v2)
+- 다크 모드, 모바일 반응형 (→ v2)
 
 ---
 
@@ -383,22 +442,36 @@ useInterval(() => {
 
 ---
 
-## 10. 미결 사항
+## 10. 미결 사항 해소
 
-- [ ] 전략 빌더 조건 타입 확장 (custom_formula 지원 여부)
-- [ ] localhost 미연결 시 UX (기능 제한 범위)
-- [ ] 모바일 반응형 필요 여부
-- [ ] 다크 모드 지원 범위
-- [ ] 브릿지 sync 실패 시 재시도 정책
+| 항목 | 결정 |
+|------|------|
+| 전략 빌더 조건 타입 확장 | UI 드롭다운만 (RSI, MACD 등 사전정의). custom_formula는 v2 |
+| localhost 미연결 시 UX | 대시보드: 시세+체결 오류. 전략: 저장 가능(클라우드), sync 불가 경고. 설정: API Key 등록 불가. 로그: 조회 불가 |
+| 모바일 반응형 | PC 기준(md 768px 이상). 모바일은 v2 |
+| 다크 모드 | 라이트 모드만. v2에서 추가 |
+| 브릿지 sync 실패 시 재시도 | syncRules 실패 → Toast 경고(자동 재시도 없음). JWT 전달 실패 → 재시도 3회(1s 백오프) |
+
+---
+
+## 11. 기존 spec과의 관계
+
+| 기존 | 상태 |
+|------|------|
+| `spec/strategy-builder/` | **병합** — §4.3 규칙 편집 모달 |
+| `spec/user-dashboard/` | **병합** — §4.1 대시보드 |
+| `spec/notification/` | **병합** — 체결 알림 + 신호등 |
+| `spec/onboarding/` | **병합** — 온보딩 |
+| `spec/portfolio/` | **삭제** — Spec 범위 외 |
+| `spec/execution-log/` | **병합** — 실행 로그 뷰어 |
 
 ---
 
 ## 참고
 
-- `spec/strategy-builder/spec.md`, `spec/user-dashboard/spec.md` (상세)
 - `docs/architecture.md` §4.1, §7, §8
 - `docs/development-plan-v2.md` Unit 5
 
 ---
 
-**마지막 갱신**: 2026-03-06
+**마지막 갱신**: 2026-03-09
