@@ -16,6 +16,9 @@ import Register from './pages/Register'
 import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
 import Onboarding from './pages/Onboarding'
+import ProtoA from './pages/ProtoA'
+import ProtoB from './pages/ProtoB'
+import ProtoC from './pages/ProtoC'
 import Layout from './components/Layout'
 import AlertContainer from './components/AlertContainer'
 import ToastContainer from './components/ToastContainer'
@@ -47,6 +50,9 @@ function AppRoutes() {
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/onboarding" element={<Onboarding />} />
+      <Route path="/proto-a" element={<ProtoA />} />
+      <Route path="/proto-b" element={<ProtoB />} />
+      <Route path="/proto-c" element={<ProtoC />} />
 
       {/* 인증 필수 라우트 */}
       <Route path="*" element={
