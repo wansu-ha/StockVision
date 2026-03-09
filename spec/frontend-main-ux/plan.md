@@ -22,34 +22,31 @@ ProtoC.tsx (701줄)가 단일 파일에 모든 UI를 포함:
 
 ### 1.2 목표 구조
 
-ProtoC를 컴포넌트로 분해하고 mock → 실제 API로 교체.
+ProtoC를 적절한 단위로 분해하고 mock → 실제 API로 교체.
 `/proto-c` → `/` (인증 필수 메인 화면)로 전환.
+
+ProtoC.tsx는 701줄 — 과잉 분해를 피하고 자연스러운 경계로 나눈다.
 
 ```
 pages/
-  MainDashboard.tsx          ← ProtoC를 리네임, 상태/데이터 관리
+  MainDashboard.tsx          ← 상태 관리 + 뷰 전환 (~60줄)
   Login.tsx                  ← 다크 테마 리스타일
   Register.tsx               ← 다크 테마 리스타일
 
 components/main/
-  Header.tsx                 ← 로고 + 신호등 + 검색 + 알림 + 톱니바퀴
-  SearchOverlay.tsx          ← cloudStocks.search() 연동
-  NotificationDropdown.tsx   ← useNotifStore 연동
-  GearDropdown.tsx           ← 엔진/연결/사용자
-  AccountSummary.tsx         ← localStatus → 계좌 정보
-  StockList.tsx              ← 탭 + 아코디언 종목 행
-  StockRow.tsx               ← 단일 종목 행 + 확장 영역
-  PendingOrders.tsx          ← 미체결 주문 테이블
-  ExecutionHistory.tsx       ← 체결 내역 테이블
-  DetailView.tsx             ← 상세 뷰 (차트, 지표, 규칙, 체결)
-  PriceChart.tsx             ← Lightweight Charts 래퍼
-  RuleCard.tsx               ← 규칙 카드 (토글 + 편집)
+  Header.tsx                 ← 로고 + 신호등 + 검색 + 알림 + 톱니바퀴 (드롭다운 포함, ~150줄)
+  ListView.tsx               ← 계좌 요약 + 탭 + 종목 행 + 미체결 + 체결 (~250줄)
+  DetailView.tsx             ← 차트 + 지표 + 컨텍스트 + 규칙 + 체결 (~200줄)
+  PriceChart.tsx             ← Lightweight Charts (독립, 복잡도 높아 분리 필수, ~170줄)
 
 hooks/
   useAccountStatus.ts        ← localStatus 폴링 (5s)
-  useStockData.ts            ← cloudRules + watchlist 병합
+  useStockData.ts            ← cloudRules + watchlist + quote 병합
   useMarketContext.ts        ← cloudContext 폴링
 ```
+
+> **분해 기준**: Header/ListView/DetailView/PriceChart는 각각 독립적 책임 + 100줄 이상.
+> 드롭다운(검색/알림/톱니바퀴)은 Header 내부에 유지 (Header에서만 사용).
 
 ### 1.3 데이터 흐름
 
@@ -65,8 +62,21 @@ MainDashboard
   │   └─ KOSPI RSI, KOSDAQ RSI, 시장 추세, 변동성
   ├─ useNotifStore       → WebSocket /ws (useLocalBridgeWS)
   │   └─ 실시간 알림 (체결, 트리거, 연결 변경)
-  └─ cloudStocks.search() → 검색 오버레이 (on-demand)
+  ├─ cloudStocks.search() → 검색 오버레이 (on-demand)
+  └─ cloudBars.get()      → OHLCV 차트 데이터 (on-demand, 상세 진입 시)
 ```
+
+### 1.4 시세 데이터 소스
+
+백엔드에 시세 API가 이미 구현되어 있다:
+
+| API | 엔드포인트 | 데이터 |
+|-----|----------|--------|
+| 일봉 OHLCV | `GET /api/v1/stocks/{symbol}/bars?start=&end=` | DailyBar 테이블 캐시 + yfinance fallback |
+| 현재가 | `GET /api/v1/stocks/{symbol}/quote` | 지연 시세 (REST) |
+
+프론트엔드 `cloudClient.ts`에 메서드만 추가하면 mock 대체 가능.
+yfinance는 무료, 토큰 불필요.
 
 ---
 
@@ -74,24 +84,16 @@ MainDashboard
 
 ### 신규 생성
 
-| 파일 | 내용 |
-|------|------|
-| `components/main/Header.tsx` | 헤더 (로고, 검색, 알림, 톱니바퀴) |
-| `components/main/SearchOverlay.tsx` | 검색 오버레이 (cloudStocks.search) |
-| `components/main/NotificationDropdown.tsx` | 알림 드롭다운 (useNotifStore) |
-| `components/main/GearDropdown.tsx` | 톱니바퀴 드롭다운 |
-| `components/main/AccountSummary.tsx` | 계좌 요약 카드 |
-| `components/main/StockList.tsx` | 탭 + 종목 리스트 |
-| `components/main/StockRow.tsx` | 종목 행 (아코디언) |
-| `components/main/PendingOrders.tsx` | 미체결 주문 |
-| `components/main/ExecutionHistory.tsx` | 체결 내역 |
-| `components/main/DetailView.tsx` | 상세 뷰 |
-| `components/main/PriceChart.tsx` | 가격 차트 |
-| `components/main/RuleCard.tsx` | 규칙 카드 |
-| `hooks/useAccountStatus.ts` | 계좌 상태 폴링 훅 |
-| `hooks/useStockData.ts` | 종목+규칙 데이터 훅 |
-| `hooks/useMarketContext.ts` | 시장 컨텍스트 훅 |
-| `pages/MainDashboard.tsx` | 메인 대시보드 (ProtoC 리네임) |
+| 파일 | 내용 | 예상 줄수 |
+|------|------|----------|
+| `pages/MainDashboard.tsx` | 상태 관리 + 뷰 전환 오케스트레이터 | ~60 |
+| `components/main/Header.tsx` | 로고 + 신호등 + 검색 오버레이 + 알림 + 톱니바퀴 (드롭다운 포함) | ~150 |
+| `components/main/ListView.tsx` | 계좌 요약 + 탭 + 종목 행(아코디언) + 미체결 + 체결 | ~250 |
+| `components/main/DetailView.tsx` | 상세 뷰 (지표, 컨텍스트, 규칙 토글+편집, 체결) | ~200 |
+| `components/main/PriceChart.tsx` | Lightweight Charts 래퍼 (기간선택, 드래그확대) | ~170 |
+| `hooks/useAccountStatus.ts` | localStatus 폴링 (5s) | ~40 |
+| `hooks/useStockData.ts` | cloudRules + watchlist + quote 병합 | ~60 |
+| `hooks/useMarketContext.ts` | cloudContext 폴링 (30s) | ~30 |
 
 ### 수정
 
@@ -112,44 +114,51 @@ ProtoC.tsx는 삭제하지 않고 유지 (비교 참조용).
 
 ## 3. 구현 순서
 
-### Step 1: 컴포넌트 분해 (mock 유지)
+### Step 1: 컴포넌트 분해 + 라우팅 (mock 유지)
 
-ProtoC.tsx의 inline JSX를 `components/main/` 파일들로 추출.
-동작은 동일하되 파일만 분리. mock 데이터는 그대로 props로 전달.
+ProtoC.tsx를 4개 컴포넌트로 분해 + 인증 라우팅 설정.
+API 연동 전에 인증 프레임을 먼저 갖춘다 (Step 2에서 API 호출에 JWT 필요).
 
 **작업:**
 - `components/main/` 디렉토리 생성
-- Header, AccountSummary, StockList, StockRow, PendingOrders, ExecutionHistory, DetailView, PriceChart, RuleCard 추출
-- SearchOverlay, NotificationDropdown, GearDropdown 추출
-- MainDashboard.tsx 생성 (ProtoC 구조 유지, 컴포넌트 조합)
+- Header.tsx 추출 (검색/알림/톱니바퀴 드롭다운 포함)
+- ListView.tsx 추출 (계좌 요약, 탭, 종목 행, 미체결, 체결)
+- DetailView.tsx 추출 (지표, 컨텍스트, 규칙, 체결)
+- PriceChart.tsx 추출 (Lightweight Charts 래퍼)
+- MainDashboard.tsx 생성 (상태 관리 + 4개 컴포넌트 조합)
+- App.tsx: `/` → MainDashboard (ProtectedRoute), `/proto-c` 유지
+- GearDropdown 내 로그아웃 → `useAuth().logout()` 연결
 
-**verify:** `npm run dev` → `/proto-c`와 동일한 화면 렌더링. `npx tsc --noEmit` 통과.
+**verify:** `npm run dev` → 로그인 후 `/`에서 ProtoC와 동일한 화면. `npx tsc --noEmit` 통과.
 
 ### Step 2: 커스텀 훅 + API 연동
 
-mock 데이터를 실제 API 호출로 교체.
+mock 데이터를 실제 API 호출로 교체. cloudClient에 시세 메서드 추가.
 
 **작업:**
-- `useAccountStatus` 훅: `localStatus.get()` 5초 폴링, 계좌/보유/엔진/연결 상태
-- `useStockData` 훅: `cloudRules.list()` → 규칙이 걸린 종목 추출 (내 종목), `cloudWatchlist.list()` (관심 종목)
+- `cloudClient.ts`에 `cloudBars.get(symbol, start?, end?)` 추가 (→ `/api/v1/stocks/{symbol}/bars`)
+- `cloudClient.ts`에 `cloudQuote.get(symbol)` 추가 (→ `/api/v1/stocks/{symbol}/quote`)
+- `useAccountStatus` 훅: `localStatus.get()` 5초 폴링
+- `useStockData` 훅: `cloudRules.list()` + `cloudWatchlist.list()` + `cloudQuote.get()`
 - `useMarketContext` 훅: `cloudContext.get()` 30초 폴링
+- PriceChart: `cloudBars.get()` 연동 (기간 변경 시 API 재호출)
 - 알림: 기존 `useNotifStore` (useLocalBridgeWS) 연결
-- MainDashboard에서 mock 상수 제거, 훅으로 교체
+- MainDashboard에서 MOCK_* 상수 제거, 훅으로 교체
 
-**verify:** 브라우저 Network 탭에서 API 호출 확인. 빈 데이터 시 빈 상태 UI 표시. `npx tsc --noEmit` 통과.
+**verify:** Network 탭에서 API 호출 확인. 빈 데이터 시 빈 상태 UI. `npx tsc --noEmit` 통과.
 
 ### Step 3: 검색 오버레이
 
 헤더 검색바를 실제 `cloudStocks.search()` 연동.
 
 **작업:**
-- SearchOverlay: 300ms 디바운스, 드롭다운 결과 (최대 10건)
-- 기존 `StockSearch.tsx`의 `doSearch` 로직 참조 (재사용)
-- 종목 선택 → 상세 뷰로 전환 (페이지 이동 없음, `setView('detail')`)
+- Header 내 검색 입력 → 300ms 디바운스 → `cloudStocks.search(q, 10)`
+- 드롭다운 결과 표시 (다크 테마)
+- 종목 선택 → 상세 뷰로 전환 (페이지 이동 없음)
 - ESC / 외부 클릭으로 닫기
-- 다크 테마 스타일
+- 기존 `StockSearch.tsx`의 `doSearch` 로직 참조
 
-**verify:** 검색어 입력 → 300ms 후 API 호출 → 결과 드롭다운 → 선택 시 상세 뷰. `npx tsc --noEmit` 통과.
+**verify:** 검색 → 300ms → API 호출 → 결과 → 선택 → 상세 뷰. `npx tsc --noEmit` 통과.
 
 ### Step 4: 규칙 토글 + 인라인 편집 API 연동
 
@@ -159,35 +168,23 @@ mock 데이터를 실제 API 호출로 교체.
 - 규칙 추가 → `cloudRules.create(payload)`
 - 규칙 삭제 → `cloudRules.remove(id)` (확인 모달)
 
-**verify:** 토글 ON↔OFF → API 호출 확인 → 새로고침 후 상태 유지. `npx tsc --noEmit` 통과.
+**verify:** 토글 ON↔OFF → API → 새로고침 후 상태 유지. `npx tsc --noEmit` 통과.
 
-### Step 5: 라우팅 전환 + 인증 연결
-
-**작업:**
-- App.tsx: `/` 라우트 → MainDashboard (ProtectedRoute 내부)
-- `/proto-c` 라우트 유지 (개발용 비교)
-- MainDashboard에서 AuthContext의 jwt/email 활용
-- GearDropdown: `useAuth().logout()` 연결
-- 미인증 시 `/login`으로 리다이렉트 (기존 ProtectedRoute 동작)
-
-**verify:** 로그아웃 → `/login` 이동. 로그인 → `/` 메인 대시보드 표시. `npx tsc --noEmit` 통과.
-
-### Step 6: 로그인/회원가입 다크 테마
+### Step 5: 로그인/회원가입 다크 테마
 
 **작업:**
 - Login.tsx, Register.tsx, ForgotPassword.tsx, ResetPassword.tsx 스타일 변경
 - 배경: `bg-gray-950`, 카드: `bg-gray-900 border-gray-800`, 텍스트: `text-gray-100`
-- 버튼: `bg-blue-600 hover:bg-blue-500`
-- 입력: `bg-gray-800 border-gray-700`
+- 버튼: `bg-blue-600 hover:bg-blue-500`, 입력: `bg-gray-800 border-gray-700`
 - 기능 로직 변경 없음 (스타일만)
 
-**verify:** `/login`, `/register` 페이지 → Proto C와 통일된 다크 테마. `npx tsc --noEmit` 통과.
+**verify:** `/login`, `/register` → Proto C 다크 테마 통일. `npx tsc --noEmit` 통과.
 
-### Step 7: 툴팁 (용어 설명)
+### Step 6: 툴팁 (용어 설명)
 
 **작업:**
 - 금융 용어 데이터 정의 (RSI, MACD, 볼린저, 거래량배수 등)
-- 점선 밑줄 스타일 적용 (Tailwind: `decoration-dotted underline cursor-help`)
+- 점선 밑줄 스타일 (Tailwind: `decoration-dotted underline cursor-help`)
 - 호버/클릭 시 설명 표시 (CSS tooltip 또는 Headless UI Popover)
 - 최초 방문 시 힌트 (localStorage 플래그)
 
@@ -201,13 +198,12 @@ mock 데이터를 실제 API 호출로 교체.
 |------|------|
 | 모든 단계 | `npx tsc --noEmit` 통과 |
 | 모든 단계 | `npm run build` 성공 (ProtoC 외 기존 에러 제외) |
-| Step 1 | `/proto-c`와 시각적으로 동일 |
-| Step 2 | Network 탭에서 API 호출 확인, 빈 데이터 시 빈 상태 표시 |
+| Step 1 | 로그인 → `/`에서 ProtoC와 동일한 화면, 로그아웃 → `/login` |
+| Step 2 | Network: API 호출, 차트에 실제 OHLCV 표시, 빈 데이터 시 빈 상태 |
 | Step 3 | 검색 → 결과 → 선택 → 상세 뷰 전환 |
 | Step 4 | 토글/저장 → API → 새로고침 후 상태 유지 |
-| Step 5 | 인증 흐름: 로그인 → 메인 → 로그아웃 → 로그인 |
-| Step 6 | 로그인/가입 페이지 스크린샷 비교 |
-| Step 7 | 용어 호버 → 팝오버 표시 |
+| Step 5 | 로그인/가입 페이지 Proto C 다크 테마 통일 |
+| Step 6 | 용어 호버 → 팝오버 표시 |
 
 ---
 
@@ -216,9 +212,10 @@ mock 데이터를 실제 API 호출로 교체.
 | 항목 | 설명 | 대응 |
 |------|------|------|
 | Unit 2 (로컬 서버) API | 계좌, 엔진 상태 | mock fallback 유지, API 가용 시 교체 |
-| Unit 4 (클라우드 서버) API | 규칙, 검색, 컨텍스트 | 클라우드 서버 구현 완료 상태, 통합 테스트 필요 |
+| Unit 4 (클라우드 서버) API | 규칙, 검색, 컨텍스트 | 클라우드 서버 구현 완료, 통합 테스트 필요 |
+| 시세 API | `/api/v1/stocks/{symbol}/bars`, `/quote` | 구현 완료 (yfinance, 토큰 불필요). cloudClient 메서드만 추가 |
 | WebSocket 연결 | 실시간 알림 | 기존 useLocalBridgeWS 훅 사용, 연결 실패 시 폴링 fallback |
-| 반응형 (§3.6) | 태블릿/모바일 대응 | Step 1~7 완료 후 별도 이터레이션 |
+| 반응형 (§3.6) | 태블릿/모바일 대응 | Step 1~6 완료 후 별도 이터레이션 |
 
 ---
 
