@@ -1,6 +1,6 @@
 # Cloud AI 분석 모듈 명세서 (cloud-ai)
 
-> 작성일: 2026-03-09 | 상태: 초안 | cloud-server F9/F10 구현
+> 작성일: 2026-03-09 | 상태: 구현 완료 | cloud-server F9/F10 구현
 
 ---
 
@@ -286,20 +286,20 @@ class AIAnalysisLog(Base):
 
 ## 10. 수용 기준
 
-- [ ] A1: `GET /api/v1/ai/analysis/{symbol}?type=sentiment` → Claude 호출 → score 반환
-- [ ] A2: `GET /api/v1/ai/analysis/{symbol}?type=summary` → 종합 분석 리포트 반환
-- [ ] A2: `type=risk`, `type=technical` → 각 유형별 분석 반환
-- [ ] A3: `ANTHROPIC_API_KEY` 미설정 → `source: "stub"`, `score: 0.0` 반환 (에러 없음)
-- [ ] A4: 유효하지 않은 키 → 에러 로깅 + 스텁 반환 (서버 크래시 없음)
-- [ ] A5: 동일 종목+type TTL 내 재호출 → 캐시 응답 (`cached: true`)
-- [ ] A5: Redis 가용 시 Redis 캐시, 불가 시 메모리 캐시 fallback
-- [ ] A6: 호출마다 토큰 사용량 로깅
-- [ ] A7: 일일 한도 초과 → 스텁 반환
-- [ ] A8: `GET /api/v1/ai/status` → 키 유효 여부 + 일일 사용량 + 캐시 백엔드 반환
-- [ ] A9: 분석 결과 `AIAnalysisLog` 테이블에 저장
-- [ ] A10: `GET /api/v1/ai/history` → 어드민 전용 이력 조회
-- [ ] 기존 테스트 깨지지 않음 (`pytest cloud_server/` 전체 통과)
-- [ ] 신규 테스트 추가 (스텁 fallback, 캐시, 한도 초과, 이력 저장)
+- [x] A1: `GET /api/v1/ai/analysis/{symbol}?type=sentiment` → Claude 호출 → score 반환
+- [x] A2: `GET /api/v1/ai/analysis/{symbol}?type=summary` → 종합 분석 리포트 반환
+- [x] A2: `type=risk`, `type=technical` → 각 유형별 분석 반환
+- [x] A3: `ANTHROPIC_API_KEY` 미설정 → `source: "stub"`, `score: 0.0` 반환 (에러 없음)
+- [x] A4: 유효하지 않은 키 → 에러 로깅 + 스텁 반환 (서버 크래시 없음)
+- [x] A5: 동일 종목+type TTL 내 재호출 → 캐시 응답 (`cached: true`)
+- [x] A5: Redis 가용 시 Redis 캐시, 불가 시 메모리 캐시 fallback
+- [x] A6: 호출마다 토큰 사용량 로깅
+- [x] A7: 일일 한도 초과 → 스텁 반환
+- [x] A8: `GET /api/v1/ai/status` → 키 유효 여부 + 일일 사용량 + 캐시 백엔드 반환
+- [x] A9: 분석 결과 `AIAnalysisLog` 테이블에 저장
+- [x] A10: `GET /api/v1/ai/history` → 어드민 전용 이력 조회
+- [x] 기존 테스트 깨지지 않음 (`pytest cloud_server/` 전체 통과)
+- [x] 신규 테스트 추가 (스텁 fallback, 캐시, 한도 초과, 이력 저장)
 
 ---
 

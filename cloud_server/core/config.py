@@ -49,7 +49,12 @@ class Settings:
 
     # AI (Claude API)
     ANTHROPIC_API_KEY: str = os.environ.get("ANTHROPIC_API_KEY", "")
-    CLAUDE_MODEL: str = os.environ.get("CLAUDE_MODEL", "claude-opus-4-6")
+    CLAUDE_MODEL: str = os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-20250514")
+    AI_DAILY_LIMIT: int = int(os.environ.get("AI_DAILY_LIMIT", "100"))
+    AI_CACHE_TTL: int = int(os.environ.get("AI_CACHE_TTL", "3600"))
+
+    # Redis (AI 캐시 + 향후 rate_limit 공용)
+    REDIS_URL: str = os.environ.get("REDIS_URL", "")
 
     # 로컬 서버 버전 정보
     LOCAL_SERVER_LATEST_VERSION: str = os.environ.get("LOCAL_SERVER_LATEST_VERSION", "1.0.0")

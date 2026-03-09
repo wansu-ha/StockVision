@@ -12,6 +12,7 @@ from cloud_server.models.heartbeat import Heartbeat  # noqa: F401
 from cloud_server.models.market import StockMaster, DailyBar, MinuteBar, Watchlist  # noqa: F401
 from cloud_server.models.template import StrategyTemplate, BrokerServiceKey  # noqa: F401
 from cloud_server.models.fundamental import CompanyFinancial, CompanyDividend  # noqa: F401
+from cloud_server.models.ai import AIAnalysisLog  # noqa: F401
 
 
 def init_db() -> None:
