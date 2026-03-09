@@ -8,7 +8,7 @@
 
 **현재 상태 (2026-03-09 갱신):**
 - ✅ 이용약관, 개인정보처리방침, 투자 면책 고지, 키움 약관 준수 확인서 — Step 1-4 작성 완료
-- ⚠️ KIS(한국투자증권) 반영 + "법률 검토 전 초안" 헤더 추가 등 업데이트 필요
+- ✅ KIS(한국투자증권) 반영 + "법률 검토 전 초안" 헤더 추가 완료 (v1.1)
 - ✅ 프론트엔드 온보딩 위험고지(RiskDisclosure) 구현됨
 - ❌ 회원가입 약관 동의 체크박스 미구현
 - ❌ 설정 페이지 약관 열람 미구현
@@ -220,115 +220,32 @@
 
 ---
 
-### Step 5 — 프론트엔드 UI 연동
+### Step 5-6 — 프론트엔드 UI + 백엔드 약관 버전 관리
 
-**목표**: 약관 동의, 면책 고지 팝업을 프론트엔드에 구현
+> **상세 계획서**: `spec/legal/plan-v2.md` 참조 (2026-03-09 작성)
+>
+> Step 5-6의 구체적인 구현 대상 파일, 모델 설계, API 설계, UI 와이어프레임,
+> 구현 순서, 커밋 계획은 plan-v2.md에 기술.
 
-**파일**: `frontend/src/components/LegalModals.tsx` (신규)
-
-**구현 내용:**
-
-1. **회원가입 동의 화면**
-   - 이용약관 + 개인정보처리방침 동의 체크박스 (필수)
-   - 각 약관 링크 (모달 또는 새 탭)
-   - 동의 안 함 → 가입 버튼 비활성화
-
-2. **전략 활성화 팝업**
-   - 투자 면책 고지 대형 팝업
-   - "위험을 이해하고 동의합니다" 체크박스
-   - 동의 후에만 전략 활성화 가능
-
-3. **설정 페이지 약관 섹션**
-   - "약관 및 고지" 탭
-   - 이용약관, 개인정보처리방침, 면책 고지 열람
-   - "계정 삭제" 버튼 (회원탈퇴)
-
-4. **온보딩 화면**
-   - 앱 최초 실행 시 면책 고지 표시
-   - "동의" 클릭 후 대시보드로 진행
-
-**파일 변경:**
-- `frontend/src/pages/SignUp.tsx` — 약관 동의 UI 추가
-- `frontend/src/pages/StrategyBuilder.tsx` — 활성화 팝업 추가
-- `frontend/src/pages/Settings.tsx` — 약관 열람 섹션 추가
-- `frontend/src/App.tsx` — 온보딩 라우트 추가
-
-**검증:**
-- [ ] 회원가입 → 동의 없이 가입 불가 확인
-- [ ] 전략 활성화 → 팝업 표시 후 동의 확인
-- [ ] 설정 페이지에서 약관 모두 열람 가능
-- [ ] 온보딩 화면 → 스킵 불가 확인
-
----
-
-### Step 6 — 백엔드 약관 버전 관리
-
-**목표**: 약관 버전 관리 및 사용자 동의 기록 저장 기능 구현
-
-**파일**: `backend/app/models/legal.py` (신규)
-
-**구현 내용:**
-
-1. **약관 버전 모델**
-   ```python
-   class LegalDocument(SQLAlchemy Model):
-       id: int (PK)
-       document_type: str  # 'terms', 'privacy', 'disclaimer'
-       version: str  # '1.0', '1.1', ...
-       content: str  # markdown
-       effective_date: datetime
-       created_at: datetime
-   ```
-
-2. **사용자 동의 기록 모델**
-   ```python
-   class UserLegalConsent(SQLAlchemy Model):
-       id: int (PK)
-       user_id: int (FK)
-       document_id: int (FK)
-       version: str
-       agreed_at: datetime
-       ip_address: str
-   ```
-
-3. **API 엔드포인트**
-   - `GET /api/v1/legal/{document_type}/{version}` — 약관 조회
-   - `POST /api/v1/legal/consent` — 동의 기록 저장
-   - `GET /api/v1/legal/consent/status` — 사용자 동의 상태 조회
-
-4. **로직**
-   - 약관 변경 시 새 버전 생성
-   - 사용자가 구 버전으로 가입했을 경우, 신버전 재동의 요청
-   - 동의 기록에 IP, 타임스탬프 저장 (감시 추적)
-
-**파일 변경:**
-- `backend/app/api/auth.py` — 회원가입 시 동의 기록 저장
-- `backend/app/services/user_service.py` — 동의 상태 확인 로직
-
-**검증:**
-- [ ] 약관 생성 후 조회 가능 확인
-- [ ] 사용자 동의 기록 저장 확인
-- [ ] 신버전 약관 → 기존 사용자 재동의 요청 로직 동작 확인
+**요약:**
+- **L1**: Register.tsx 약관 동의 체크박스 + cloud_server RegisterBody 확장
+- **L2**: LegalDocument.tsx 열람 페이지 + Settings 법무 섹션 + Layout Footer
+- **L3**: LegalDocument/LegalConsent 모델 + 약관 API + 로그인 시 재동의 플로우
 
 ---
 
 ## 2. 파일 목록
 
+> Step 5-6 파일 목록은 `spec/legal/plan-v2.md` §4 참조.
+
+### Step 1-4 (완료)
+
 | 파일 | 종류 | 변경 | 목적 |
 |------|------|------|------|
-| `docs/legal/terms-of-service.md` | 문서 | 신규 | 이용약관 |
-| `docs/legal/privacy-policy.md` | 문서 | 신규 | 개인정보처리방침 |
-| `docs/legal/disclaimer.md` | 문서 | 신규 | 투자 면책 고지 |
-| `docs/legal/kiwoom-compliance.md` | 문서 | 신규 | 키움 약관 준수(내부) |
-| `frontend/src/components/LegalModals.tsx` | 컴포넌트 | 신규 | 약관 모달/팝업 |
-| `frontend/src/pages/SignUp.tsx` | 페이지 | 수정 | 약관 동의 UI 추가 |
-| `frontend/src/pages/StrategyBuilder.tsx` | 페이지 | 수정 | 면책 고지 팝업 추가 |
-| `frontend/src/pages/Settings.tsx` | 페이지 | 수정 | 약관 열람 섹션 추가 |
-| `frontend/src/App.tsx` | 라우팅 | 수정 | 온보딩 라우트 추가 |
-| `backend/app/models/legal.py` | 모델 | 신규 | 약관/동의 DB 스키마 |
-| `backend/app/api/legal.py` | API | 신규 | 약관 조회/동의 엔드포인트 |
-| `backend/app/services/legal_service.py` | 서비스 | 신규 | 약관 버전 관리 로직 |
-| `backend/app/api/auth.py` | API | 수정 | 회원가입 시 동의 기록 저장 |
+| `docs/legal/terms-of-service.md` | 문서 | 완료 (v1.1) | 이용약관 |
+| `docs/legal/privacy-policy.md` | 문서 | 완료 (v1.1) | 개인정보처리방침 |
+| `docs/legal/disclaimer.md` | 문서 | 완료 (v1.1) | 투자 면책 고지 |
+| `docs/legal/broker-compliance.md` | 문서 | 완료 (v1.1) | 증권사 약관 준수(내부) |
 
 ---
 
@@ -408,4 +325,4 @@
 
 ---
 
-**마지막 갱신**: 2026-03-05
+**마지막 갱신**: 2026-03-09
