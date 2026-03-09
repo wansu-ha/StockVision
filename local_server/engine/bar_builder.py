@@ -96,6 +96,34 @@ class BarBuilder:
         """직전 완성 분봉."""
         return self._completed.get(symbol)
 
+    async def fill_gap(self, symbol: str, broker) -> int:
+        """WS 끊김 동안 누락된 분봉을 REST 현재가로 보충한다.
+
+        Returns:
+            보충된 분봉 수 (0이면 gap 없음)
+        """
+        latest = self._latest.get(symbol)
+        if not latest or "timestamp" not in latest:
+            return 0
+
+        now = datetime.now()
+        last = latest["timestamp"]
+        gap_minutes = (now - last).total_seconds() / 60
+
+        if gap_minutes < 2:
+            return 0
+
+        try:
+            quote = await broker.get_quote(symbol)
+            price = quote.price if hasattr(quote, "price") else Decimal(0)
+            if price > 0:
+                self.on_quote(symbol, price, 0, now)
+                return 1
+        except Exception as e:
+            logger.error("분봉 gap fill 실패 (%s): %s", symbol, e)
+
+        return 0
+
     @staticmethod
     def _new_bar(timestamp: datetime, price: Decimal, volume: int) -> dict:
         return {
