@@ -5,6 +5,7 @@ WORKDIR /app
 COPY cloud_server/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+COPY sv_core/ sv_core/
 COPY cloud_server/ cloud_server/
 
 EXPOSE 4010
