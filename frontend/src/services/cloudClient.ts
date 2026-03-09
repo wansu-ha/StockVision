@@ -125,6 +125,37 @@ export const cloudWatchlist = {
     client.delete(`/api/v1/watchlist/${symbol}`).then((r) => r.data),
 }
 
+/** 시세 데이터 — /api/v1/stocks/{symbol}/bars, /quote */
+export interface DailyBar {
+  date: string
+  open: number
+  high: number
+  low: number
+  close: number
+  volume: number
+}
+
+export interface StockQuote {
+  symbol: string
+  price: number
+  change: number
+  change_pct: number
+  volume: number
+  updated_at: string
+}
+
+export const cloudBars = {
+  get: (symbol: string, start?: string, end?: string) =>
+    client.get<{ data: DailyBar[] }>(`/api/v1/stocks/${symbol}/bars`, { params: { start, end } })
+      .then((r) => r.data.data ?? []),
+}
+
+export const cloudQuote = {
+  get: (symbol: string) =>
+    client.get<{ data: StockQuote }>(`/api/v1/stocks/${symbol}/quote`)
+      .then((r) => r.data.data ?? null),
+}
+
 /** 헬스 체크 — /health */
 export const cloudHealth = {
   check: () =>

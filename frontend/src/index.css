@@ -19,6 +19,12 @@ code {
     monospace;
 }
 
+/* View transition animation */
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* Force icon sizing */
 .icon-xs { width: 12px !important; height: 12px !important; }
 .icon-sm { width: 16px !important; height: 16px !important; }

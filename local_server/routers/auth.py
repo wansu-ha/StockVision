@@ -17,6 +17,7 @@ from local_server.core.local_auth import require_local_secret
 from local_server.storage.credential import (
     clear_all_credentials,
     has_credential,
+    set_active_user,
     KEY_CLOUD_ACCESS_TOKEN,
     save_cloud_tokens,
 )
@@ -48,6 +49,18 @@ async def register_cloud_token(body: CloudTokenRequest, request: Request) -> dic
     응답에 local_secret을 포함하여 프론트엔드가 이후 요청에 사용할 수 있게 한다.
     """
     try:
+        # JWT payload에서 email 추출 → 활성 사용자 설정
+        import base64, json as _json
+        try:
+            payload_b64 = body.access_token.split(".")[1]
+            payload_b64 += "=" * (4 - len(payload_b64) % 4)  # padding
+            payload = _json.loads(base64.urlsafe_b64decode(payload_b64))
+            email = payload.get("email") or payload.get("sub")
+            if email:
+                set_active_user(email)
+        except Exception:
+            pass  # JWT 디코딩 실패 시 default 유지
+
         save_cloud_tokens(body.access_token, body.refresh_token)
         logger.info("클라우드 토큰 등록 완료")
         return {

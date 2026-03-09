@@ -45,7 +45,7 @@ export const localAuth = {
 /** 상태 */
 export const localStatus = {
   get: () =>
-    client.get('/status').then((r) => r.data).catch(() => null),
+    client.get('/status').then((r) => r.data.data ?? r.data).catch(() => null),
 }
 
 /** 설정 */
@@ -71,10 +71,48 @@ export const localLogs = {
       .catch(() => []),
 }
 
+/** 계좌 (잔고 + 미체결) */
+export interface AccountBalance {
+  cash: number
+  total_eval: number
+  positions: {
+    symbol: string
+    qty: number
+    avg_price: number
+    current_price: number
+    eval_amount: number
+    unrealized_pnl: number
+    unrealized_pnl_rate: number
+  }[]
+}
+
+export interface OpenOrder {
+  order_id: string
+  symbol: string
+  side: string
+  qty: number
+  filled_qty: number
+  status: string
+  order_type: string | null
+  limit_price: number | null
+  created_at: string | null
+}
+
+export const localAccount = {
+  balance: () =>
+    client.get<{ data: AccountBalance }>('/account/balance')
+      .then((r) => r.data.data ?? null)
+      .catch(() => null),
+  orders: () =>
+    client.get<{ data: OpenOrder[] }>('/account/orders')
+      .then((r) => r.data.data ?? [])
+      .catch(() => []),
+}
+
 /** 전략 엔진 제어 */
 export const localEngine = {
-  start: () => client.post('/strategy/start').then((r) => r.data).catch(() => null),
-  stop: () => client.post('/strategy/stop').then((r) => r.data).catch(() => null),
+  start: () => client.post('/strategy/start').then((r) => r.data),
+  stop: () => client.post('/strategy/stop').then((r) => r.data),
 }
 
 /** 헬스 체크 (버전 포함) */
