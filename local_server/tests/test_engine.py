@@ -475,5 +475,110 @@ class TestOrderExecutor:
         assert "Kill Switch" in result.message
 
 
+# ═══════════════════════════════════════
+# 손실 락 → 미체결 취소 + 알림 통합 테스트
+# ═══════════════════════════════════════
+
+class TestLossLockCancelOrders:
+    """check_max_loss() 발동 시 미체결 취소 + WS 알림 검증."""
+
+    def _make_engine(self, open_orders: list | None = None):
+        """StrategyEngine을 낮은 max_loss_pct로 구성한다."""
+        from local_server.engine.engine import StrategyEngine
+
+        broker = MockBrokerAdapter()
+        # get_open_orders가 미체결 주문을 반환하도록 오버라이드
+        if open_orders is not None:
+            broker.get_open_orders = AsyncMock(return_value=open_orders)
+        broker.cancel_order = AsyncMock(return_value=OrderResult(
+            order_id="X", client_order_id="", symbol="", side=OrderSide.BUY,
+            order_type=OrderType.MARKET, qty=0, limit_price=None,
+            status=OrderStatus.CANCELLED,
+        ))
+
+        engine = StrategyEngine(broker, config={"max_loss_pct": "1.0"})
+        return engine, broker
+
+    def test_loss_lock_cancels_open_orders(self) -> None:
+        """손실 제한 발동 시 미체결 주문이 전량 취소된다."""
+        open_orders = [
+            OrderResult(order_id="ORD-1", client_order_id="c1", symbol="005930",
+                        side=OrderSide.BUY, order_type=OrderType.MARKET,
+                        qty=10, limit_price=None, status=OrderStatus.SUBMITTED),
+            OrderResult(order_id="ORD-2", client_order_id="c2", symbol="035720",
+                        side=OrderSide.SELL, order_type=OrderType.LIMIT,
+                        qty=5, limit_price=Decimal("30000"), status=OrderStatus.SUBMITTED),
+        ]
+        engine, broker = self._make_engine(open_orders=open_orders)
+
+        # 손실 제한 발동
+        result = engine.safeguard.check_max_loss(Decimal("-200000"), Decimal("10000000"))
+        assert result is False
+        assert engine.safeguard.state.loss_lock is True
+
+        # _cancel_open_orders 호출
+        cancelled = asyncio.run(engine._cancel_open_orders())
+        assert cancelled == 2
+        assert broker.cancel_order.call_count == 2
+        broker.cancel_order.assert_any_call("ORD-1")
+        broker.cancel_order.assert_any_call("ORD-2")
+
+    def test_loss_lock_notifies_via_callback(self) -> None:
+        """손실 제한 발동 시 WS 콜백으로 알림이 전달된다."""
+        engine, _ = self._make_engine()
+
+        received = []
+        engine.set_on_execution(lambda r: received.append(r))
+
+        # 손실 제한 발동 + 알림
+        engine.safeguard.check_max_loss(Decimal("-200000"), Decimal("10000000"))
+        engine._notify_loss_lock(Decimal("-200000"))
+
+        assert len(received) == 1
+        assert received[0].status == ExecutionStatus.REJECTED
+        assert "최대 손실 제한 발동" in received[0].message
+
+
+# ═══════════════════════════════════════
+# BarBuilder fill_gap 테스트
+# ═══════════════════════════════════════
+
+class TestBarBuilderFillGap:
+    """WS 끊김 복구 시 REST 분봉 보충 검증."""
+
+    def test_fill_gap_after_3min(self) -> None:
+        """3분 gap 이후 fill_gap() 호출 시 1개 분봉이 보충된다."""
+        from datetime import timedelta
+
+        bb = BarBuilder()
+        three_min_ago = datetime.now() - timedelta(minutes=3)
+        bb.on_quote("005930", Decimal("50000"), 100, three_min_ago)
+
+        broker = MockBrokerAdapter(quote_price=Decimal("51000"))
+        filled = asyncio.run(bb.fill_gap("005930", broker))
+        assert filled == 1
+
+        # 보충된 시세가 latest에 반영
+        latest = bb.get_latest("005930")
+        assert latest is not None
+        assert latest["price"] == Decimal("51000")
+
+    def test_no_gap_no_fill(self) -> None:
+        """gap 없을 때 fill_gap() 호출 시 0 반환."""
+        bb = BarBuilder()
+        bb.on_quote("005930", Decimal("50000"), 100, datetime.now())
+
+        broker = MockBrokerAdapter()
+        filled = asyncio.run(bb.fill_gap("005930", broker))
+        assert filled == 0
+
+    def test_fill_gap_unknown_symbol(self) -> None:
+        """미수신 종목은 gap fill 하지 않는다."""
+        bb = BarBuilder()
+        broker = MockBrokerAdapter()
+        filled = asyncio.run(bb.fill_gap("UNKNOWN", broker))
+        assert filled == 0
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

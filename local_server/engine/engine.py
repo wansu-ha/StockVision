@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, Callable, Optional
 from local_server.engine.bar_builder import BarBuilder
 from local_server.engine.context_cache import ContextCache
 from local_server.engine.evaluator import RuleEvaluator
-from local_server.engine.executor import ExecutionResult, OrderExecutor
+from local_server.engine.executor import ExecutionResult, ExecutionStatus, OrderExecutor
 from local_server.engine.limit_checker import LimitChecker
 from local_server.engine.price_verifier import PriceVerifier
 from local_server.engine.safeguard import KillSwitchLevel, Safeguard
@@ -164,7 +164,10 @@ class StrategyEngine:
             if self._safeguard.is_trading_enabled():
                 from local_server.storage.log_db import get_log_db
                 today_pnl = get_log_db().today_realized_pnl()
-                self._safeguard.check_max_loss(today_pnl, balance.cash + balance.total_eval)
+                loss_ok = self._safeguard.check_max_loss(today_pnl, balance.cash + balance.total_eval)
+                if not loss_ok:
+                    await self._cancel_open_orders()
+                    self._notify_loss_lock(today_pnl)
 
             # Kill Switch / 손실 락 포함 최종 거래 가능 여부
             trading_enabled = self._safeguard.is_trading_enabled()
@@ -216,6 +219,49 @@ class StrategyEngine:
 
         except Exception:
             logger.exception("Rule %d 평가 오류", rule_id)
+
+    # ── 손실 제한 처리 ──
+
+    async def _cancel_open_orders(self) -> int:
+        """손실 제한 발동 시 미체결 주문을 전량 취소한다."""
+        cancelled = 0
+        try:
+            open_orders = await self._broker.get_open_orders()
+            for order in open_orders:
+                try:
+                    await self._broker.cancel_order(order.order_id)
+                    cancelled += 1
+                except Exception as e:
+                    logger.error("미체결 취소 실패 (order_id=%s): %s", order.order_id, e)
+        except Exception as e:
+            logger.error("미체결 조회 실패: %s", e)
+        return cancelled
+
+    def _notify_loss_lock(self, today_pnl: float) -> None:
+        """손실 제한 발동을 WS + logs.db로 알린다."""
+        msg = f"최대 손실 제한 발동: 당일 실현손익 {today_pnl:,.0f}원"
+        logger.warning(msg)
+
+        # logs.db 기록
+        try:
+            from local_server.storage.log_db import get_log_db, LOG_TYPE_STRATEGY
+            get_log_db().write(LOG_TYPE_STRATEGY, msg)
+        except Exception as e:
+            logger.error("손실 락 로그 기록 실패: %s", e)
+
+        # WS 브로드캐스트 (콜백 경유)
+        if self._on_execution:
+            try:
+                alert = ExecutionResult(
+                    rule_id=0,
+                    symbol="",
+                    side="",
+                    status=ExecutionStatus.REJECTED,
+                    message=msg,
+                )
+                self._on_execution(alert)
+            except Exception:
+                pass
 
     # ── WS 콜백 ──
 
