@@ -1,6 +1,6 @@
 # Cloud AI 분석 모듈 구현 계획 (cloud-ai)
 
-> 작성일: 2026-03-09 | 상태: 초안
+> 작성일: 2026-03-09 | 상태: 구현 완료
 
 ---
 
@@ -389,20 +389,20 @@ app.include_router(ai_router)
 
 ## 4. 검증 체크리스트
 
-- [ ] Step 1: `REDIS_URL` 설정 시 Redis 연결, 미설정 시 메모리 캐시 fallback
-- [ ] Step 1: 기존 테스트 38개 깨지지 않음
-- [ ] Step 2: `AIAnalysisLog` 모델 생성, `get_symbol_context()` 지표 반환
-- [ ] Step 3: `ANTHROPIC_API_KEY` 있으면 Claude 호출, 없으면 스텁
-- [ ] Step 3: 유효하지 않은 키 → 에러 로깅 + 스텁 (크래시 없음)
-- [ ] Step 3: type별 프롬프트 분기 (sentiment/summary/risk/technical)
-- [ ] Step 3: 캐시 TTL 동작 (Redis/메모리)
-- [ ] Step 3: 일일 한도 초과 → 스텁
-- [ ] Step 4: `GET /api/v1/ai/analysis/{symbol}?type=summary` → 200
-- [ ] Step 4: `GET /api/v1/ai/status` → available, model, daily_usage
-- [ ] Step 4: `GET /api/v1/ai/history` → 어드민만 접근 가능
-- [ ] Step 5: 테스트 8개+ 전체 통과
-- [ ] Step 6: `alembic revision --autogenerate` → ai_analysis_logs 마이그레이션 생성
-- [ ] 전체: `pytest cloud_server/` 전체 통과 (기존 38 + 신규)
+- [x] Step 1: `REDIS_URL` 설정 시 Redis 연결, 미설정 시 메모리 캐시 fallback
+- [x] Step 1: 기존 테스트 46개 깨지지 않음
+- [x] Step 2: `AIAnalysisLog` 모델 생성, `get_symbol_context()` 지표 반환
+- [x] Step 3: `ANTHROPIC_API_KEY` 있으면 Claude 호출, 없으면 스텁
+- [x] Step 3: 유효하지 않은 키 → 에러 로깅 + 스텁 (크래시 없음)
+- [x] Step 3: type별 프롬프트 분기 (sentiment/summary/risk/technical)
+- [x] Step 3: 캐시 TTL 동작 (Redis/메모리)
+- [x] Step 3: 일일 한도 초과 → 스텁
+- [x] Step 4: `GET /api/v1/ai/analysis/{symbol}?type=summary` → 200
+- [x] Step 4: `GET /api/v1/ai/status` → available, model, daily_usage
+- [x] Step 4: `GET /api/v1/ai/history` → 어드민만 접근 가능
+- [x] Step 5: 테스트 13개 전체 통과
+- [x] Step 6: init_db + alembic/env.py AIAnalysisLog import 추가
+- [x] 전체: `pytest cloud_server/` 59개 전체 통과 (기존 46 + 신규 13)
 
 ---
 

@@ -68,11 +68,75 @@ def _calc_volatility(prices: pd.Series, period: int = _VOL_PERIOD) -> float | No
     return round(float(vol), 4) if not np.isnan(vol) else None
 
 
+def _calc_macd(prices: pd.Series) -> tuple[float | None, float | None]:
+    """MACD (12, 26, 9) 계산. Returns: (macd, signal)"""
+    if len(prices) < 35:
+        return None, None
+    ema12 = prices.ewm(span=12).mean()
+    ema26 = prices.ewm(span=26).mean()
+    macd_line = ema12 - ema26
+    signal = macd_line.ewm(span=9).mean()
+    m = macd_line.iloc[-1]
+    s = signal.iloc[-1]
+    if np.isnan(m) or np.isnan(s):
+        return None, None
+    return round(float(m), 2), round(float(s), 2)
+
+
+def _calc_bollinger(prices: pd.Series, period: int = 20) -> tuple[float | None, float | None]:
+    """볼린저 밴드 (상단, 하단). Returns: (upper, lower)"""
+    if len(prices) < period:
+        return None, None
+    sma = prices.rolling(period).mean()
+    std = prices.rolling(period).std()
+    upper = sma + 2 * std
+    lower = sma - 2 * std
+    u, l = upper.iloc[-1], lower.iloc[-1]
+    if np.isnan(u) or np.isnan(l):
+        return None, None
+    return round(float(u), 2), round(float(l), 2)
+
+
 class ContextService:
     """시장 컨텍스트 계산"""
 
     def __init__(self, db: Session):
         self.db = db
+
+    def get_symbol_context(self, symbol: str) -> dict:
+        """종목별 기술적 지표 계산."""
+        prices = self._get_prices(symbol)
+        if prices is None or len(prices) < _RSI_PERIOD + 1:
+            return {
+                "symbol": symbol,
+                "current_price": None,
+                "rsi_14": None, "rsi_21": None,
+                "macd": None, "macd_signal": None,
+                "bollinger_upper": None, "bollinger_lower": None,
+                "volatility": None,
+            }
+        macd, macd_signal = _calc_macd(prices)
+        b_upper, b_lower = _calc_bollinger(prices)
+        return {
+            "symbol": symbol,
+            "current_price": round(float(prices.iloc[-1]), 2),
+            "rsi_14": _calc_rsi(prices, 14),
+            "rsi_21": _calc_rsi(prices, 21),
+            "macd": macd,
+            "macd_signal": macd_signal,
+            "bollinger_upper": b_upper,
+            "bollinger_lower": b_lower,
+            "volatility": _calc_volatility(prices),
+        }
+
+    def _get_prices(self, symbol: str) -> pd.Series | None:
+        """DB 조회 → yfinance fallback으로 종가 시리즈 반환."""
+        bars = self.db.query(DailyBar).filter(
+            DailyBar.symbol == symbol
+        ).order_by(DailyBar.date.desc()).limit(_LOOKBACK).all()
+        if len(bars) >= _RSI_PERIOD + 1:
+            return pd.Series([b.close for b in reversed(bars)], dtype=float)
+        return self._fetch_yfinance(symbol)
 
     def get_current_context(self) -> dict:
         """
