@@ -49,8 +49,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # 시스템 트레이 시작 (별도 스레드)
     tray_thread = None
     try:
-        from local_server.tray.tray_app import start_tray
+        from local_server.tray.tray_app import start_tray, set_tray_auth
         tray_thread = start_tray()
+        # 트레이 → 로컬 API 호출에 필요한 인증 정보 주입
+        set_tray_auth(
+            port=cfg.get("server.port", 4020),
+            secret=app.state.local_secret,
+        )
         logger.info("시스템 트레이 시작")
     except Exception as e:
         logger.warning("시스템 트레이 시작 실패 (GUI 환경이 아닐 수 있음): %s", e)

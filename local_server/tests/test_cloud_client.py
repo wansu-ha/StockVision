@@ -35,21 +35,19 @@ class TestCloudClientFetchRules:
     async def test_fetch_rules_with_data_wrapper(self) -> None:
         """{ data: [...] } 형식의 응답에서 규칙을 파싱한다."""
         rules = [{"id": 1, "name": "RSI매수"}]
-        transport = MockTransport(_make_response({"success": True, "data": rules, "count": 1}))
+        _captured_path = None
 
         client = CloudClient(base_url="http://test-server")
 
-        async with httpx.AsyncClient(transport=transport) as http_client:
-            # _get을 직접 대체하는 방식으로 테스트
-            original_get = client._get
+        async def mock_get(path: str):
+            nonlocal _captured_path
+            _captured_path = path
+            return {"success": True, "data": rules, "count": 1}
 
-            async def mock_get(path: str):
-                return {"success": True, "data": rules, "count": 1}
-
-            client._get = mock_get  # type: ignore[method-assign]
-            result = await client.fetch_rules()
-            assert result == rules
-            client._get = original_get
+        client._get = mock_get  # type: ignore[method-assign]
+        result = await client.fetch_rules()
+        assert result == rules
+        assert _captured_path == "/api/v1/rules"
 
     @pytest.mark.asyncio
     async def test_fetch_rules_with_plain_list(self) -> None:
@@ -108,13 +106,17 @@ class TestCloudClientSendHeartbeat:
     async def test_send_heartbeat(self) -> None:
         """하트비트 전송 후 서버 응답을 딕셔너리로 반환한다."""
         client = CloudClient(base_url="http://test-server")
+        _captured_path = None
 
         async def mock_post(path: str, data=None):
+            nonlocal _captured_path
+            _captured_path = path
             return {"received": True}
 
         client._post = mock_post  # type: ignore[method-assign]
-        result = await client.send_heartbeat({"status": "online"})
+        result = await client.send_heartbeat({"uuid": "test", "timestamp": "2026-01-01T00:00:00"})
         assert result == {"received": True}
+        assert _captured_path == "/api/v1/heartbeat"
 
 
 class TestCloudClientURLConstruction:
@@ -138,6 +140,52 @@ class TestCloudClientURLConstruction:
         """api_token이 없으면 Authorization 헤더가 없다."""
         client = CloudClient(base_url="http://test-server")
         assert "Authorization" not in client._headers
+
+
+# ──────────────────────────────────────────────────────
+# 하트비트 요청 payload 계약 테스트
+# ──────────────────────────────────────────────────────
+
+
+class TestHeartbeatRequestContract:
+    """로컬 서버가 보내는 하트비트 payload가 서버 HeartbeatBody 스키마와 일치하는지 검증."""
+
+    def test_payload_has_required_fields(self) -> None:
+        """payload에 서버 필수 필드(uuid, timestamp)가 포함된다."""
+        from unittest.mock import patch, MagicMock
+
+        mock_cfg = MagicMock()
+        mock_cfg.get.side_effect = lambda key, default=None: {
+            "server.uuid": "test-uuid-1234",
+            "server.version": "1.0.0",
+        }.get(key, default)
+
+        with patch("local_server.cloud.heartbeat.get_config", return_value=mock_cfg):
+            from local_server.cloud.heartbeat import _build_heartbeat_payload
+            payload = _build_heartbeat_payload()
+
+        assert "uuid" in payload
+        assert "timestamp" in payload
+        assert isinstance(payload["engine_running"], bool)
+        assert "version" in payload
+        assert "os" in payload
+
+    def test_payload_no_legacy_fields(self) -> None:
+        """레거시 필드(status, strategy_engine)가 포함되지 않는다."""
+        from unittest.mock import patch, MagicMock
+
+        mock_cfg = MagicMock()
+        mock_cfg.get.side_effect = lambda key, default=None: {
+            "server.uuid": "test-uuid",
+            "server.version": "1.0.0",
+        }.get(key, default)
+
+        with patch("local_server.cloud.heartbeat.get_config", return_value=mock_cfg):
+            from local_server.cloud.heartbeat import _build_heartbeat_payload
+            payload = _build_heartbeat_payload()
+
+        assert "status" not in payload
+        assert "strategy_engine" not in payload
 
 
 # ──────────────────────────────────────────────────────

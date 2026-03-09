@@ -1,6 +1,6 @@
 # 배포 전 내실 강화 구현 계획 (pre-deploy-hardening)
 
-> 작성일: 2026-03-09 | 상태: 초안
+> 작성일: 2026-03-09 | 상태: 구현 완료
 
 ---
 
@@ -277,13 +277,13 @@ services:
 | `cloud_server/core/config.py` | 1, 2 | CORS 환경변수 + CONFIG_ENCRYPTION_KEY 경고 |
 | `local_server/cloud/client.py` | 3 | 하트비트/규칙 URL 수정 |
 | `local_server/cloud/heartbeat.py` | 3 | payload 필드 서버 스키마 대응 |
-| `local_server/config.py` | 3 | UUID 자동 생성/저장 (기존 `_DEFAULTS`에 추가) |
-| `local_server/tests/test_cloud_client.py` | 3 | 계약 테스트 URL/payload 갱신 |
+| `local_server/tests/test_cloud_client.py` | 3 | 계약 테스트 URL/payload 갱신 + payload 계약 2개 추가 |
 | `local_server/tray/tray_app.py` | 4 | 엔진 토글 → API 호출 |
 | `local_server/main.py` | 4 | `set_tray_auth()` 호출 추가 |
 | `alembic.ini` | 5 | 신규 — Alembic 설정 |
 | `cloud_server/alembic/env.py` | 5 | 신규 — 모델 메타데이터 연결 |
-| `cloud_server/alembic/versions/` | 5 | 신규 — 초기 마이그레이션 |
+| `cloud_server/alembic/script.py.mako` | 5 | 신규 — 마이그레이션 템플릿 |
+| `cloud_server/alembic/versions/__init__.py` | 5 | 신규 — 빈 패키지 |
 | `cloud_server/Dockerfile` | 6 | 신규 |
 | `docker-compose.yml` | 6 | cloud_server 서비스 추가 |
 
@@ -291,18 +291,18 @@ services:
 
 ## 4. 검증 체크리스트
 
-- [ ] Step 1: `CORS_ORIGINS` 환경변수 파싱, 미설정 시 기본값 유지
-- [ ] Step 2: 서버 시작 시 CONFIG_ENCRYPTION_KEY 미설정 WARNING 로그
-- [ ] Step 3: `send_heartbeat()` → `/api/v1/heartbeat` 200 응답
-- [ ] Step 3: `fetch_rules()` → `/api/v1/rules` 200 응답
-- [ ] Step 3: payload에 `uuid`, `timestamp`, `engine_running` 포함
-- [ ] Step 4: 트레이 "엔진 시작" → `/api/strategy/start` 호출
-- [ ] Step 4: 트레이 "엔진 중지" → `/api/strategy/stop` 호출
-- [ ] Step 5: `alembic upgrade head` → 전체 테이블 생성
-- [ ] Step 6: `cloud_server/Dockerfile` 존재
-- [ ] Step 6: `docker-compose.yml`에 cloud_server 서비스 포함
-- [ ] 전체: `pytest cloud_server/` 통과
-- [ ] 전체: `pytest local_server/` 통과
+- [x] Step 1: `CORS_ORIGINS` 환경변수 파싱, 미설정 시 기본값 유지
+- [x] Step 2: 서버 시작 시 CONFIG_ENCRYPTION_KEY 미설정 WARNING 로그
+- [x] Step 3: `send_heartbeat()` → `/api/v1/heartbeat` 200 응답
+- [x] Step 3: `fetch_rules()` → `/api/v1/rules` 200 응답
+- [x] Step 3: payload에 `uuid`, `timestamp`, `engine_running` 포함
+- [x] Step 4: 트레이 "엔진 시작" → `/api/strategy/start` 호출
+- [x] Step 4: 트레이 "엔진 중지" → `/api/strategy/stop` 호출
+- [ ] Step 5: `alembic upgrade head` → 전체 테이블 생성 (초기 마이그레이션 미생성 — 배포 시 실행)
+- [x] Step 6: `cloud_server/Dockerfile` 존재
+- [x] Step 6: `docker-compose.yml`에 cloud_server 서비스 포함
+- [x] 전체: `pytest cloud_server/` 38 passed
+- [x] 전체: `pytest local_server/` 109 passed (계약 테스트 2개 추가)
 
 ---
 

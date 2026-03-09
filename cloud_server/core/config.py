@@ -59,9 +59,13 @@ class Settings:
         "https://github.com/stockvision/releases/latest",
     )
 
-    # CORS 허용 오리진
+    # CORS 허용 오리진 (환경변수: 콤마 구분 문자열)
     CORS_ORIGINS: list[str] = [
-        "http://localhost:5173",   # Vite 개발 서버
+        origin.strip()
+        for origin in os.environ.get(
+            "CORS_ORIGINS", "http://localhost:5173"
+        ).split(",")
+        if origin.strip()
     ]
 
     # Rate Limiting (in-memory, 프로덕션은 Redis)
@@ -88,6 +92,11 @@ def validate_settings() -> None:
     if not settings.SECRET_KEY:
         raise RuntimeError(
             "SECRET_KEY 환경 변수가 설정되지 않았습니다. 서버를 시작할 수 없습니다."
+        )
+    if not settings.CONFIG_ENCRYPTION_KEY:
+        import logging
+        logging.getLogger(__name__).warning(
+            "CONFIG_ENCRYPTION_KEY 미설정 — 암호화 기능 사용 시 오류 발생"
         )
 
 

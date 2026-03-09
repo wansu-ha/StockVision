@@ -1,6 +1,6 @@
 # 배포 전 내실 강화 명세서 (pre-deploy-hardening)
 
-> 작성일: 2026-03-09 | 상태: 초안
+> 작성일: 2026-03-09 | 상태: 구현 완료
 
 ---
 
@@ -124,39 +124,39 @@
 
 ### C1: API 정합성
 
-- [ ] `local_server` → `cloud_server` 하트비트 전송 시 200 응답
-- [ ] 하트비트 payload가 서버 `HeartbeatBody` 스키마와 일치
-- [ ] `local_server` → `cloud_server` 규칙 fetch 시 200 + 규칙 리스트 반환
-- [ ] 양쪽 테스트에서 동일한 URL/payload 사용 (계약 테스트 갱신)
+- [x] `local_server` → `cloud_server` 하트비트 전송 시 200 응답
+- [x] 하트비트 payload가 서버 `HeartbeatBody` 스키마와 일치
+- [x] `local_server` → `cloud_server` 규칙 fetch 시 200 + 규칙 리스트 반환
+- [x] 양쪽 테스트에서 동일한 URL/payload 사용 (계약 테스트 갱신)
 
 ### C3: Alembic
 
-- [ ] `alembic.ini` + `cloud_server/alembic/` 디렉토리 존재
+- [x] `alembic.ini` + `cloud_server/alembic/` 디렉토리 존재
 - [ ] `alembic revision --autogenerate` 실행 가능
 - [ ] `alembic upgrade head` → 빈 DB에 전체 테이블 생성
 
 ### C4: CORS
 
-- [ ] `CORS_ORIGINS` 환경변수로 허용 도메인 설정 가능
-- [ ] 환경변수 미설정 시 기본값 `http://localhost:5173` 유지
-- [ ] 클라우드 서버 테스트 통과 (기존 38개 유지)
+- [x] `CORS_ORIGINS` 환경변수로 허용 도메인 설정 가능
+- [x] 환경변수 미설정 시 기본값 `http://localhost:5173` 유지
+- [x] 클라우드 서버 테스트 통과 (기존 38개 유지)
 
 ### W1: Docker
 
-- [ ] `cloud_server/Dockerfile` 존재
+- [x] `cloud_server/Dockerfile` 존재
 - [ ] `docker-compose up` → cloud_server + PostgreSQL + Redis 전체 기동
 - [ ] 헬스체크 엔드포인트 응답 확인
 
 ### W3: 트레이 엔진 토글
 
-- [ ] 트레이 "엔진 시작" → 실제 `/api/strategy/start` 호출
-- [ ] 트레이 "엔진 중지" → 실제 `/api/strategy/stop` 호출
-- [ ] 브로커 미설정 시 토스트 에러 알림
+- [x] 트레이 "엔진 시작" → 실제 `/api/strategy/start` 호출
+- [x] 트레이 "엔진 중지" → 실제 `/api/strategy/stop` 호출
+- [x] 브로커 미설정 시 토스트 에러 알림
 
 ### W5: 암호화 키 검증
 
-- [ ] 서버 시작 시 `CONFIG_ENCRYPTION_KEY` 미설정이면 WARNING 로그
-- [ ] 암호화 기능 호출 시 키 없으면 명확한 에러 메시지
+- [x] 서버 시작 시 `CONFIG_ENCRYPTION_KEY` 미설정이면 WARNING 로그
+- [x] 암호화 기능 호출 시 키 없으면 명확한 에러 메시지
 
 ---
 
@@ -182,20 +182,21 @@
 
 ---
 
-## 6. 변경 파일 (예상)
+## 6. 변경 파일
 
 | 파일 | 변경 |
 |------|------|
-| `local_server/cloud/client.py` | 하트비트/규칙 URL 수정 |
-| `local_server/cloud/heartbeat.py` | payload 필드 서버 스키마 대응 |
-| `local_server/tests/test_cloud_client.py` | 계약 테스트 URL/payload 갱신 |
-| `cloud_server/core/config.py` | CORS_ORIGINS 환경변수 파싱 |
-| `cloud_server/core/config.py` | validate_settings() 확장 |
-| `cloud_server/alembic/` | 신규 — Alembic 설정 + 초기 마이그레이션 |
-| `cloud_server/Dockerfile` | 신규 |
+| `cloud_server/core/config.py` | CORS_ORIGINS 환경변수 파싱 + validate_settings() 확장 |
+| `local_server/cloud/client.py` | 하트비트/규칙 URL 수정 (`/api/v1/`) |
+| `local_server/cloud/heartbeat.py` | payload → uuid, timestamp, engine_running, version, os |
+| `local_server/tests/test_cloud_client.py` | 계약 테스트 URL/payload 갱신 + payload 계약 테스트 2개 추가 |
+| `local_server/tray/tray_app.py` | 엔진 토글 → httpx API 호출 + set_tray_auth() |
+| `local_server/main.py` | lifespan에서 set_tray_auth() 호출 |
+| `alembic.ini` | 신규 — Alembic 설정 |
+| `cloud_server/alembic/env.py` | 신규 — 모델 메타데이터 연결 |
+| `cloud_server/alembic/script.py.mako` | 신규 — 마이그레이션 템플릿 |
+| `cloud_server/Dockerfile` | 신규 — Python 3.13-slim, uvicorn |
 | `docker-compose.yml` | cloud_server 서비스 추가 |
-| `local_server/tray/tray_app.py` | 엔진 토글 → API 호출 |
-| `cloud_server/tests/` | 기존 테스트 유지 확인 |
 
 ---
 
