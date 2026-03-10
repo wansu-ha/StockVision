@@ -10,6 +10,7 @@ import asyncio
 import logging
 from typing import Any
 
+from local_server.__version__ import __version__ as _VERSION
 from local_server.cloud.client import CloudClient, CloudClientError
 from local_server.config import get_config
 
@@ -50,7 +51,7 @@ def _build_heartbeat_payload() -> dict[str, Any]:
         "uuid": uuid,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "engine_running": _engine_running,
-        "version": cfg.get("server.version", "1.0.0"),
+        "version": cfg.get("server.version", _VERSION),
         "os": platform.system(),
     }
 
