@@ -7,7 +7,7 @@ const adminNav = [
   { path: '/admin/stats', label: '접속 통계' },
   { path: '/admin/service-keys', label: '서비스 키' },
   { path: '/admin/templates', label: '템플릿' },
-  { path: '/admin/data', label: '시세 모니터링' },
+  { path: '/admin/ai', label: 'AI 분석' },
   { path: '/admin/errors', label: '에러 로그' },
 ]
 

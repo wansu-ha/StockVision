@@ -10,7 +10,15 @@ import StrategyList from './pages/StrategyList'
 import Portfolio from './pages/Portfolio'
 import Templates from './pages/Templates'
 import Settings from './pages/Settings'
-import AdminDashboard from './pages/AdminDashboard'
+import AdminLayout from './pages/Admin'
+import AdminDash from './pages/Admin/Dashboard'
+import AdminUsers from './pages/Admin/Users'
+import AdminStats from './pages/Admin/Stats'
+import AdminServiceKeys from './pages/Admin/ServiceKeys'
+import AdminTemplates from './pages/Admin/Templates'
+import AdminAiMonitor from './pages/Admin/AiMonitor'
+import AdminErrorLogs from './pages/Admin/ErrorLogs'
+import AdminLogin from './pages/Admin/Login'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import ForgotPassword from './pages/ForgotPassword'
@@ -48,6 +56,7 @@ function AppRoutes() {
   return (
     <Routes>
       {/* 공개 라우트 */}
+      <Route path="/admin/login" element={<AdminLogin />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
@@ -87,7 +96,15 @@ function AppRoutes() {
               <Route path="/strategy" element={<StrategyBuilder />} />
               <Route path="/portfolio" element={<Portfolio />} />
               <Route path="/templates" element={<Templates />} />
-              <Route path="/admin/*" element={<AdminGuard><AdminDashboard /></AdminGuard>} />
+              <Route path="/admin" element={<AdminGuard><AdminLayout /></AdminGuard>}>
+                <Route index element={<AdminDash />} />
+                <Route path="users" element={<AdminUsers />} />
+                <Route path="stats" element={<AdminStats />} />
+                <Route path="service-keys" element={<AdminServiceKeys />} />
+                <Route path="templates" element={<AdminTemplates />} />
+                <Route path="ai" element={<AdminAiMonitor />} />
+                <Route path="errors" element={<AdminErrorLogs />} />
+              </Route>
             </Routes>
           </Layout>
         </ProtectedRoute>

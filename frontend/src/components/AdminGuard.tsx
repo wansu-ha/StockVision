@@ -21,7 +21,10 @@ function getRoleFromJwt(jwt: string | null): string | null {
 export default function AdminGuard({ children }: Props) {
   const { isAuthenticated, jwt } = useAuth()
 
-  if (!isAuthenticated) return <Navigate to="/login" replace />
+  // DEV: 서버 없이 UI 확인용 bypass
+  if (import.meta.env.DEV && import.meta.env.VITE_AUTH_BYPASS === 'true') return <>{children}</>
+
+  if (!isAuthenticated) return <Navigate to="/admin/login" replace />
 
   const role = getRoleFromJwt(jwt)
   if (role !== 'admin') return <Navigate to="/" replace />

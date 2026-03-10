@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { adminApi } from '../../services/admin'
 
-type Period = '24h' | '7d' | '30d' | '90d'
+type Period = '7d' | '30d' | '90d'
 
 interface DataPoint {
   timestamp: string
@@ -28,7 +28,7 @@ export default function AdminStats() {
 
       {/* 기간 선택 */}
       <div className="flex gap-2 mb-6">
-        {(['24h', '7d', '30d', '90d'] as Period[]).map((p) => (
+        {(['7d', '30d', '90d'] as Period[]).map((p) => (
           <button
             key={p}
             onClick={() => setPeriod(p)}
