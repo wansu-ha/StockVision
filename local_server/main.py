@@ -14,6 +14,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from local_server.__version__ import __version__ as _VERSION
 from local_server.config import get_config
 from local_server.core.local_auth import generate_secret
 from local_server.routers import account, auth, config as config_router, logs, rules, status, trading, ws
@@ -132,7 +133,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="StockVision 로컬 서버",
         description="키움 브로커 연동 및 전략 엔진 호스팅 서버",
-        version="0.1.0",
+        version=_VERSION,
         lifespan=lifespan,
     )
 
