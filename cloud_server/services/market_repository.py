@@ -51,6 +51,7 @@ class MarketRepository:
         # C2/C3: timestamp는 Optional — None이면 현재 시각 사용
         raw_ts = event.timestamp if event.timestamp is not None else datetime.utcnow()
         ts = raw_ts.replace(second=0, microsecond=0)
+        price = int(event.price)  # Decimal → int (MinuteBar 컬럼은 Integer)
 
         existing = self.db.query(MinuteBar).filter(
             MinuteBar.symbol == event.symbol,
@@ -59,11 +60,11 @@ class MarketRepository:
 
         if existing:
             # OHLC 업데이트
-            if existing.high is None or event.price > existing.high:
-                existing.high = event.price
-            if existing.low is None or event.price < existing.low:
-                existing.low = event.price
-            existing.close = event.price
+            if existing.high is None or price > existing.high:
+                existing.high = price
+            if existing.low is None or price < existing.low:
+                existing.low = price
+            existing.close = price
             if existing.volume is not None:
                 existing.volume += event.volume
             else:
@@ -74,10 +75,10 @@ class MarketRepository:
         bar = MinuteBar(
             symbol=event.symbol,
             timestamp=ts,
-            open=event.price,
-            high=event.price,
-            low=event.price,
-            close=event.price,
+            open=price,
+            high=price,
+            low=price,
+            close=price,
             volume=event.volume,
         )
         self.db.add(bar)

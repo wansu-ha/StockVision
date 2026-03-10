@@ -42,7 +42,7 @@ _SYSTEM_BASE = (
 _TYPE_CONFIG: dict[str, dict] = {
     "sentiment": {
         "system": "주어진 기술적 지표와 현재가를 바탕으로 시장 감성 점수를 분석하세요.",
-        "max_tokens": 150,
+        "max_tokens": 300,
     },
     "summary": {
         "system": "주어진 기술적 지표, 현재가, 재무 데이터를 바탕으로 종합 분석 리포트를 작성하세요.",
@@ -214,12 +214,15 @@ class AIService:
     def _parse_response(self, raw: str, analysis_type: str) -> dict:
         """Claude 응답 JSON 파싱. 파싱 실패 시 기본값."""
         try:
-            # JSON 블록 추출 (```json ... ``` 또는 순수 JSON)
             text = raw.strip()
-            if "```" in text:
+            # JSON 블록 추출 (```json ... ``` 또는 순수 JSON)
+            if "{" in text:
                 start = text.index("{")
-                end = text.rindex("}") + 1
+                end = text.rindex("}") + 1 if "}" in text else len(text)
                 text = text[start:end]
+                # 잘린 JSON 복구 시도 (max_tokens로 잘린 경우)
+                if not text.endswith("}"):
+                    text += '"}'
             parsed = json.loads(text)
             return {
                 "score": float(parsed.get("score", 0.0)),
