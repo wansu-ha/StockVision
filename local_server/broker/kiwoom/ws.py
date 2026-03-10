@@ -1,10 +1,11 @@
 """local_server.broker.kiwoom.ws: 키움증권 WebSocket 실시간 시세 스트림 모듈
 
-KIS와 주요 차이:
-- URL: wss://api.kiwoom.com:10000/api/dostk/websocket
-- 구독 메시지: {ServiceName: "REG", GroupId, Data: [{Item: [종목], Type: [코드]}]}
-- 해제 메시지: {ServiceName: "REMOVE", ...}
-- 서비스 코드: 0B=주식체결, 0D=호가잔량, 00=주문체결
+키움 REST API WS 프로토콜:
+- URL: wss://(mock)api.kiwoom.com:10000/api/dostk/websocket
+- 연결 후 LOGIN 메시지로 인증: {trnm: "LOGIN", token: access_token}
+- 구독: {trnm: "REG", grp_no, refresh, data: [{item: [종목], type: [코드]}]}
+- 해제: {trnm: "REMOVE", ...}
+- 서비스 코드: 0B=주식체결, 0D=호가잔량
 """
 
 import asyncio
@@ -55,17 +56,21 @@ class KiwoomWS:
         return self._connected and self._ws is not None
 
     async def connect(self) -> None:
-        """WebSocket 서버에 연결한다."""
+        """WebSocket 서버에 연결하고 LOGIN 인증을 수행한다."""
         logger.info("WebSocket 연결 시도: %s", self._ws_url)
         token = await self._auth.get_access_token()
-        # 키움 WS는 URL 파라미터로 토큰 전달
-        ws_url = f"{self._ws_url}?token={token}"
+        # 토큰 없이 연결 → LOGIN 메시지로 인증
         self._ws = await websockets.connect(
-            ws_url,
+            self._ws_url,
             ping_interval=30,
             ping_timeout=10,
             close_timeout=5,
         )
+        # LOGIN 인증
+        login_msg = json.dumps({"trnm": "LOGIN", "token": token})
+        await self._ws.send(login_msg)
+        resp = await asyncio.wait_for(self._ws.recv(), timeout=10)
+        logger.info("WebSocket LOGIN 응답: %.200s", resp)
         self._connected = True
         logger.info("WebSocket 연결 성공")
         self._recv_task = asyncio.create_task(self._recv_loop())
@@ -99,12 +104,12 @@ class KiwoomWS:
             return
 
         msg = {
-            "ServiceName": "REG",
-            "GroupId": self._group_id,
-            "Refresh": "1",
-            "Data": [{
-                "Item": new_symbols,
-                "Type": [SVC_STOCK_TRADE],
+            "trnm": "REG",
+            "grp_no": self._group_id,
+            "refresh": "1",
+            "data": [{
+                "item": new_symbols,
+                "type": [SVC_STOCK_TRADE],
             }],
         }
         await self._ws.send(json.dumps(msg))  # type: ignore[union-attr]
@@ -121,12 +126,12 @@ class KiwoomWS:
             return
 
         msg = {
-            "ServiceName": "REMOVE",
-            "GroupId": self._group_id,
-            "Refresh": "1",
-            "Data": [{
-                "Item": existing,
-                "Type": [SVC_STOCK_TRADE],
+            "trnm": "REMOVE",
+            "grp_no": self._group_id,
+            "refresh": "1",
+            "data": [{
+                "item": existing,
+                "type": [SVC_STOCK_TRADE],
             }],
         }
         await self._ws.send(json.dumps(msg))  # type: ignore[union-attr]
@@ -151,7 +156,11 @@ class KiwoomWS:
             self._connected = False
 
     def _handle_message(self, raw_msg: str) -> None:
-        """수신 메시지를 파싱하여 QuoteEvent로 변환한다."""
+        """수신 메시지를 파싱하여 QuoteEvent로 변환한다.
+
+        실시간 메시지 형식:
+          {"trnm": "REAL", "data": [{"item": "005930", "type": "0B", "values": {...}}]}
+        """
         if not raw_msg:
             return
 
@@ -161,25 +170,43 @@ class KiwoomWS:
             logger.debug("WebSocket 비JSON 메시지: %.100s", raw_msg)
             return
 
-        # 시세 데이터 처리
-        if isinstance(data, dict) and "stk_cd" in data:
-            self._handle_quote_data(data)
+        if not isinstance(data, dict):
+            return
 
-    def _handle_quote_data(self, data: dict) -> None:
-        """시세 데이터를 QuoteEvent로 변환하여 콜백 호출."""
+        trnm = data.get("trnm", "")
+        if trnm == "REAL":
+            for entry in data.get("data", []):
+                symbol = entry.get("item", "")
+                values = entry.get("values", {})
+                if symbol and values:
+                    self._handle_quote_data(symbol, values)
+                elif values:
+                    logger.debug("REAL 메시지에 종목코드 없음: %s", list(values.keys())[:5])
+        elif trnm in ("LOGIN", "REG", "REMOVE"):
+            logger.debug("WebSocket %s 응답: %.200s", trnm, raw_msg)
+        else:
+            logger.debug("WebSocket 미처리 메시지: trnm=%s", trnm)
+
+    def _handle_quote_data(self, symbol: str, values: dict) -> None:
+        """실시간 시세 값을 QuoteEvent로 변환하여 콜백 호출.
+
+        0B(주식체결) 필드 맵:
+          10=현재가, 15=체결량, 20=체결시간,
+          27=매도호가1, 28=매수호가1
+        """
         try:
-            cur_prc = data.get("cur_prc", "0")
+            raw_price = values.get("10", "0")
             event = QuoteEvent(
-                symbol=data.get("stk_cd", ""),
-                price=abs(Decimal(cur_prc)) if cur_prc else Decimal("0"),
-                volume=int(data.get("trde_qty", "0") or "0"),
-                bid_price=abs(Decimal(data["buy_1bid"])) if data.get("buy_1bid") else None,
-                ask_price=abs(Decimal(data["sel_1bid"])) if data.get("sel_1bid") else None,
+                symbol=symbol,
+                price=abs(Decimal(raw_price)) if raw_price else Decimal("0"),
+                volume=abs(int(values.get("15", "0") or "0")),
+                bid_price=abs(Decimal(values["28"])) if values.get("28") else None,
+                ask_price=abs(Decimal(values["27"])) if values.get("27") else None,
                 timestamp=datetime.now(),
-                raw=data,
+                raw={"symbol": symbol, **values},
             )
         except (ValueError, KeyError) as exc:
-            logger.warning("QuoteEvent 파싱 실패: %s", exc)
+            logger.warning("QuoteEvent 파싱 실패 [%s]: %s", symbol, exc)
             return
 
         for callback in self._callbacks:

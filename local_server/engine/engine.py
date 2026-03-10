@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, Callable, Optional
 from local_server.engine.bar_builder import BarBuilder
 from local_server.engine.context_cache import ContextCache
 from local_server.engine.evaluator import RuleEvaluator
+from local_server.engine.indicator_provider import IndicatorProvider
 from local_server.engine.executor import ExecutionResult, ExecutionStatus, OrderExecutor
 from local_server.engine.limit_checker import LimitChecker
 from local_server.engine.price_verifier import PriceVerifier
@@ -62,6 +63,7 @@ class StrategyEngine:
             ttl_seconds=int(cfg.get("context_ttl", 3600)),
         )
         self._bar_builder = BarBuilder()
+        self._indicator_provider = IndicatorProvider()
         self._scheduler = EngineScheduler(self.evaluate_all)
 
         # 규칙 캐시 (외부에서 set)
@@ -75,8 +77,12 @@ class StrategyEngine:
     async def start(self) -> None:
         """엔진 시작."""
         self._running = True
-        # 시세 구독: 활성 규칙 종목들
+        # 활성 규칙 종목들
         symbols = list({r.get("symbol", "") for r in self._rules if r.get("is_active")})
+        # 일봉 지표 계산 (yfinance)
+        if symbols:
+            await self._indicator_provider.refresh(symbols)
+        # 시세 구독
         if symbols:
             await self._broker.subscribe_quotes(symbols, self._on_quote)
         await self._scheduler.start()
@@ -123,6 +129,10 @@ class StrategyEngine:
     @property
     def context_cache(self) -> ContextCache:
         return self._context_cache
+
+    @property
+    def indicator_provider(self) -> IndicatorProvider:
+        return self._indicator_provider
 
     # ── 메인 루프 ──
 
@@ -195,6 +205,9 @@ class StrategyEngine:
             if not latest:
                 logger.debug("Rule %d (%s): 시세 미수신", rule_id, symbol)
                 return
+
+            # 일봉 기반 기술적 지표 주입
+            latest["indicators"] = self._indicator_provider.get(symbol)
 
             context = self._context_cache.get()
 
