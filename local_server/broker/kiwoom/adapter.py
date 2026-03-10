@@ -83,9 +83,13 @@ class KiwoomAdapter(BrokerAdapter):
             await self._state.transition(ConnectionState.AUTHENTICATED)
             logger.info("키움 인증 완료")
 
-            await self._ws.connect()
-            await self._state.transition(ConnectionState.SUBSCRIBED)
-            logger.info("키움 WebSocket 연결 완료")
+            # 모의서버 WS 미지원 — 실전만 WS 연결
+            if not self._auth._is_mock:
+                await self._ws.connect()
+                await self._state.transition(ConnectionState.SUBSCRIBED)
+                logger.info("키움 WebSocket 연결 완료")
+            else:
+                logger.info("모의서버 — WebSocket 연결 건너뜀")
 
             await self._reconciler.start()
 

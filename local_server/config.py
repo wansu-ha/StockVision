@@ -31,6 +31,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "kis": {
         "account_no": "",    # 한국투자증권 계좌번호 (앱 키/시크릿은 keyring 전용)
     },
+    "budget_ratio": 10,         # 예산 비율 (%)
+    "max_positions": 5,          # 최대 보유 종목 수
+    "max_loss_pct": 5.0,         # 최대 손실률 (%)
+    "max_orders_per_minute": 10, # 분당 최대 주문 수
     "cors": {
         "origins": ["http://localhost:5173"],
     },

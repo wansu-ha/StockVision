@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from local_server.config import get_config
 from local_server.core.local_auth import generate_secret
-from local_server.routers import auth, config as config_router, logs, rules, status, trading, ws
+from local_server.routers import account, auth, config as config_router, logs, rules, status, trading, ws
 
 logger = logging.getLogger(__name__)
 
@@ -150,6 +150,7 @@ def create_app() -> FastAPI:
     )
 
     # 라우터 등록
+    app.include_router(account.router, prefix="/api/account", tags=["계좌"])
     app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
     app.include_router(config_router.router, prefix="/api/config", tags=["설정"])
     app.include_router(status.router, prefix="/api/status", tags=["상태"])

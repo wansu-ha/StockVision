@@ -124,7 +124,8 @@ async def start_strategy(request: Request, _: None = Depends(require_local_secre
     try:
         broker = create_broker_from_config()
         await broker.connect()
-    except (ValueError, ConnectionError) as e:
+    except Exception as e:
+        logger.error("브로커 연결 실패: %s", e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"브로커 연결 실패: {e}",

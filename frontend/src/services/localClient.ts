@@ -45,16 +45,16 @@ export const localAuth = {
 /** 상태 */
 export const localStatus = {
   get: () =>
-    client.get('/status').then((r) => r.data).catch(() => null),
+    client.get('/status').then((r) => r.data.data ?? r.data).catch(() => null),
 }
 
 /** 설정 */
 export const localConfig = {
   get: () => client.get<{ data: LocalConfig }>('/config').then((r) => r.data.data ?? r.data).catch(() => null),
   update: (patch: Partial<LocalConfig>) =>
-    client.patch('/config', patch).then((r) => r.data).catch(() => null),
-  setBrokerKeys: (appKey: string, appSecret: string) =>
-    client.post('/config/broker-keys', { app_key: appKey, app_secret: appSecret }).then((r) => r.data),
+    client.patch('/config', { updates: patch }).then((r) => r.data).catch(() => null),
+  setBrokerKeys: (brokerType: string, appKey: string, appSecret: string, accountNo?: string) =>
+    client.post('/config/broker-keys', { broker_type: brokerType, app_key: appKey, app_secret: appSecret, account_no: accountNo }, { timeout: 30_000 }).then((r) => r.data),
 }
 
 /** 규칙 sync */
@@ -71,10 +71,48 @@ export const localLogs = {
       .catch(() => []),
 }
 
-/** 전략 엔진 제어 */
+/** 계좌 (잔고 + 미체결) */
+export interface AccountBalance {
+  cash: number
+  total_eval: number
+  positions: {
+    symbol: string
+    qty: number
+    avg_price: number
+    current_price: number
+    eval_amount: number
+    unrealized_pnl: number
+    unrealized_pnl_rate: number
+  }[]
+}
+
+export interface OpenOrder {
+  order_id: string
+  symbol: string
+  side: string
+  qty: number
+  filled_qty: number
+  status: string
+  order_type: string | null
+  limit_price: number | null
+  created_at: string | null
+}
+
+export const localAccount = {
+  balance: () =>
+    client.get<{ data: AccountBalance }>('/account/balance')
+      .then((r) => r.data.data ?? null)
+      .catch(() => null),
+  orders: () =>
+    client.get<{ data: OpenOrder[] }>('/account/orders')
+      .then((r) => r.data.data ?? [])
+      .catch(() => []),
+}
+
+/** 전략 엔진 제어 (브로커 인증 포함하므로 타임아웃 여유) */
 export const localEngine = {
-  start: () => client.post('/strategy/start').then((r) => r.data).catch(() => null),
-  stop: () => client.post('/strategy/stop').then((r) => r.data).catch(() => null),
+  start: () => client.post('/strategy/start', null, { timeout: 30_000 }).then((r) => r.data),
+  stop: () => client.post('/strategy/stop', null, { timeout: 15_000 }).then((r) => r.data),
 }
 
 /** 헬스 체크 (버전 포함) */

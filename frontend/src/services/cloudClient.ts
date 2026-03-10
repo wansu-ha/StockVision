@@ -86,8 +86,18 @@ export const cloudRules = {
 
 /** 시장 컨텍스트 — /api/v1/context */
 export const cloudContext = {
-  get: () =>
-    client.get<{ data: MarketContextData }>('/api/v1/context').then((r) => r.data.data ?? r.data),
+  get: (): Promise<MarketContextData> =>
+    client.get('/api/v1/context').then((r) => {
+      const d = r.data.data ?? r.data
+      const m = d.market ?? {}
+      return {
+        kospi_rsi: m.kospi_rsi,
+        kosdaq_rsi: m.kosdaq_rsi,
+        volatility: m.volatility,
+        trend: m.market_trend,
+        updated_at: d.computed_at,
+      }
+    }),
 }
 
 /** 종목 검색/조회 — /api/v1/stocks */
@@ -123,6 +133,37 @@ export const cloudWatchlist = {
     client.post<{ data: WatchlistItem }>('/api/v1/watchlist', { symbol }).then((r) => r.data.data),
   remove: (symbol: string) =>
     client.delete(`/api/v1/watchlist/${symbol}`).then((r) => r.data),
+}
+
+/** 시세 데이터 — /api/v1/stocks/{symbol}/bars, /quote */
+export interface DailyBar {
+  date: string
+  open: number
+  high: number
+  low: number
+  close: number
+  volume: number
+}
+
+export interface StockQuote {
+  symbol: string
+  price: number
+  change: number
+  change_pct: number
+  volume: number
+  updated_at: string
+}
+
+export const cloudBars = {
+  get: (symbol: string, start?: string, end?: string) =>
+    client.get<{ data: DailyBar[] }>(`/api/v1/stocks/${symbol}/bars`, { params: { start, end } })
+      .then((r) => r.data.data ?? []),
+}
+
+export const cloudQuote = {
+  get: (symbol: string) =>
+    client.get<{ data: StockQuote }>(`/api/v1/stocks/${symbol}/quote`)
+      .then((r) => r.data.data ?? null),
 }
 
 /** 헬스 체크 — /health */

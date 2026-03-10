@@ -17,6 +17,21 @@ logger = logging.getLogger(__name__)
 _SERVICE_PREFIX = "stockvision"
 _DEFAULT_USER = "default"
 
+# 활성 사용자 — 로그인 시 JWT에서 email을 추출하여 설정
+_active_user: str = _DEFAULT_USER
+
+
+def set_active_user(user_id: str) -> None:
+    """로그인 시 활성 사용자를 설정한다. 이후 모든 credential 함수가 이 네임스페이스를 사용한다."""
+    global _active_user
+    _active_user = user_id
+    logger.info("활성 사용자 설정: %s", user_id)
+
+
+def get_active_user() -> str:
+    """현재 활성 사용자 ID를 반환한다."""
+    return _active_user
+
 # keyring 키 이름 상수 — KIS API
 KEY_APP_KEY = "kis_app_key"
 KEY_APP_SECRET = "kis_app_secret"
@@ -41,15 +56,15 @@ class CredentialError(Exception):
     """자격증명 저장/조회 실패 시 발생하는 예외."""
 
 
-def save_credential(name: str, value: str, user_id: str = _DEFAULT_USER) -> None:
+def save_credential(name: str, value: str, user_id: str | None = None) -> None:
     """자격증명을 keyring에 저장한다.
 
     Args:
         name: 자격증명 이름 (예: KEY_APP_KEY)
         value: 저장할 값
-        user_id: 사용자 식별자 (네임스페이스 격리용)
+        user_id: 사용자 식별자 (None이면 활성 사용자 사용)
     """
-    svc = _service_name(user_id)
+    svc = _service_name(user_id or _active_user)
     try:
         keyring.set_password(svc, name, value)
         logger.debug("자격증명 저장 완료: %s (user=%s)", name, user_id)
@@ -57,31 +72,31 @@ def save_credential(name: str, value: str, user_id: str = _DEFAULT_USER) -> None
         raise CredentialError(f"자격증명 저장 실패 ({name}): {e}") from e
 
 
-def load_credential(name: str, user_id: str = _DEFAULT_USER) -> str | None:
+def load_credential(name: str, user_id: str | None = None) -> str | None:
     """keyring에서 자격증명을 조회한다.
 
     Args:
         name: 자격증명 이름
-        user_id: 사용자 식별자
+        user_id: 사용자 식별자 (None이면 활성 사용자 사용)
 
     Returns:
         저장된 값, 없으면 None
     """
-    svc = _service_name(user_id)
+    svc = _service_name(user_id or _active_user)
     try:
         return keyring.get_password(svc, name)
     except keyring.errors.KeyringError as e:
         raise CredentialError(f"자격증명 조회 실패 ({name}): {e}") from e
 
 
-def delete_credential(name: str, user_id: str = _DEFAULT_USER) -> None:
+def delete_credential(name: str, user_id: str | None = None) -> None:
     """keyring에서 자격증명을 삭제한다.
 
     Args:
         name: 자격증명 이름
-        user_id: 사용자 식별자
+        user_id: 사용자 식별자 (None이면 활성 사용자 사용)
     """
-    svc = _service_name(user_id)
+    svc = _service_name(user_id or _active_user)
     try:
         keyring.delete_password(svc, name)
         logger.debug("자격증명 삭제 완료: %s (user=%s)", name, user_id)
@@ -91,28 +106,28 @@ def delete_credential(name: str, user_id: str = _DEFAULT_USER) -> None:
         raise CredentialError(f"자격증명 삭제 실패 ({name}): {e}") from e
 
 
-def has_credential(name: str, user_id: str = _DEFAULT_USER) -> bool:
+def has_credential(name: str, user_id: str | None = None) -> bool:
     """자격증명이 저장되어 있는지 확인한다."""
     return load_credential(name, user_id) is not None
 
 
-def save_api_keys(app_key: str, app_secret: str, user_id: str = _DEFAULT_USER) -> None:
+def save_api_keys(app_key: str, app_secret: str, user_id: str | None = None) -> None:
     """KIS 앱 키와 시크릿을 저장한다."""
     save_credential(KEY_APP_KEY, app_key, user_id)
     save_credential(KEY_APP_SECRET, app_secret, user_id)
 
 
-def load_api_keys(user_id: str = _DEFAULT_USER) -> tuple[str | None, str | None]:
+def load_api_keys(user_id: str | None = None) -> tuple[str | None, str | None]:
     """KIS 앱 키와 시크릿을 반환한다."""
     return load_credential(KEY_APP_KEY, user_id), load_credential(KEY_APP_SECRET, user_id)
 
 
-def save_access_token(token: str, user_id: str = _DEFAULT_USER) -> None:
+def save_access_token(token: str, user_id: str | None = None) -> None:
     """발급받은 액세스 토큰을 저장한다."""
     save_credential(KEY_ACCESS_TOKEN, token, user_id)
 
 
-def load_access_token(user_id: str = _DEFAULT_USER) -> str | None:
+def load_access_token(user_id: str | None = None) -> str | None:
     """저장된 액세스 토큰을 반환한다."""
     return load_credential(KEY_ACCESS_TOKEN, user_id)
 
@@ -120,13 +135,13 @@ def load_access_token(user_id: str = _DEFAULT_USER) -> str | None:
 # ── 클라우드 JWT 토큰 ────────────────────────────────────────────────────────
 
 
-def save_cloud_tokens(access_token: str, refresh_token: str, user_id: str = _DEFAULT_USER) -> None:
+def save_cloud_tokens(access_token: str, refresh_token: str, user_id: str | None = None) -> None:
     """클라우드 로그인 후 전달받은 JWT 토큰 쌍을 keyring에 저장한다."""
     save_credential(KEY_CLOUD_ACCESS_TOKEN, access_token, user_id)
     save_credential(KEY_CLOUD_REFRESH_TOKEN, refresh_token, user_id)
 
 
-def load_cloud_tokens(user_id: str = _DEFAULT_USER) -> tuple[str | None, str | None]:
+def load_cloud_tokens(user_id: str | None = None) -> tuple[str | None, str | None]:
     """저장된 클라우드 JWT 토큰 쌍을 반환한다. (access, refresh)"""
     return (
         load_credential(KEY_CLOUD_ACCESS_TOKEN, user_id),
@@ -137,17 +152,17 @@ def load_cloud_tokens(user_id: str = _DEFAULT_USER) -> tuple[str | None, str | N
 # ── KIS 계좌번호 ─────────────────────────────────────────────────────────────
 
 
-def save_account_no(account_no: str, user_id: str = _DEFAULT_USER) -> None:
+def save_account_no(account_no: str, user_id: str | None = None) -> None:
     """KIS 계좌번호를 keyring에 저장한다."""
     save_credential(KEY_ACCOUNT_NO, account_no, user_id)
 
 
-def load_account_no(user_id: str = _DEFAULT_USER) -> str | None:
+def load_account_no(user_id: str | None = None) -> str | None:
     """저장된 KIS 계좌번호를 반환한다."""
     return load_credential(KEY_ACCOUNT_NO, user_id)
 
 
-def clear_all_credentials(user_id: str = _DEFAULT_USER) -> None:
+def clear_all_credentials(user_id: str | None = None) -> None:
     """해당 사용자의 모든 자격증명을 삭제한다 (로그아웃 시 사용)."""
     for name in (
         KEY_APP_KEY,

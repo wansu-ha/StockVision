@@ -19,5 +19,5 @@ class AIAnalysisLog(Base):
     token_input = Column(Integer, default=0)
     token_output = Column(Integer, default=0)
     model = Column(String(50), default="")
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

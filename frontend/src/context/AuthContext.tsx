@@ -7,6 +7,7 @@ interface AuthState {
   refreshToken: string | null
   email: string | null
   isAuthenticated: boolean
+  localReady: boolean
 }
 
 interface AuthContextValue extends AuthState {
@@ -26,23 +27,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refreshToken: localStorage.getItem(STORAGE_KEY_RT),
     email:        localStorage.getItem(STORAGE_KEY_EMAIL),
     isAuthenticated: !!sessionStorage.getItem(STORAGE_KEY_JWT),
+    localReady: false,
   }))
 
-  // 마운트 시 Refresh Token으로 JWT 자동 갱신
+  // 마운트 시 로컬 서버에 토큰 동기화 + JWT 자동 갱신
   useEffect(() => {
+    const jwt = sessionStorage.getItem(STORAGE_KEY_JWT)
     const rt = localStorage.getItem(STORAGE_KEY_RT)
-    if (rt && !sessionStorage.getItem(STORAGE_KEY_JWT)) {
+
+    if (jwt && rt) {
+      // JWT 있음 → 로컬 서버에 토큰 전달 (set_active_user 트리거)
+      localAuth.setAuthToken(jwt, rt).then(() => {
+        setState(prev => ({ ...prev, localReady: true }))
+      })
+    } else if (rt) {
+      // JWT 만료, RT 있음 → 클라우드에서 갱신
       cloudAuth.refresh(rt)
         .then((res) => {
           const d = res.data
           sessionStorage.setItem(STORAGE_KEY_JWT, d.access_token)
           localStorage.setItem(STORAGE_KEY_RT, d.refresh_token)
-          localAuth.setAuthToken(d.access_token, d.refresh_token)
+          localAuth.setAuthToken(d.access_token, d.refresh_token).then(() => {
+            setState(prev => ({ ...prev, localReady: true }))
+          })
           setState({
             jwt: d.access_token,
             refreshToken: d.refresh_token,
             email: localStorage.getItem(STORAGE_KEY_EMAIL),
             isAuthenticated: true,
+            localReady: false,
           })
         })
         .catch(() => {
@@ -58,23 +71,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionStorage.setItem(STORAGE_KEY_JWT, d.access_token)
     localStorage.setItem(STORAGE_KEY_RT, d.refresh_token)
     localStorage.setItem(STORAGE_KEY_EMAIL, email)
-    localAuth.setAuthToken(d.access_token, d.refresh_token)
+    await localAuth.setAuthToken(d.access_token, d.refresh_token)
     setState({
       jwt: d.access_token,
       refreshToken: d.refresh_token,
       email,
       isAuthenticated: true,
+      localReady: true,
     })
   }, [])
 
   const logout = useCallback(async () => {
+    // 즉시 스토리지 정리 + 상태 초기화 (서버 응답 안 기다림)
     const rt = localStorage.getItem(STORAGE_KEY_RT)
-    if (rt) await cloudAuth.logout(rt).catch(() => {})
-    localAuth.logout()
     sessionStorage.removeItem(STORAGE_KEY_JWT)
     localStorage.removeItem(STORAGE_KEY_RT)
     localStorage.removeItem(STORAGE_KEY_EMAIL)
-    setState({ jwt: null, refreshToken: null, email: null, isAuthenticated: false })
+    setState({ jwt: null, refreshToken: null, email: null, isAuthenticated: false, localReady: false })
+    // 서버 측 정리는 fire-and-forget
+    if (rt) cloudAuth.logout(rt).catch(() => {})
+    localAuth.logout()
   }, [])
 
   return (

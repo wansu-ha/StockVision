@@ -16,6 +16,10 @@ import Register from './pages/Register'
 import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
 import Onboarding from './pages/Onboarding'
+import ProtoA from './pages/ProtoA'
+import ProtoB from './pages/ProtoB'
+import ProtoC from './pages/ProtoC'
+import MainDashboard from './pages/MainDashboard'
 import Layout from './components/Layout'
 import AlertContainer from './components/AlertContainer'
 import ToastContainer from './components/ToastContainer'
@@ -34,6 +38,8 @@ const queryClient = new QueryClient({
 /** 인증 필수 라우트 가드 */
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth()
+  // DEV: 서버 없이 UI 확인용 bypass
+  if (import.meta.env.DEV && import.meta.env.VITE_AUTH_BYPASS === 'true') return <>{children}</>
   if (!isAuthenticated) return <Navigate to="/login" replace />
   return <>{children}</>
 }
@@ -47,13 +53,30 @@ function AppRoutes() {
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/onboarding" element={<Onboarding />} />
+      <Route path="/proto-a" element={<ProtoA />} />
+      <Route path="/proto-b" element={<ProtoB />} />
+      <Route path="/proto-c" element={<ProtoC />} />
 
-      {/* 인증 필수 라우트 */}
+      {/* 메인 대시보드 (Layout 없음 — 자체 헤더 사용) */}
+      <Route path="/" element={
+        <ProtectedRoute>
+          <MainDashboard />
+        </ProtectedRoute>
+      } />
+
+      {/* 설정 (Layout 없음 — 자체 헤더 사용) */}
+      <Route path="/settings" element={
+        <ProtectedRoute>
+          <Settings />
+        </ProtectedRoute>
+      } />
+
+      {/* 인증 필수 라우트 (레거시 Layout) */}
       <Route path="*" element={
         <ProtectedRoute>
           <Layout>
             <Routes>
-              <Route path="/" element={<Dashboard />} />
+              <Route path="/legacy-dashboard" element={<Dashboard />} />
               <Route path="/stocks" element={<StockList />} />
               <Route path="/stocks/:symbol" element={<StockDetail />} />
               <Route path="/trading" element={<Trading />} />
@@ -64,7 +87,6 @@ function AppRoutes() {
               <Route path="/strategy" element={<StrategyBuilder />} />
               <Route path="/portfolio" element={<Portfolio />} />
               <Route path="/templates" element={<Templates />} />
-              <Route path="/settings" element={<Settings />} />
               <Route path="/admin/*" element={<AdminGuard><AdminDashboard /></AdminGuard>} />
             </Routes>
           </Layout>
