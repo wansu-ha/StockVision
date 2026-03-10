@@ -7,3 +7,6 @@ pystray>=0.19.5
 Pillow>=11.0.0        # pystray 아이콘 생성에 필요
 pyinstaller>=6.11.0
 aiosqlite>=0.20.0     # 비동기 SQLite
+pandas>=2.2.0         # 지표 계산
+numpy>=2.0.0          # pandas 의존
+yfinance>=0.2.40      # 일봉 데이터 조회

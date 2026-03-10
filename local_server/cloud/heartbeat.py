@@ -94,15 +94,15 @@ async def start_heartbeat() -> None:
             # 서버 버전 업데이트 알림
             _check_server_version(resp)
 
-            # 버전 갱신
+            # 버전 갱신 (cloud가 int를 보내도 str로 통일)
             if resp.get("rules_version") is not None:
-                last_rules_version = resp["rules_version"]
+                last_rules_version = str(resp["rules_version"])
             if resp.get("context_version") is not None:
-                last_context_version = resp["context_version"]
+                last_context_version = str(resp["context_version"])
             if resp.get("watchlist_version") is not None:
-                last_watchlist_version = resp["watchlist_version"]
+                last_watchlist_version = str(resp["watchlist_version"])
             if resp.get("stock_master_version") is not None:
-                last_stock_master_version = resp["stock_master_version"]
+                last_stock_master_version = str(resp["stock_master_version"])
 
             # 성공 → 실패 카운터 리셋 + 트레이 초록
             if consecutive_failures > 0:
@@ -181,7 +181,7 @@ async def _check_version_changes(
     last_stock_master_ver: str | None,
 ) -> None:
     """하트비트 응답에서 버전 변경을 감지하여 fetch를 트리거한다."""
-    rules_ver = resp.get("rules_version")
+    rules_ver = str(resp["rules_version"]) if resp.get("rules_version") is not None else None
     if rules_ver is not None and rules_ver != last_rules_ver:
         logger.info("규칙 버전 변경 감지: %s → %s", last_rules_ver, rules_ver)
         try:
@@ -191,7 +191,7 @@ async def _check_version_changes(
         except Exception as e:
             logger.error("규칙 자동 fetch 실패: %s", e)
 
-    context_ver = resp.get("context_version")
+    context_ver = str(resp["context_version"]) if resp.get("context_version") is not None else None
     if context_ver is not None and context_ver != last_context_ver:
         logger.info("컨텍스트 버전 변경 감지: %s → %s", last_context_ver, context_ver)
         try:
@@ -200,7 +200,7 @@ async def _check_version_changes(
         except Exception as e:
             logger.error("컨텍스트 자동 fetch 실패: %s", e)
 
-    watchlist_ver = resp.get("watchlist_version")
+    watchlist_ver = str(resp["watchlist_version"]) if resp.get("watchlist_version") is not None else None
     if watchlist_ver is not None and watchlist_ver != last_watchlist_ver:
         logger.info("관심종목 버전 변경 감지: %s → %s", last_watchlist_ver, watchlist_ver)
         try:
@@ -211,7 +211,7 @@ async def _check_version_changes(
         except Exception as e:
             logger.error("관심종목 자동 fetch 실패: %s", e)
 
-    stock_ver = resp.get("stock_master_version")
+    stock_ver = str(resp["stock_master_version"]) if resp.get("stock_master_version") is not None else None
     if stock_ver is not None and stock_ver != last_stock_master_ver:
         logger.info("종목 마스터 버전 변경 감지: %s → %s", last_stock_master_ver, stock_ver)
         try:

@@ -5,6 +5,7 @@
 kis 패키지에서 재사용한다.
 """
 
+import asyncio
 import logging
 from decimal import Decimal
 from typing import Callable, Optional
@@ -70,6 +71,11 @@ class KiwoomAdapter(BrokerAdapter):
         )
         self._state.on_change(self._reconnect_mgr.on_state_change)
 
+        self._ws_available = False
+        self._rest_poll_task: Optional[asyncio.Task] = None
+        self._rest_poll_callbacks: list[Callable[[QuoteEvent], None]] = []
+        self._rest_poll_symbols: list[str] = []
+
     # ── 라이프사이클 ─────────────────────────────────
 
     async def connect(self) -> None:
@@ -83,13 +89,15 @@ class KiwoomAdapter(BrokerAdapter):
             await self._state.transition(ConnectionState.AUTHENTICATED)
             logger.info("키움 인증 완료")
 
-            # 모의서버 WS 미지원 — 실전만 WS 연결
-            if not self._auth._is_mock:
+            try:
                 await self._ws.connect()
-                await self._state.transition(ConnectionState.SUBSCRIBED)
-                logger.info("키움 WebSocket 연결 완료")
-            else:
-                logger.info("모의서버 — WebSocket 연결 건너뜀")
+                self._ws_available = True
+                logger.info("키움 WebSocket 연결 완료 (mock=%s)", self._auth._is_mock)
+            except Exception as ws_exc:
+                self._ws_available = False
+                logger.warning("키움 WebSocket 연결 실패 — REST 폴링 모드: %s", ws_exc)
+
+            await self._state.transition(ConnectionState.SUBSCRIBED)
 
             await self._reconciler.start()
 
@@ -103,8 +111,12 @@ class KiwoomAdapter(BrokerAdapter):
 
     async def disconnect(self) -> None:
         self._reconnect_mgr.disable()
+        if self._rest_poll_task:
+            self._rest_poll_task.cancel()
+            self._rest_poll_task = None
         await self._reconciler.stop()
-        await self._ws.disconnect()
+        if self._ws_available:
+            await self._ws.disconnect()
         self._state.reset()
         logger.info("KiwoomAdapter 연결 종료")
 
@@ -132,11 +144,38 @@ class KiwoomAdapter(BrokerAdapter):
         callback: Callable[[QuoteEvent], None],
     ) -> None:
         self._assert_connected()
-        self._ws.add_callback(callback)
-        await self._ws.subscribe(symbols)
+        if self._ws_available:
+            self._ws.add_callback(callback)
+            await self._ws.subscribe(symbols)
+        else:
+            # REST 폴링 폴백
+            self._rest_poll_callbacks.append(callback)
+            self._rest_poll_symbols = list(set(self._rest_poll_symbols + symbols))
+            if self._rest_poll_task is None:
+                self._rest_poll_task = asyncio.create_task(self._rest_poll_loop())
+                logger.info("REST 폴링 시작 — %d종목, 10초 간격", len(self._rest_poll_symbols))
 
     async def unsubscribe_quotes(self, symbols: list[str]) -> None:
-        await self._ws.unsubscribe(symbols)
+        if self._ws_available:
+            await self._ws.unsubscribe(symbols)
+        else:
+            for s in symbols:
+                if s in self._rest_poll_symbols:
+                    self._rest_poll_symbols.remove(s)
+
+    async def _rest_poll_loop(self) -> None:
+        """WS 불가 시 REST로 시세 폴링 (10초 간격)."""
+        while self._rest_poll_symbols:
+            for sym in list(self._rest_poll_symbols):
+                try:
+                    await self._rate_limiter.acquire("quote")
+                    event = await self._quote_client.get_price(sym)
+                    for cb in self._rest_poll_callbacks:
+                        cb(event)
+                except Exception as exc:
+                    logger.debug("REST 폴링 실패 [%s]: %s", sym, exc)
+            await asyncio.sleep(10)
+        self._rest_poll_task = None
 
     # ── 주문 실행 ─────────────────────────────────────
 
