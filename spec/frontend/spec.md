@@ -1,7 +1,7 @@
 # 프론트엔드 명세서 (frontend)
 
 > 작성일: 2026-03-04 | 상태: 구현 완료 | Unit 5 (Phase 3-B)
-> 검증일: 2026-03-10 | 12/13 PASS, 1 PARTIAL, 1 FAIL | 보고서: `reports/acceptance-test.md`
+> 검증일: 2026-03-10 | 12/13 PASS, 1 PARTIAL | 보고서: `reports/acceptance-test.md`
 >
 > **병합 대상**: `spec/strategy-builder/`, `spec/user-dashboard/`, `spec/notification/`,
 > `spec/onboarding/`, `spec/portfolio/`, `spec/execution-log/` → 본 spec에 통합.
@@ -319,7 +319,7 @@ useInterval(() => {
 ### 6.3 전략 빌더
 
 - [x] 매수/매도 조건을 UI로 구성 가능
-- [ ] AND/OR 연산자 선택 가능 (Phase 3 모달 미구현)
+- [x] AND/OR 연산자 선택 가능
 - [x] 저장 → 클라우드 서버 + localhost sync
 
 ### 6.4 JWT 전달 + 규칙 sync

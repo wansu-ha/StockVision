@@ -216,39 +216,49 @@ interface AddRuleModalProps {
   onSaved: () => void
 }
 
+interface ConditionRow {
+  field: string
+  operator: string
+  value: number
+}
+
 function AddRuleModal({ symbol, stockName, onClose, onSaved }: AddRuleModalProps) {
-  const nameRef = useRef<HTMLInputElement>(null)
-  const indicatorRef = useRef<HTMLSelectElement>(null)
-  const operatorRef = useRef<HTMLSelectElement>(null)
-  const valueRef = useRef<HTMLInputElement>(null)
-  const sideRef = useRef<HTMLSelectElement>(null)
-  const qtyRef = useRef<HTMLInputElement>(null)
-  const orderTypeRef = useRef<HTMLSelectElement>(null)
+  const [name, setName] = useState('')
+  const [conditions, setConditions] = useState<ConditionRow[]>([
+    { field: 'rsi_14', operator: '<=', value: 30 },
+  ])
+  const [logicOp, setLogicOp] = useState<'AND' | 'OR'>('AND')
+  const [side, setSide] = useState<'buy' | 'sell'>('buy')
+  const [qty, setQty] = useState(10)
+  const [orderType, setOrderType] = useState<'market' | 'limit'>('market')
   const [saving, setSaving] = useState(false)
+  const nameRef = useRef<HTMLInputElement>(null)
+
+  const updateCondition = (i: number, patch: Partial<ConditionRow>) => {
+    setConditions(prev => prev.map((c, idx) => idx === i ? { ...c, ...patch } : c))
+  }
+  const addCondition = () => {
+    setConditions(prev => [...prev, { field: 'rsi_14', operator: '<=', value: 30 }])
+  }
+  const removeCondition = (i: number) => {
+    setConditions(prev => prev.filter((_, idx) => idx !== i))
+  }
 
   const handleSave = async () => {
-    const name = nameRef.current?.value?.trim()
-    if (!name) { nameRef.current?.focus(); return }
+    if (!name.trim()) { nameRef.current?.focus(); return }
 
-    const indicator = indicatorRef.current?.value ?? 'rsi_14'
-    const operator = operatorRef.current?.value ?? '<='
-    const value = Number(valueRef.current?.value) || 30
-    const side = sideRef.current?.value === '매도' ? 'sell' : 'buy'
-    const qty = Number(qtyRef.current?.value) || 10
-    const orderType = orderTypeRef.current?.value === '지정가' ? 'limit' : 'market'
-
-    const conditions = {
-      operator: 'AND',
-      conditions: [{ type: 'indicator', field: indicator, operator, value }],
+    const condPayload = {
+      operator: logicOp,
+      conditions: conditions.map(c => ({ type: 'indicator', field: c.field, operator: c.operator, value: c.value })),
     }
 
     setSaving(true)
     try {
       await cloudRules.create({
-        name,
+        name: name.trim(),
         symbol,
-        buy_conditions: side === 'buy' ? conditions : undefined,
-        sell_conditions: side === 'sell' ? conditions : undefined,
+        buy_conditions: side === 'buy' ? condPayload : undefined,
+        sell_conditions: side === 'sell' ? condPayload : undefined,
         order_type: orderType,
         qty,
         is_active: true,
@@ -259,10 +269,13 @@ function AddRuleModal({ symbol, stockName, onClose, onSaved }: AddRuleModalProps
     }
   }
 
+  const selectCls = 'bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500'
+  const inputCls = selectCls
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
-      <div className="relative bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
+      <div className="relative bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-base font-bold">{stockName} 규칙 추가</h2>
           <button onClick={onClose} className="text-gray-500 hover:text-white transition text-lg">&times;</button>
@@ -273,38 +286,72 @@ function AddRuleModal({ symbol, stockName, onClose, onSaved }: AddRuleModalProps
             <label className="text-xs text-gray-500 mb-1 block">규칙 이름</label>
             <input
               ref={nameRef}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              className={`w-full ${inputCls}`}
               placeholder="예: RSI 매수"
               autoFocus
             />
           </div>
 
           <div>
-            <label className="text-xs text-gray-500 mb-1 block">조건</label>
-            <div className="flex flex-wrap gap-2">
-              <select ref={indicatorRef} defaultValue="rsi_14" className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
-                {AVAILABLE_INDICATORS.map(ind => (
-                  <option key={ind.key} value={ind.key}>{ind.name}</option>
-                ))}
-              </select>
-              <select ref={operatorRef} defaultValue="<=" className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
-                <option value="<=">{'≤'}</option>
-                <option value=">=">{' ≥'}</option>
-                <option value="==">{'='}</option>
-              </select>
-              <input ref={valueRef} defaultValue="30" className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm w-20 focus:outline-none focus:border-indigo-500" />
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs text-gray-500">조건</label>
+              <div className="flex items-center gap-1">
+                {conditions.length > 1 && (
+                  <div className="flex rounded-lg overflow-hidden border border-gray-700 mr-2">
+                    <button
+                      onClick={() => setLogicOp('AND')}
+                      className={`px-2.5 py-1 text-xs font-medium transition ${logicOp === 'AND' ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-500 hover:text-gray-300'}`}
+                    >AND</button>
+                    <button
+                      onClick={() => setLogicOp('OR')}
+                      className={`px-2.5 py-1 text-xs font-medium transition ${logicOp === 'OR' ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-500 hover:text-gray-300'}`}
+                    >OR</button>
+                  </div>
+                )}
+                <button onClick={addCondition} className="text-xs text-indigo-400 hover:text-indigo-300 transition">+ 조건</button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {conditions.map((c, i) => (
+                <div key={i} className="flex flex-wrap items-center gap-2">
+                  {i > 0 && conditions.length > 1 && (
+                    <span className="text-[10px] text-indigo-400 font-medium w-full -mb-1">{logicOp}</span>
+                  )}
+                  <select value={c.field} onChange={e => updateCondition(i, { field: e.target.value })} className={selectCls}>
+                    {AVAILABLE_INDICATORS.map(ind => (
+                      <option key={ind.key} value={ind.key}>{ind.name}</option>
+                    ))}
+                  </select>
+                  <select value={c.operator} onChange={e => updateCondition(i, { operator: e.target.value })} className={selectCls}>
+                    <option value="<=">{'≤'}</option>
+                    <option value=">=">{'≥'}</option>
+                    <option value="==">{'='}</option>
+                  </select>
+                  <input
+                    type="number"
+                    value={c.value}
+                    onChange={e => updateCondition(i, { value: Number(e.target.value) })}
+                    className={`w-20 ${inputCls}`}
+                  />
+                  {conditions.length > 1 && (
+                    <button onClick={() => removeCondition(i)} className="text-gray-600 hover:text-red-400 transition text-sm">&times;</button>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
 
           <div>
             <label className="text-xs text-gray-500 mb-1 block">실행</label>
             <div className="flex flex-wrap gap-2">
-              <select ref={sideRef} defaultValue="매수" className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
+              <select value={side === 'buy' ? '매수' : '매도'} onChange={e => setSide(e.target.value === '매도' ? 'sell' : 'buy')} className={selectCls}>
                 <option>매수</option><option>매도</option>
               </select>
-              <input ref={qtyRef} defaultValue="10" className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm w-20 focus:outline-none focus:border-indigo-500" />
+              <input type="number" value={qty} onChange={e => setQty(Number(e.target.value) || 1)} className={`w-20 ${inputCls}`} />
               <span className="text-sm text-gray-500 self-center">주</span>
-              <select ref={orderTypeRef} defaultValue="시장가" className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
+              <select value={orderType === 'limit' ? '지정가' : '시장가'} onChange={e => setOrderType(e.target.value === '지정가' ? 'limit' : 'market')} className={selectCls}>
                 <option>시장가</option><option>지정가</option>
               </select>
             </div>
