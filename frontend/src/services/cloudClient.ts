@@ -86,8 +86,18 @@ export const cloudRules = {
 
 /** 시장 컨텍스트 — /api/v1/context */
 export const cloudContext = {
-  get: () =>
-    client.get<{ data: MarketContextData }>('/api/v1/context').then((r) => r.data.data ?? r.data),
+  get: (): Promise<MarketContextData> =>
+    client.get('/api/v1/context').then((r) => {
+      const d = r.data.data ?? r.data
+      const m = d.market ?? {}
+      return {
+        kospi_rsi: m.kospi_rsi,
+        kosdaq_rsi: m.kosdaq_rsi,
+        volatility: m.volatility,
+        trend: m.market_trend,
+        updated_at: d.computed_at,
+      }
+    }),
 }
 
 /** 종목 검색/조회 — /api/v1/stocks */

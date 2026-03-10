@@ -5,7 +5,7 @@
  * cloudQuote → 각 종목 현재가
  */
 import { useQuery } from '@tanstack/react-query'
-import { cloudRules, cloudWatchlist, cloudQuote } from '../services/cloudClient'
+import { cloudRules, cloudWatchlist, cloudQuote, cloudStocks } from '../services/cloudClient'
 import type { Rule } from '../types/strategy'
 import type { WatchlistItem, StockQuote } from '../services/cloudClient'
 import type { Stock } from '../components/main/ListView'
@@ -20,12 +20,13 @@ function buildStocks(
   symbols: string[],
   quotes: Map<string, StockQuote>,
   ruleCountMap: Map<string, number>,
+  names: Map<string, string>,
 ): Stock[] {
   return symbols.map(sym => {
     const q = quotes.get(sym)
     return {
       symbol: sym,
-      name: q?.symbol ?? sym,
+      name: names.get(sym) ?? sym,
       price: q?.price ?? 0,
       change: q?.change_pct ?? 0,
       rules: ruleCountMap.get(sym) ?? 0,
@@ -64,7 +65,7 @@ export function useStockData() {
 
   // 각 종목 현재가 — allSymbols가 변할 때만 fetch
   const quotesQuery = useQuery<Map<string, StockQuote>>({
-    queryKey: ['quotes', allSymbols.sort().join(',')],
+    queryKey: ['quotes', [...allSymbols].sort().join(',')],
     queryFn: async () => {
       const results = await Promise.allSettled(
         allSymbols.map(sym => cloudQuote.get(sym))
@@ -84,9 +85,31 @@ export function useStockData() {
 
   const quotes = quotesQuery.data ?? new Map<string, StockQuote>()
 
+  // 종목명 — stock_master에서 조회, 이름은 자주 안 바뀌므로 긴 캐시
+  const namesQuery = useQuery<Map<string, string>>({
+    queryKey: ['stockNames', [...allSymbols].sort().join(',')],
+    queryFn: async () => {
+      const results = await Promise.allSettled(
+        allSymbols.map(sym => cloudStocks.get(sym))
+      )
+      const map = new Map<string, string>()
+      results.forEach((r, i) => {
+        if (r.status === 'fulfilled' && r.value) {
+          map.set(allSymbols[i], r.value.name)
+        }
+      })
+      return map
+    },
+    staleTime: 5 * 60_000,
+    enabled: allSymbols.length > 0,
+    retry: 1,
+  })
+
+  const names = namesQuery.data ?? new Map<string, string>()
+
   return {
-    myStocks: buildStocks(mySymbols, quotes, ruleCountMap),
-    watchStocks: buildStocks(watchSymbols, quotes, ruleCountMap),
+    myStocks: buildStocks(mySymbols, quotes, ruleCountMap, names),
+    watchStocks: buildStocks(watchSymbols, quotes, ruleCountMap, names),
     rules,
     isLoading: rulesQuery.isLoading || watchlistQuery.isLoading,
     error: rulesQuery.error || watchlistQuery.error,

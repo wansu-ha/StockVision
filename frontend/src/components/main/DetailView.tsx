@@ -21,6 +21,7 @@ interface DetailViewProps {
 
 export default function DetailView({ stock, trades, rules: propRules, context, onBack }: DetailViewProps) {
   const [ruleEditing, setRuleEditing] = useState<number | null>(null)
+  const [showAddModal, setShowAddModal] = useState(false)
   const queryClient = useQueryClient()
 
   const stockTrades = trades.filter(t => t.symbol === stock.symbol || t.symbol === stock.name)
@@ -51,7 +52,7 @@ export default function DetailView({ stock, trades, rules: propRules, context, o
   const contextItems = context ? [
     { label: 'KOSPI RSI', value: context.kospi_rsi?.toFixed(1) ?? '—' },
     { label: 'KOSDAQ RSI', value: context.kosdaq_rsi?.toFixed(1) ?? '—' },
-    { label: '시장 추세', value: context.trend ?? '—' },
+    { label: '시장 추세', value: ({ bullish: '상승세', bearish: '하락세', neutral: '중립' }[context.trend ?? ''] ?? context.trend ?? '—') },
     { label: '변동성', value: context.volatility?.toFixed(2) ?? '—' },
   ] : []
 
@@ -112,6 +113,11 @@ export default function DetailView({ stock, trades, rules: propRules, context, o
       <section className="mb-6">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-medium text-gray-400">규칙</h3>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="w-6 h-6 flex items-center justify-center rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm transition"
+            aria-label="규칙 추가"
+          >+</button>
         </div>
         {propRules.length === 0 ? (
           <div className="bg-gray-900 border border-gray-800 rounded-xl py-8 text-center text-sm text-gray-600">
@@ -184,7 +190,137 @@ export default function DetailView({ stock, trades, rules: propRules, context, o
           관심 종목 해제
         </button>
       </div>
+
+      {/* 규칙 추가 모달 */}
+      {showAddModal && (
+        <AddRuleModal
+          symbol={stock.symbol}
+          stockName={stock.name}
+          onClose={() => setShowAddModal(false)}
+          onSaved={() => {
+            setShowAddModal(false)
+            queryClient.invalidateQueries({ queryKey: ['rules'] })
+          }}
+        />
+      )}
     </>
+  )
+}
+
+// ── AddRuleModal ──
+
+interface AddRuleModalProps {
+  symbol: string
+  stockName: string
+  onClose: () => void
+  onSaved: () => void
+}
+
+function AddRuleModal({ symbol, stockName, onClose, onSaved }: AddRuleModalProps) {
+  const nameRef = useRef<HTMLInputElement>(null)
+  const indicatorRef = useRef<HTMLSelectElement>(null)
+  const operatorRef = useRef<HTMLSelectElement>(null)
+  const valueRef = useRef<HTMLInputElement>(null)
+  const sideRef = useRef<HTMLSelectElement>(null)
+  const qtyRef = useRef<HTMLInputElement>(null)
+  const orderTypeRef = useRef<HTMLSelectElement>(null)
+  const [saving, setSaving] = useState(false)
+
+  const handleSave = async () => {
+    const name = nameRef.current?.value?.trim()
+    if (!name) { nameRef.current?.focus(); return }
+
+    const indicator = indicatorRef.current?.value ?? 'rsi_14'
+    const operator = operatorRef.current?.value ?? '<='
+    const value = Number(valueRef.current?.value) || 30
+    const side = sideRef.current?.value === '매도' ? 'sell' : 'buy'
+    const qty = Number(qtyRef.current?.value) || 10
+    const orderType = orderTypeRef.current?.value === '지정가' ? 'limit' : 'market'
+
+    const conditions = {
+      operator: 'AND',
+      conditions: [{ type: 'indicator', field: indicator, operator, value }],
+    }
+
+    setSaving(true)
+    try {
+      await cloudRules.create({
+        name,
+        symbol,
+        buy_conditions: side === 'buy' ? conditions : undefined,
+        sell_conditions: side === 'sell' ? conditions : undefined,
+        order_type: orderType,
+        qty,
+        is_active: true,
+      })
+      onSaved()
+    } catch {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+      <div className="relative bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-base font-bold">{stockName} 규칙 추가</h2>
+          <button onClick={onClose} className="text-gray-500 hover:text-white transition text-lg">&times;</button>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">규칙 이름</label>
+            <input
+              ref={nameRef}
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition"
+              placeholder="예: RSI 매수"
+              autoFocus
+            />
+          </div>
+
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">조건</label>
+            <div className="flex flex-wrap gap-2">
+              <select ref={indicatorRef} defaultValue="rsi_14" className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
+                {AVAILABLE_INDICATORS.map(ind => (
+                  <option key={ind.key} value={ind.key}>{ind.name}</option>
+                ))}
+              </select>
+              <select ref={operatorRef} defaultValue="<=" className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
+                <option value="<=">{'≤'}</option>
+                <option value=">=">{' ≥'}</option>
+                <option value="==">{'='}</option>
+              </select>
+              <input ref={valueRef} defaultValue="30" className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm w-20 focus:outline-none focus:border-indigo-500" />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">실행</label>
+            <div className="flex flex-wrap gap-2">
+              <select ref={sideRef} defaultValue="매수" className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
+                <option>매수</option><option>매도</option>
+              </select>
+              <input ref={qtyRef} defaultValue="10" className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm w-20 focus:outline-none focus:border-indigo-500" />
+              <span className="text-sm text-gray-500 self-center">주</span>
+              <select ref={orderTypeRef} defaultValue="시장가" className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
+                <option>시장가</option><option>지정가</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2 mt-6">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-400 hover:text-white transition">취소</button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="px-5 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 disabled:opacity-50 transition"
+          >{saving ? '저장 중...' : '저장'}</button>
+        </div>
+      </div>
+    </div>
   )
 }
 

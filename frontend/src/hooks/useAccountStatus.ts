@@ -13,7 +13,7 @@ export interface BrokerCredentials {
 
 export interface LocalStatusData {
   server: { uptime: number }
-  broker: { connected: boolean; has_credentials: boolean; credentials?: BrokerCredentials; mode?: 'paper' | 'live' }
+  broker: { connected: boolean; has_credentials: boolean; credentials?: BrokerCredentials; is_mock?: boolean }
   strategy_engine: {
     running: boolean
     kill_switch: boolean
@@ -37,7 +37,7 @@ export function useAccountStatus() {
     lossLock: data?.strategy_engine?.loss_lock ?? false,
     tradingEnabled: data?.strategy_engine?.trading_enabled ?? false,
     credentials: data?.broker?.credentials ?? null,
-    brokerMode: data?.broker?.mode ?? null,
+    isMock: data?.broker?.is_mock ?? null,
     isLoading,
     error,
     raw: data,

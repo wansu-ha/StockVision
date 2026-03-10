@@ -46,6 +46,14 @@ async def get_status(request: Request) -> dict[str, Any]:
             "trading_enabled": engine.safeguard.is_trading_enabled(),
         }
 
+    # is_mock 판단: 브로커 인스턴스 > config 순서
+    def _resolve_is_mock(b: Any) -> bool:
+        auth = getattr(b, "_auth", None) if b else None
+        if auth is not None:
+            return getattr(auth, "_is_mock", True)
+        from local_server.config import get_config
+        return get_config().get("broker.is_mock", True)
+
     # 브로커 키 마스킹 — 앞 4자만 노출
     def _mask(key_name: str) -> str | None:
         val = load_credential(key_name)
@@ -72,7 +80,7 @@ async def get_status(request: Request) -> dict[str, Any]:
                 "connected": broker_connected,
                 "has_credentials": has_credential(KEY_CLOUD_ACCESS_TOKEN),
                 "credentials": credentials,
-                "mode": "paper" if (getattr(getattr(broker, "_auth", None), "_is_mock", True)) else "live",
+                "is_mock": _resolve_is_mock(broker),
             },
             "strategy_engine": {
                 "running": engine_running,

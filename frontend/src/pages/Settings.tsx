@@ -1,35 +1,39 @@
-/** 설정 페이지 — 다크 테마, API Key 등록, 모드 전환, 엔진 설정, 프로필 */
-import { useState, useEffect } from 'react'
+/** 설정 페이지 — API Key 등록, 엔진 제어, 프로필 */
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { localConfig, localEngine } from '../services/localClient'
 import { useAuth } from '../context/AuthContext'
 import { useAlertStore } from '../stores/alertStore'
 import { useAccountStatus } from '../hooks/useAccountStatus'
-import type { LocalConfig } from '../types/settings'
 
 export default function Settings() {
   const { email, logout } = useAuth()
   const addAlert = useAlertStore((s) => s.add)
   const navigate = useNavigate()
-  const { engineRunning, brokerConnected, credentials } = useAccountStatus()
+  const { engineRunning, brokerConnected, credentials, isMock } = useAccountStatus()
 
   // 증권사 API Key
+  const [brokerType, setBrokerType] = useState<'kiwoom' | 'kis'>('kiwoom')
   const [appKey, setAppKey] = useState('')
   const [appSecret, setAppSecret] = useState('')
-  const [config, setConfig] = useState<LocalConfig | null>(null)
+  const [saving, setSaving] = useState(false)
 
-  useEffect(() => {
-    localConfig.get().then((c) => { if (c) setConfig(c) })
-  }, [])
+  const hasKeys = !!(credentials?.kiwoom?.app_key || credentials?.kis?.app_key)
 
   const handleSaveKeys = async () => {
+    setSaving(true)
     try {
-      await localConfig.setBrokerKeys(appKey, appSecret)
-      addAlert('API Key가 등록되었습니다', 'success')
+      const res = await localConfig.setBrokerKeys(brokerType, appKey, appSecret)
+      const label = res?.data?.is_mock ? '모의투자' : '실전투자'
+      addAlert(`API Key 등록 완료 (${label})`, 'success')
       setAppKey('')
       setAppSecret('')
-    } catch {
-      addAlert('API Key 등록 실패. 로컬 서버 연결을 확인하세요.', 'error')
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+        ?? 'API Key 등록 실패. 키를 확인하세요.'
+      addAlert(msg, 'error')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -105,21 +109,35 @@ export default function Settings() {
           <h2 className="text-base font-semibold mb-1">증권사 API 설정</h2>
           <p className="text-xs text-gray-500 mb-4">API Key는 이 PC에만 저장됩니다. 클라우드로 전송되지 않습니다.</p>
 
-          {/* 등록된 키 현황 */}
-          {credentials && (credentials.kiwoom.app_key || credentials.kis.app_key) && (
-            <div className="mb-4 space-y-2">
-              {credentials.kiwoom.app_key && (
+          {hasKeys ? (
+            /* 등록 완료 — 읽기전용 표시 */
+            <div className="space-y-2">
+              {credentials?.kiwoom?.app_key && (
                 <div className="bg-gray-800 border border-gray-700 rounded-lg p-3">
-                  <div className="text-xs text-gray-400 mb-1.5 font-medium">키움증권</div>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="text-xs text-gray-400 font-medium">키움증권</span>
+                    {isMock !== null && (
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isMock ? 'bg-yellow-900/50 text-yellow-400' : 'bg-red-900/50 text-red-400'}`}>
+                        {isMock ? '모의' : '실전'}
+                      </span>
+                    )}
+                  </div>
                   <div className="flex gap-4 text-xs font-mono">
                     <span className="text-gray-500">App Key: <span className="text-gray-300">{credentials.kiwoom.app_key}</span></span>
                     <span className="text-gray-500">Secret: <span className="text-gray-300">{credentials.kiwoom.secret_key}</span></span>
                   </div>
                 </div>
               )}
-              {credentials.kis.app_key && (
+              {credentials?.kis?.app_key && (
                 <div className="bg-gray-800 border border-gray-700 rounded-lg p-3">
-                  <div className="text-xs text-gray-400 mb-1.5 font-medium">한국투자증권 (KIS)</div>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="text-xs text-gray-400 font-medium">한국투자증권</span>
+                    {isMock !== null && (
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isMock ? 'bg-yellow-900/50 text-yellow-400' : 'bg-red-900/50 text-red-400'}`}>
+                        {isMock ? '모의' : '실전'}
+                      </span>
+                    )}
+                  </div>
                   <div className="flex gap-4 text-xs font-mono">
                     <span className="text-gray-500">App Key: <span className="text-gray-300">{credentials.kis.app_key}</span></span>
                     <span className="text-gray-500">Secret: <span className="text-gray-300">{credentials.kis.app_secret}</span></span>
@@ -127,98 +145,44 @@ export default function Settings() {
                 </div>
               )}
             </div>
+          ) : (
+            /* 미등록 — 입력 폼 */
+            <div className="space-y-3">
+              <select
+                value={brokerType}
+                onChange={(e) => setBrokerType(e.target.value as 'kiwoom' | 'kis')}
+                className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-xl text-sm text-gray-300 focus:outline-none focus:border-indigo-500 transition"
+              >
+                <option value="kiwoom">키움증권</option>
+                <option value="kis">한국투자증권 (KIS)</option>
+              </select>
+              <input
+                type="password"
+                autoComplete="off"
+                placeholder="App Key"
+                value={appKey}
+                onChange={(e) => setAppKey(e.target.value)}
+                className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-xl text-sm placeholder-gray-500 focus:outline-none focus:border-indigo-500 transition"
+              />
+              <input
+                type="password"
+                autoComplete="off"
+                placeholder="App Secret"
+                value={appSecret}
+                onChange={(e) => setAppSecret(e.target.value)}
+                className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-xl text-sm placeholder-gray-500 focus:outline-none focus:border-indigo-500 transition"
+              />
+              <button
+                onClick={handleSaveKeys}
+                disabled={!appKey || !appSecret || saving}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed transition"
+              >
+                {saving ? '확인 중...' : '등록'}
+              </button>
+            </div>
           )}
-
-          <div className="space-y-3">
-            <input
-              type="password"
-              autoComplete="off"
-              placeholder="App Key"
-              value={appKey}
-              onChange={(e) => setAppKey(e.target.value)}
-              className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-xl text-sm placeholder-gray-500 focus:outline-none focus:border-indigo-500 transition"
-            />
-            <input
-              type="password"
-              autoComplete="off"
-              placeholder="App Secret"
-              value={appSecret}
-              onChange={(e) => setAppSecret(e.target.value)}
-              className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-xl text-sm placeholder-gray-500 focus:outline-none focus:border-indigo-500 transition"
-            />
-            <button
-              onClick={handleSaveKeys}
-              disabled={!appKey || !appSecret}
-              className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed transition"
-            >
-              등록
-            </button>
-          </div>
-
         </section>
 
-        {/* 엔진 파라미터 */}
-        <section className="bg-gray-900 border border-gray-800 rounded-xl p-4 sm:p-6">
-          <h2 className="text-base font-semibold mb-4">엔진 파라미터</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">예산 비율 (%)</label>
-              <input
-                type="number"
-                value={config?.budget_ratio ?? ''}
-                onChange={(e) => {
-                  const val = Number(e.target.value)
-                  setConfig(prev => prev ? { ...prev, budget_ratio: val } : null)
-                  localConfig.update({ budget_ratio: val })
-                }}
-                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm focus:outline-none focus:border-indigo-500 transition"
-                min={1} max={100}
-              />
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">최대 포지션 수</label>
-              <input
-                type="number"
-                value={config?.max_positions ?? ''}
-                onChange={(e) => {
-                  const val = Number(e.target.value)
-                  setConfig(prev => prev ? { ...prev, max_positions: val } : null)
-                  localConfig.update({ max_positions: val })
-                }}
-                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm focus:outline-none focus:border-indigo-500 transition"
-                min={1} max={50}
-              />
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">최대 손실률 (%)</label>
-              <input
-                type="number"
-                value={config?.max_loss_pct ?? ''}
-                onChange={(e) => {
-                  const val = Number(e.target.value)
-                  setConfig(prev => prev ? { ...prev, max_loss_pct: val } : null)
-                  localConfig.update({ max_loss_pct: val })
-                }}
-                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm focus:outline-none focus:border-indigo-500 transition"
-                min={1} max={100} step={0.5}
-              />
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">분당 최대 주문 수</label>
-              <input
-                type="number"
-                value={config?.max_orders_per_minute ?? ''}
-                onChange={(e) => {
-                  const val = Number(e.target.value)
-                  setConfig(prev => prev ? { ...prev, max_orders_per_minute: val } : null)
-                  localConfig.update({ max_orders_per_minute: val })
-                }}
-                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm focus:outline-none focus:border-indigo-500 transition"
-                min={1} max={60}
-              />
-            </div>
-          </div>
-        </section>
 
         {/* 프로필 */}
         <section className="bg-gray-900 border border-gray-800 rounded-xl p-6">

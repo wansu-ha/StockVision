@@ -23,7 +23,7 @@ export default function MainDashboard() {
 
   const { localReady } = useAuth()
   const { myStocks, watchStocks, rules } = useStockData()
-  const { engineRunning, brokerConnected, credentials } = useAccountStatus()
+  const { engineRunning, brokerConnected, credentials, isMock } = useAccountStatus()
   const { balance, openOrders } = useAccountBalance(brokerConnected)
   const { context } = useMarketContext()
 
@@ -126,6 +126,7 @@ export default function MainDashboard() {
               setTab={setTab}
               stocks={stocks}
               account={account}
+              isMock={isMock}
               marketStatus={marketStatus}
               trades={trades}
               pendingOrders={pendingOrders}

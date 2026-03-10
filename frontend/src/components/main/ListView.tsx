@@ -57,6 +57,7 @@ interface ListViewProps {
   setTab: (t: 'my' | 'watch') => void
   stocks: Stock[]
   account: AccountInfo
+  isMock: boolean | null
   marketStatus: MarketStatus
   trades: Trade[]
   pendingOrders: PendingOrder[]
@@ -64,7 +65,7 @@ interface ListViewProps {
 }
 
 export default function ListView({
-  tab, setTab, stocks, account, marketStatus, trades, pendingOrders, onDetail,
+  tab, setTab, stocks, account, isMock, marketStatus, trades, pendingOrders, onDetail,
 }: ListViewProps) {
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
   const [hintVisible, setHintVisible] = useState(false)
@@ -112,7 +113,7 @@ export default function ListView({
           <span className="text-gray-700 hidden sm:inline">│</span>
           <span>보유 <span className="font-mono text-gray-300">{account.holdings.length}종목</span></span>
           <span className="text-gray-700 hidden sm:inline">│</span>
-          <span className="hidden sm:inline">{account.broker} <span className="text-gray-600">{account.accountNo}</span></span>
+          <span className="hidden sm:inline">{account.broker}{isMock !== null && <span className={`ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded ${isMock ? 'bg-yellow-900/50 text-yellow-400' : 'bg-red-900/50 text-red-400'}`}>{isMock ? '모의' : '실전'}</span>} <span className="text-gray-600">{account.accountNo}</span></span>
         </div>
       </div>
 

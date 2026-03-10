@@ -79,8 +79,8 @@ export default function Header({ onStockSelect, engineRunning = false, brokerCon
   }
 
   return (
-    <header className="sticky top-0 z-40 bg-gray-900 border-b border-gray-800">
-      <div className="max-w-6xl mx-auto h-12 flex items-center px-3 sm:px-4 gap-2 sm:gap-4">
+    <header className="sticky top-0 z-40 w-full max-w-6xl mx-auto px-3 sm:px-4 pt-3">
+      <div className="h-12 flex items-center px-3 sm:px-4 gap-2 sm:gap-4 bg-gray-900 border border-gray-800 rounded-xl">
         {/* 로고 + 신호등 */}
         <div className="flex items-center gap-2 shrink-0">
           <span className="font-bold text-indigo-400">StockVision</span>

@@ -80,11 +80,12 @@ class KiwoomQuote:
             resp.raise_for_status()
 
         data = resp.json()
+        logger.debug("잔고 raw 응답: %s", data)
         if data.get("return_code") != 0:
             raise RuntimeError(f"잔고 조회 실패: {data.get('return_msg')}")
 
-        # 보유 종목 파싱 (리스트 키는 API 응답 구조에 따라 조정 필요)
-        stock_list = data.get("stk_list", [])
+        # 보유 종목 파싱
+        stock_list = data.get("acnt_evlt_remn_indv_tot", [])
         positions = [
             Position(
                 symbol=item.get("stk_cd", ""),
@@ -99,8 +100,11 @@ class KiwoomQuote:
             if int(item.get("hldg_qty", 0)) > 0
         ]
 
-        cash = _abs_decimal(data.get("tot_dps_amt", "0"))
-        total_eval = _abs_decimal(data.get("tot_evlt_amt", "0"))
+        # 예수금: prsm_dpst_aset_amt (추정예수금자산총액)
+        cash = _abs_decimal(data.get("prsm_dpst_aset_amt", "0"))
+        # 총 평가 = 예수금 + 주식 평가
+        stock_eval = _abs_decimal(data.get("tot_evlt_amt", "0"))
+        total_eval = cash + stock_eval
 
         return BalanceResult(
             cash=cash,
