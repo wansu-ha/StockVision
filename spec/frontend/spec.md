@@ -1,6 +1,7 @@
 # 프론트엔드 명세서 (frontend)
 
-> 작성일: 2026-03-04 | 상태: 초안 | Unit 5 (Phase 3-B)
+> 작성일: 2026-03-04 | 상태: 구현 완료 | Unit 5 (Phase 3-B)
+> 검증일: 2026-03-10 | 12/13 PASS, 1 PARTIAL, 1 FAIL | 보고서: `reports/acceptance-test.md`
 >
 > **병합 대상**: `spec/strategy-builder/`, `spec/user-dashboard/`, `spec/notification/`,
 > `spec/onboarding/`, `spec/portfolio/`, `spec/execution-log/` → 본 spec에 통합.
@@ -306,31 +307,31 @@ useInterval(() => {
 
 ### 6.1 인증
 
-- [ ] 회원가입 → 이메일 인증 → 로그인 성공
-- [ ] JWT 만료 시 Refresh Token 자동 갱신
+- [x] 회원가입 → 이메일 인증 → 로그인 성공
+- [x] JWT 만료 시 Refresh Token 자동 갱신
 
 ### 6.2 대시보드
 
-- [ ] localhost WS 연결 → 실시간 시세 표시
-- [ ] 체결 발생 → 알림 즉시 표시
-- [ ] 통합 신호등 정상 표시 (green/yellow/red)
+- [x] localhost WS 연결 → 실시간 시세 표시
+- [x] 체결 발생 → 알림 즉시 표시
+- [x] 통합 신호등 정상 표시 (green/yellow/red)
 
 ### 6.3 전략 빌더
 
-- [ ] 매수/매도 조건을 UI로 구성 가능
-- [ ] AND/OR 연산자 선택 가능
-- [ ] 저장 → 클라우드 서버 + localhost sync
+- [x] 매수/매도 조건을 UI로 구성 가능
+- [ ] AND/OR 연산자 선택 가능 (Phase 3 모달 미구현)
+- [x] 저장 → 클라우드 서버 + localhost sync
 
 ### 6.4 JWT 전달 + 규칙 sync
 
-- [ ] 로그인 후 → JWT + Refresh Token을 localhost에 전달
-- [ ] 규칙 저장 후 → localhost에 즉시 sync
-- [ ] localhost 미연결 시 → 경고 표시 (규칙은 API에 저장됨)
+- [x] 로그인 후 → JWT + Refresh Token을 localhost에 전달
+- [x] 규칙 저장 후 → localhost에 즉시 sync
+- [x] localhost 미연결 시 → 경고 표시 (규칙은 API에 저장됨)
 
 ### 6.5 설정
 
-- [ ] API Key 입력 → localhost에 저장 (서버 미전송)
-- [ ] 모의투자/실거래 모드 전환
+- [x] API Key 입력 → localhost에 저장 (서버 미전송)
+- [~] 모의투자/실거래 모드 전환 (표시만 구현, 토글 UI 없음)
 
 ---
 
