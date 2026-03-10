@@ -32,7 +32,7 @@ export default function Header({ onStockSelect, engineRunning = false, brokerCon
   const [results, setResults] = useState<StockMasterItem[]>([])
   const [searchOpen, setSearchOpen] = useState(false)
   const [selectedIdx, setSelectedIdx] = useState(-1)
-  const searchTimeout = useRef<ReturnType<typeof setTimeout>>()
+  const searchTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const doSearch = useCallback(async (q: string) => {

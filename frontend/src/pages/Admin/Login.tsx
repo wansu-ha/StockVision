@@ -1,5 +1,6 @@
 /** 어드민 전용 로그인 페이지 — 흰색 테마, role!=admin 거부 */
-import { useState, FormEvent } from 'react'
+import { useState } from 'react'
+import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 

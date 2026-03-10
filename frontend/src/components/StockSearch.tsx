@@ -24,7 +24,7 @@ const StockSearch = ({
   const [showResults, setShowResults] = useState(false)
   const [selectedStock, setSelectedStock] = useState<StockMasterItem | null>(null)
   const searchRef = useRef<HTMLDivElement>(null)
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>()
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const navigate = useNavigate()
 
   // 서버 검색 (디바운스)
