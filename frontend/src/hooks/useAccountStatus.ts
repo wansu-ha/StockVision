@@ -5,6 +5,7 @@
  */
 import { useQuery } from '@tanstack/react-query'
 import { localStatus } from '../services/localClient'
+import { useAuth } from '../context/AuthContext'
 
 export interface BrokerCredentials {
   kiwoom: { app_key: string | null; secret_key: string | null }
@@ -13,7 +14,7 @@ export interface BrokerCredentials {
 
 export interface LocalStatusData {
   server: { uptime: number }
-  broker: { connected: boolean; has_credentials: boolean; credentials?: BrokerCredentials; is_mock?: boolean }
+  broker: { connected: boolean; has_credentials: boolean; reason?: string; credentials?: BrokerCredentials; is_mock?: boolean }
   strategy_engine: {
     running: boolean
     kill_switch: boolean
@@ -23,11 +24,13 @@ export interface LocalStatusData {
 }
 
 export function useAccountStatus() {
+  const { localReady } = useAuth()
   const { data, isLoading, error } = useQuery<LocalStatusData | null>({
     queryKey: ['localStatus'],
     queryFn: () => localStatus.get(),
     refetchInterval: 5_000,
     retry: 1,
+    enabled: localReady,
   })
 
   return {

@@ -44,19 +44,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } else if (rt) {
       // JWT 만료, RT 있음 → 클라우드에서 갱신
       cloudAuth.refresh(rt)
-        .then((res) => {
+        .then(async (res) => {
           const d = res.data
           sessionStorage.setItem(STORAGE_KEY_JWT, d.access_token)
           localStorage.setItem(STORAGE_KEY_RT, d.refresh_token)
-          localAuth.setAuthToken(d.access_token, d.refresh_token).then(() => {
-            setState(prev => ({ ...prev, localReady: true }))
-          })
+          await localAuth.setAuthToken(d.access_token, d.refresh_token)
           setState({
             jwt: d.access_token,
             refreshToken: d.refresh_token,
             email: localStorage.getItem(STORAGE_KEY_EMAIL),
             isAuthenticated: true,
-            localReady: false,
+            localReady: true,
           })
         })
         .catch(() => {

@@ -64,16 +64,18 @@ export function useStockData() {
   const allSymbols = [...new Set([...mySymbols, ...watchSymbols])]
 
   // 각 종목 현재가 — allSymbols가 변할 때만 fetch
+  const sortedSymbolKey = [...allSymbols].sort().join(',')
   const quotesQuery = useQuery<Map<string, StockQuote>>({
-    queryKey: ['quotes', [...allSymbols].sort().join(',')],
-    queryFn: async () => {
+    queryKey: ['quotes', sortedSymbolKey],
+    queryFn: async ({ queryKey }) => {
+      const syms = (queryKey[1] as string).split(',').filter(Boolean)
       const results = await Promise.allSettled(
-        allSymbols.map(sym => cloudQuote.get(sym))
+        syms.map(sym => cloudQuote.get(sym))
       )
       const map = new Map<string, StockQuote>()
       results.forEach((r, i) => {
         if (r.status === 'fulfilled' && r.value) {
-          map.set(allSymbols[i], r.value)
+          map.set(syms[i], r.value)
         }
       })
       return map
@@ -87,15 +89,16 @@ export function useStockData() {
 
   // 종목명 — stock_master에서 조회, 이름은 자주 안 바뀌므로 긴 캐시
   const namesQuery = useQuery<Map<string, string>>({
-    queryKey: ['stockNames', [...allSymbols].sort().join(',')],
-    queryFn: async () => {
+    queryKey: ['stockNames', sortedSymbolKey],
+    queryFn: async ({ queryKey }) => {
+      const syms = (queryKey[1] as string).split(',').filter(Boolean)
       const results = await Promise.allSettled(
-        allSymbols.map(sym => cloudStocks.get(sym))
+        syms.map(sym => cloudStocks.get(sym))
       )
       const map = new Map<string, string>()
       results.forEach((r, i) => {
         if (r.status === 'fulfilled' && r.value) {
-          map.set(allSymbols[i], r.value.name)
+          map.set(syms[i], r.value.name)
         }
       })
       return map

@@ -93,6 +93,7 @@ function AppRoutes() {
                 <Route path="ai" element={<AdminAiMonitor />} />
                 <Route path="errors" element={<AdminErrorLogs />} />
               </Route>
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Layout>
         </ProtectedRoute>
