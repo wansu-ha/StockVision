@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 
 const LOCAL_URL = import.meta.env.VITE_LOCAL_API_URL || 'http://localhost:4020'
+const SV_INSTALLED_KEY = 'sv_installed'
 
 interface Props {
   onConnected: () => void
@@ -12,6 +13,7 @@ export default function BridgeInstaller({ onConnected }: Props) {
   const [connected, setConnected] = useState(false)
   const [phase, setPhase] = useState<Phase>('download')
   const [retries, setRetries] = useState(0)
+  const [deeplinkFailed, setDeeplinkFailed] = useState(false)
   const onConnectedRef = useRef(onConnected)
   onConnectedRef.current = onConnected
 
@@ -21,14 +23,17 @@ export default function BridgeInstaller({ onConnected }: Props) {
 
     const check = () =>
       fetch(`${LOCAL_URL}/health`, { method: 'GET' })
-        .then(r => {
-          if (r.ok) {
-            setConnected(true)
-            setPhase('connect')
-            onConnectedRef.current()
-          } else {
+        .then(r => r.ok ? r.json() : Promise.reject())
+        .then(data => {
+          if (data.app !== 'stockvision') {
+            // 다른 서버가 포트를 사용 중
             setRetries(n => n + 1)
+            return
           }
+          setConnected(true)
+          setPhase('connect')
+          localStorage.setItem(SV_INSTALLED_KEY, '1')
+          onConnectedRef.current()
         })
         .catch(() => setRetries(n => n + 1))
 
@@ -36,6 +41,18 @@ export default function BridgeInstaller({ onConnected }: Props) {
     const id = setInterval(check, 5000)
     return () => clearInterval(id)
   }, [connected])
+
+  // 딥링크 시도 후 2초 내 미응답 → 미설치 판단
+  const handleDeeplink = () => {
+    window.location.href = 'stockvision://launch'
+    setPhase('run')
+    setTimeout(() => {
+      // 2초 후에도 connected가 아니면 미설치 가능성
+      setDeeplinkFailed(true)
+    }, 2000)
+  }
+
+  const wasInstalled = localStorage.getItem(SV_INSTALLED_KEY) === '1'
 
   const STEPS: { phase: Phase; label: string; desc: string }[] = [
     { phase: 'download', label: '다운로드', desc: '아래 버튼으로 설치 파일을 다운로드하세요.' },
@@ -74,15 +91,26 @@ export default function BridgeInstaller({ onConnected }: Props) {
         })}
       </div>
 
-      {/* 다운로드 버튼 */}
+      {/* 액션 버튼 */}
       {!connected && (
-        <a
-          href="#"
-          onClick={() => setPhase('run')}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-500 transition"
-        >
-          StockVision 다운로드 (.exe)
-        </a>
+        <div className="flex items-center gap-3">
+          {/* 이전 연결 기록이 있으면 딥링크 시작 버튼 우선 */}
+          {wasInstalled && (
+            <button
+              onClick={handleDeeplink}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-500 transition"
+            >
+              서버 시작
+            </button>
+          )}
+          <a
+            href="#"
+            onClick={() => setPhase('run')}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-500 transition"
+          >
+            StockVision 다운로드 (.exe)
+          </a>
+        </div>
       )}
 
       {/* 상태 */}
@@ -92,6 +120,14 @@ export default function BridgeInstaller({ onConnected }: Props) {
           {connected ? '연결됨!' : `연결 대기 중... (${retries}회 시도)`}
         </span>
       </div>
+
+      {/* 딥링크 실패 → 미설치 안내 */}
+      {!connected && deeplinkFailed && wasInstalled && (
+        <div className="bg-orange-900/20 border border-orange-800/50 rounded-lg p-3 text-xs text-orange-400 space-y-1">
+          <p className="font-medium">서버가 응답하지 않습니다</p>
+          <p className="text-orange-400/80">프로그램이 설치되어 있지 않거나, 실행에 실패했을 수 있습니다. 다운로드 버튼으로 재설치해 보세요.</p>
+        </div>
+      )}
 
       {/* 실패 시 체크리스트 */}
       {!connected && retries >= 3 && (
