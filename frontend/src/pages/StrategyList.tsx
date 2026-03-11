@@ -2,8 +2,9 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { cloudRules } from '../services/cloudClient'
+import { cloudRules, cloudStocks } from '../services/cloudClient'
 import { localRules } from '../services/localClient'
+import { useAccountStatus } from '../hooks/useAccountStatus'
 import RuleCard from '../components/RuleCard'
 import type { Rule } from '../types/strategy'
 
@@ -16,6 +17,28 @@ export default function StrategyList() {
     queryKey: ['rules'],
     queryFn: cloudRules.list,
     refetchInterval: 10000,
+  })
+
+  const { engineRunning } = useAccountStatus()
+
+  // unique symbols → 종목명 맵 (캐시 공유: MainDashboard와 동일 queryKey)
+  const sortedSymbolKey = [...new Set(rules.map(r => r.symbol))].sort().join(',')
+  const { data: namesMap = new Map<string, string>() } = useQuery<Map<string, string>>({
+    queryKey: ['stockNames', sortedSymbolKey],
+    queryFn: async ({ queryKey }) => {
+      const syms = (queryKey[1] as string).split(',').filter(Boolean)
+      const results = await Promise.allSettled(syms.map(sym => cloudStocks.get(sym)))
+      const map = new Map<string, string>()
+      results.forEach((r, i) => {
+        if (r.status === 'fulfilled' && r.value) {
+          map.set(syms[i], r.value.name)
+        }
+      })
+      return map
+    },
+    staleTime: 5 * 60_000,
+    enabled: rules.length > 0,
+    retry: 1,
   })
 
   const toggleMutation = useMutation({
@@ -73,6 +96,8 @@ export default function StrategyList() {
             <RuleCard
               key={rule.id}
               rule={rule}
+              symbolName={namesMap.get(rule.symbol)}
+              engineRunning={engineRunning}
               onToggle={(id, enabled) => toggleMutation.mutate({ id, enabled })}
               onEdit={(id) => navigate(`/strategies/${id}/edit`)}
               onDelete={(id) => {
