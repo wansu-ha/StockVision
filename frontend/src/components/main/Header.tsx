@@ -84,10 +84,6 @@ export default function Header({ onStockSelect, engineRunning = false, brokerCon
         {/* 로고 + 신호등 */}
         <div className="flex items-center gap-2 shrink-0">
           <span className="font-bold text-indigo-400">StockVision</span>
-          <span
-            className={`w-2.5 h-2.5 rounded-full ${engineRunning && brokerConnected ? 'bg-green-400' : brokerConnected ? 'bg-yellow-400' : 'bg-gray-600'}`}
-            title={engineRunning ? '엔진 실행 중' : '엔진 정지'}
-          />
         </div>
 
         {/* 검색바 + 오버레이 */}

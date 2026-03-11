@@ -115,6 +115,11 @@ export const localEngine = {
   stop: () => client.post('/strategy/stop', null, { timeout: 15_000 }).then((r) => r.data),
 }
 
+/** 브로커 재연결 */
+export const localBroker = {
+  reconnect: () => client.post('/broker/reconnect', null, { timeout: 15_000 }).then((r) => r.data).catch(() => null),
+}
+
 /** 헬스 체크 (버전 포함) */
 export const localHealth = {
   check: () =>

@@ -1,7 +1,7 @@
 /** 설정 페이지 — API Key 등록, 엔진 제어, 프로필 */
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { localConfig, localEngine } from '../services/localClient'
+import { localConfig, localEngine, localBroker } from '../services/localClient'
 import { useAuth } from '../context/AuthContext'
 import { useAlertStore } from '../stores/alertStore'
 import { useAccountStatus } from '../hooks/useAccountStatus'
@@ -28,6 +28,8 @@ export default function Settings() {
       addAlert(`API Key 등록 완료 (${label})`, 'success')
       setAppKey('')
       setAppSecret('')
+      // 키 등록 후 브로커 자동 재연결
+      localBroker.reconnect()
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
         ?? 'API Key 등록 실패. 키를 확인하세요.'
