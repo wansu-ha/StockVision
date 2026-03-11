@@ -1,13 +1,15 @@
 /**
- * PriceChart — Lightweight Charts 다중 차트 타입 + 볼륨
+ * PriceChart — Lightweight Charts 다중 차트 타입 + 볼륨 + 이벤트 마커
  * 차트 타입 전환(캔들/속빈/하이킨/OHLC/라인), 기간 선택(1W~1Y), 드래그 패닝, 휠 줌
+ * 체결 로그 기반 매수/매도/실패 마커 표시
  */
 import { useState, useRef, useEffect } from 'react'
-import { createChart, ColorType, CandlestickSeries, BarSeries, LineSeries, HistogramSeries } from 'lightweight-charts'
+import { createChart, ColorType, CandlestickSeries, BarSeries, LineSeries, HistogramSeries, createSeriesMarkers } from 'lightweight-charts'
 import type { IChartApi } from 'lightweight-charts'
 import { useQuery } from '@tanstack/react-query'
 import { cloudBars } from '../../services/cloudClient'
 import type { DailyBar } from '../../services/cloudClient'
+import { localLogs } from '../../services/localClient'
 
 // ─── 차트 타입 ───
 
@@ -100,6 +102,30 @@ function transformData(bars: DailyBar[], type: ChartType) {
   return bars.map(c => ({ time: c.date, open: c.open, high: c.high, low: c.low, close: c.close }))
 }
 
+// ─── 이벤트 마커 변환 ───
+
+interface FillLog {
+  ts: string
+  meta: { side: string; status: string; qty?: number }
+}
+
+function buildMarkers(logs: FillLog[], startDate: string) {
+  return logs
+    .filter(l => l.ts && l.meta && l.ts.slice(0, 10) >= startDate)
+    .map(l => {
+      const filled = l.meta.status === 'FILLED'
+      const buy = l.meta.side === 'BUY'
+      return {
+        time: l.ts.slice(0, 10),
+        position: buy ? 'belowBar' as const : 'aboveBar' as const,
+        shape: filled ? (buy ? 'arrowUp' as const : 'arrowDown' as const) : 'circle' as const,
+        color: !filled ? '#f59e0b' : buy ? '#3b82f6' : '#ef4444',
+        text: !filled ? '실패' : buy ? '매수' : '매도',
+      }
+    })
+    .sort((a, b) => a.time < b.time ? -1 : a.time > b.time ? 1 : 0)
+}
+
 // ─── Component ───
 
 interface PriceChartProps {
@@ -111,6 +137,8 @@ export default function PriceChart({ symbol }: PriceChartProps) {
   const chartRef = useRef<IChartApi | null>(null)
   const mainSeriesRef = useRef<SeriesRef | null>(null)
   const volumeSeriesRef = useRef<SeriesRef | null>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const markersRef = useRef<any>(null)
   const prevTypeRef = useRef<ChartType | null>(null)
   const [period, setPeriod] = useState<(typeof PERIOD_OPTIONS)[number]['label']>('3M')
   const [chartType, setChartType] = useState<ChartType>('candle')
@@ -135,6 +163,7 @@ export default function PriceChart({ symbol }: PriceChartProps) {
     // StrictMode 더블마운트 대응: 이전 차트의 시리즈 ref 초기화
     mainSeriesRef.current = null
     prevTypeRef.current = null
+    markersRef.current = null
 
     volumeSeriesRef.current = chart.addSeries(HistogramSeries, {
       priceFormat: { type: 'volume' },
@@ -169,6 +198,16 @@ export default function PriceChart({ symbol }: PriceChartProps) {
     retry: 1,
   })
 
+  // 체결 로그 fetch (마커용)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: fillLogData } = useQuery<any>({
+    queryKey: ['fillLogs', symbol],
+    queryFn: () => symbol
+      ? localLogs.get({ log_type: 'FILL', symbol, limit: 200 } as never)
+      : Promise.resolve([]),
+    enabled: !!symbol,
+    refetchInterval: 30_000,
+  })
   // 데이터 또는 차트 타입 변경 시 업데이트
   useEffect(() => {
     if (!chartRef.current || !volumeSeriesRef.current) return
@@ -177,17 +216,25 @@ export default function PriceChart({ symbol }: PriceChartProps) {
     const candles = bars ?? []
     dataLenRef.current = candles.length
 
+    // fillLogData 파싱 (useEffect 내부에서 — 의존성 안정성)
+    const fillLogs: FillLog[] = Array.isArray(fillLogData)
+      ? fillLogData
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      : ((fillLogData as any)?.items ?? [])
+
     // 타입 변경 시 시리즈 교체
     const typeChanged = prevTypeRef.current !== chartType
     if (typeChanged) {
       if (mainSeriesRef.current) chart.removeSeries(mainSeriesRef.current)
       mainSeriesRef.current = createMainSeries(chart, chartType)
       prevTypeRef.current = chartType
+      markersRef.current = null
     }
 
     if (!mainSeriesRef.current) {
       mainSeriesRef.current = createMainSeries(chart, chartType)
       prevTypeRef.current = chartType
+      markersRef.current = null
     }
 
     if (candles.length === 0) {
@@ -203,12 +250,24 @@ export default function PriceChart({ symbol }: PriceChartProps) {
       color: c.close >= c.open ? 'rgba(239,68,68,0.3)' : 'rgba(59,130,246,0.3)',
     })))
 
+    // 이벤트 마커 설정
+    const markers = buildMarkers(fillLogs, startStr)
+    if (markers.length > 0) {
+      if (!markersRef.current) {
+        markersRef.current = createSeriesMarkers(mainSeriesRef.current, markers)
+      } else {
+        markersRef.current.setMarkers(markers)
+      }
+    } else if (markersRef.current) {
+      markersRef.current.setMarkers([])
+    }
+
     // 타입 변경만이면 줌 위치 유지, 데이터 변경이면 fitContent
     if (!typeChanged) {
       chart.timeScale().fitContent()
       setIsZoomed(false)
     }
-  }, [bars, chartType])
+  }, [bars, chartType, fillLogData, startStr])
 
   const handleReset = () => {
     chartRef.current?.timeScale().fitContent()
