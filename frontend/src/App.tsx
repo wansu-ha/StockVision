@@ -22,6 +22,7 @@ import ProtoA from './pages/ProtoA'
 import ProtoB from './pages/ProtoB'
 import ProtoC from './pages/ProtoC'
 import MainDashboard from './pages/MainDashboard'
+import OnboardingWizard from './pages/OnboardingWizard'
 import Layout from './components/Layout'
 import AlertContainer from './components/AlertContainer'
 import ToastContainer from './components/ToastContainer'
@@ -63,6 +64,13 @@ function AppRoutes() {
       <Route path="/" element={
         <ProtectedRoute>
           <MainDashboard />
+        </ProtectedRoute>
+      } />
+
+      {/* 온보딩 (Layout 없음) */}
+      <Route path="/onboarding" element={
+        <ProtectedRoute>
+          <OnboardingWizard />
         </ProtectedRoute>
       } />
 

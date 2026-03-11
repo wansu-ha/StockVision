@@ -232,6 +232,8 @@ class StrategyEngine:
                 result = await self._executor.execute(
                     candidate.raw_rule, candidate.side, md, balance,
                 )
+                result.cycle_id = cycle_id
+                result.signal_id = candidate.signal_id
                 logger.info(
                     "[Cycle %s] Rule %d %s: %s — %s",
                     cycle_id, candidate.rule_id, candidate.side,

@@ -44,6 +44,8 @@ class ExecutionResult:
     message: str
     order_id: str | None = None
     realized_pnl: Decimal | None = None  # 매도 시 실현손익
+    cycle_id: str | None = None
+    signal_id: str | None = None
 
 
 class OrderExecutor:

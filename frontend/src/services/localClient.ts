@@ -69,11 +69,23 @@ export const localRules = {
 }
 
 /** 로그 */
+export interface LogSummary {
+  date: string
+  signals: number
+  fills: number
+  orders: number
+  errors: number
+}
+
 export const localLogs = {
   get: (filters?: LogFilter) =>
     client.get<{ data: ExecutionLog[] }>('/logs', { params: filters })
       .then((r) => r.data.data ?? r.data)
       .catch(() => []),
+  summary: (date?: string) =>
+    client.get<{ data: LogSummary }>('/logs/summary', { params: date ? { date } : undefined })
+      .then((r) => r.data.data ?? null)
+      .catch(() => null),
 }
 
 /** 계좌 (잔고 + 미체결) */

@@ -3,9 +3,11 @@
  * 디자인 개선: (A) indigo, (F) aria
  */
 import { useState, useRef } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import PriceChart from './PriceChart'
+import ExecutionTimeline from './ExecutionTimeline'
 import { cloudRules, cloudWatchlist } from '../../services/cloudClient'
+import { logsApi } from '../../services/logs'
 import type { Stock, Trade } from './ListView'
 import type { Rule } from '../../types/strategy'
 import type { MarketContextData } from '../../types/dashboard'
@@ -25,6 +27,13 @@ export default function DetailView({ stock, trades, rules: propRules, context, o
   const queryClient = useQueryClient()
 
   const stockTrades = trades.filter(t => t.symbol === stock.symbol || t.symbol === stock.name)
+
+  // 종목별 최근 실행 로그 (FILL 타입, 최근 5건)
+  const { data: recentLogs, isLoading: logsLoading, error: logsError } = useQuery({
+    queryKey: ['symbol-logs', stock.symbol],
+    queryFn: () => logsApi.getLogs({ log_type: 'FILL', symbol: stock.symbol, limit: 5 }),
+    refetchInterval: 30_000,
+  })
 
   const handleToggle = async (rule: Rule) => {
     try {
@@ -182,6 +191,16 @@ export default function DetailView({ stock, trades, rules: propRules, context, o
             </table>
           </div>
         )}
+      </section>
+
+      {/* 최근 실행 타임라인 */}
+      <section className="mt-6">
+        <h3 className="text-sm font-medium text-gray-400 mb-3">최근 실행</h3>
+        <ExecutionTimeline
+          logs={recentLogs?.data?.items ?? []}
+          isLoading={logsLoading}
+          error={!!logsError}
+        />
       </section>
 
       {/* 하단 액션 */}

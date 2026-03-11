@@ -51,6 +51,8 @@ def _on_execution(result: ExecutionResult) -> None:
             "order_id": result.order_id,
             "status": result.status.value,
             "realized_pnl": str(result.realized_pnl) if result.realized_pnl else None,
+            "cycle_id": result.cycle_id,
+            "signal_id": result.signal_id,
         },
     )
 

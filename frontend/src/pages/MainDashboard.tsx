@@ -4,8 +4,11 @@
  * (E) 뷰 전환 fade+translateY 애니메이션
  */
 import { useState, useMemo } from 'react'
+import { Navigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import Header from '../components/main/Header'
+import OpsPanel from '../components/main/OpsPanel'
+import { useOnboarding } from '../hooks/useOnboarding'
 import ListView from '../components/main/ListView'
 import DetailView from '../components/main/DetailView'
 import { useAuth } from '../context/AuthContext'
@@ -17,6 +20,7 @@ import { localLogs, localEngine } from '../services/localClient'
 import type { Stock, AccountInfo, Trade, PendingOrder, MarketStatus } from '../components/main/ListView'
 
 export default function MainDashboard() {
+  const { completed: onboardingDone } = useOnboarding()
   const [view, setView] = useState<'list' | 'detail'>('list')
   const [selectedStock, setSelectedStock] = useState<Stock | null>(null)
   const [tab, setTab] = useState<'my' | 'watch'>('my')
@@ -126,6 +130,8 @@ export default function MainDashboard() {
     setSelectedStock(null)
   }
 
+  if (!onboardingDone) return <Navigate to="/onboarding" replace />
+
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
       <Header
@@ -137,6 +143,13 @@ export default function MainDashboard() {
       <main className="w-full max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-5">
         <div key={view} className="animate-[fadeSlideIn_200ms_ease-out]">
           {view === 'list' ? (
+            <>
+            <OpsPanel
+              localConnected={localReady}
+              brokerConnected={brokerConnected}
+              engineRunning={engineRunning}
+              isMock={isMock}
+            />
             <ListView
               tab={tab}
               setTab={setTab}
@@ -152,6 +165,7 @@ export default function MainDashboard() {
               onStrategyToggle={handleStrategyToggle}
               strategyLoading={strategyLoading}
             />
+            </>
           ) : (
             <DetailView
               stock={selectedStock!}
