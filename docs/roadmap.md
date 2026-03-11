@@ -38,22 +38,22 @@
 A (쓸 수 있다) → B (보인다) → C (안심된다) → D (찾아온다) → E (나를 안다)
 ```
 
-### Phase A — "켜면 바로 쓸 수 있다" ← 현재
+### Phase A — "켜면 바로 쓸 수 있다" (완료)
 
 **목표**: 앱 켜면 계좌가 보이고, 상태가 읽히고, 뭘 할 수 있는지 안다.
 
 | 항목 | spec | 상태 |
 |------|------|------|
-| broker-auto-connect (서버 시작 시 자동 연결) | `spec/broker-auto-connect/spec.md` | 초안 |
-| 프론트 UX v2 (신호등 이동, 전략 실행 버튼, 장 상태) | `spec/frontend-ux-v2/spec.md` | 초안 |
-| 전략 목록 정보 표시 (종목명, 방향, 실행 상태) | `spec/strategy-list-info/spec.md` | 초안 |
-| UI 버그 수정 (em dash, 장전 색상 등) | - | 일부 완료 |
+| broker-auto-connect (서버 시작 시 자동 연결) | `spec/broker-auto-connect/spec.md` | 구현 완료 |
+| 프론트 UX v2 (신호등 이동, 전략 실행 버튼, 장 상태) | `spec/frontend-ux-v2/spec.md` | 구현 완료 |
+| 전략 목록 정보 표시 (종목명, 방향, 실행 상태) | `spec/strategy-list-info/spec.md` | 구현 완료 |
+| UI 버그 수정 (AuthContext 경쟁조건, useStockData 클로저 등) | `spec/phase-a-review.md` | 구현 완료 |
 
 > `전략 목록 정보 표시`는 `frontend-ux-v2` 범위 밖 (spec §범위에 "전략 목록 UI 개선 (추후)" 명시). 별도 spec으로 분리.
 
 **끝나면**: 서버 켜면 바로 잔고 보이고, 대시보드에서 전략 실행/중지 가능.
 
-### Phase B — "돌아가는 게 보인다"
+### Phase B — "돌아가는 게 보인다" ← 현재
 
 **목표**: 전략이 실행되고, 뭐가 체결되고, 왜 그런지 한 화면에서 읽힌다.
 

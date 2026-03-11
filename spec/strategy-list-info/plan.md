@@ -1,4 +1,4 @@
-> 작성일: 2026-03-11 | 상태: 초안 | spec: strategy-list-info
+> 작성일: 2026-03-11 | 상태: 구현 완료 | spec: strategy-list-info
 
 # 전략 목록 정보 표시 구현 계획
 
