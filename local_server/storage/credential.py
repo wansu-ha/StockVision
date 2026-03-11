@@ -25,7 +25,18 @@ def set_active_user(user_id: str) -> None:
     """로그인 시 활성 사용자를 설정한다. 이후 모든 credential 함수가 이 네임스페이스를 사용한다."""
     global _active_user
     _active_user = user_id
+    from local_server.config import get_config
+    cfg = get_config()
+    cfg.set("auth.last_user", user_id)
+    cfg.save()
     logger.info("활성 사용자 설정: %s", user_id)
+
+
+def _restore_active_user(user_id: str) -> None:
+    """서버 시작 시 config에서 복원 — config 재저장 안 함, 메모리만."""
+    global _active_user
+    _active_user = user_id
+    logger.info("활성 사용자 복원: %s", user_id)
 
 
 def get_active_user() -> str:

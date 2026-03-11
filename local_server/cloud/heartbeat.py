@@ -23,6 +23,14 @@ _ERROR_THRESHOLD = 60  # 60 * 30s = 30분
 # 엔진 상태 — main.py lifespan에서 갱신
 _engine_running = False
 
+# CloudClient 싱글턴 — 하트비트 루프에서 생성, 외부에서 참조 가능
+_client: CloudClient | None = None
+
+
+def get_cloud_client() -> CloudClient | None:
+    """하트비트가 사용하는 CloudClient 인스턴스를 반환한다."""
+    return _client
+
 
 def set_engine_running(running: bool) -> None:
     """엔진 실행 상태를 갱신한다. 엔진 시작/중지 시 호출."""
@@ -70,7 +78,11 @@ async def start_heartbeat() -> None:
         logger.warning("cloud.url이 설정되지 않아 하트비트를 시작할 수 없습니다.")
         return
 
-    client = CloudClient(base_url=cloud_url)
+    global _client
+    from local_server.storage.credential import load_cloud_tokens
+    access_token, _ = load_cloud_tokens()
+    _client = CloudClient(base_url=cloud_url, api_token=access_token)
+    client = _client
     logger.info("하트비트 시작: 간격=%ds, 대상=%s", interval, cloud_url)
 
     last_rules_version: str | None = None
@@ -111,6 +123,11 @@ async def start_heartbeat() -> None:
                 _update_tray("ok")
 
         except CloudClientError as e:
+            if e.status_code == 401:
+                refreshed = await _try_refresh(client)
+                if refreshed:
+                    consecutive_failures = 0
+                    continue  # 갱신 후 즉시 재시도
             consecutive_failures += 1
             logger.warning("하트비트 전송 실패 (%d연속): %s", consecutive_failures, e)
             _handle_failure(consecutive_failures)
@@ -232,6 +249,30 @@ def _handle_failure(consecutive_failures: int) -> None:
             _send_toast("StockVision 연결 오류", "클라우드 서버와 30분 이상 연결할 수 없습니다.")
     elif consecutive_failures >= _WARN_THRESHOLD:
         _update_tray("warning")
+
+
+async def _try_refresh(client: CloudClient) -> bool:
+    """401 발생 시 refresh_token으로 토큰 갱신. _refresh_lock으로 교차 경쟁 방지."""
+    from local_server.cloud.token_utils import _refresh_lock, is_jwt_expired
+    from local_server.storage.credential import load_cloud_tokens, save_cloud_tokens
+    async with _refresh_lock:
+        access_token, refresh_token = load_cloud_tokens()
+        if access_token and not is_jwt_expired(access_token):
+            # 선행 요청이 이미 refresh함 → 새 토큰 사용
+            client.set_token(access_token)
+            return True
+        if not refresh_token:
+            return False
+        try:
+            tokens = await client.refresh_access_token(refresh_token)
+            client.set_token(tokens["access_token"])
+            save_cloud_tokens(tokens["access_token"], tokens["refresh_token"])
+            logger.info("하트비트 토큰 자동 갱신 완료")
+            return True
+        except CloudClientError:
+            _update_tray("error")
+            _send_toast("StockVision", "재로그인이 필요합니다.")
+            return False
 
 
 def _update_tray(status: str) -> None:

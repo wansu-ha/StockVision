@@ -41,6 +41,15 @@ export const localAuth = {
     return result
   },
   status: () => client.get('/auth/status').then((r) => r.data).catch(() => null),
+  restore: async () => {
+    try {
+      const res = await client.post('/auth/restore')
+      localSecret = res.data?.data?.local_secret ?? null
+      return res.data
+    } catch {
+      return null
+    }
+  },
 }
 
 /** 상태 */

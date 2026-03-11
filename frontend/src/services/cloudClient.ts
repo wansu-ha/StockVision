@@ -3,6 +3,7 @@
  * JWT 인터셉터 자동 첨부, 401 시 refresh token 자동 갱신.
  */
 import axios from 'axios'
+import { localAuth } from './localClient'
 import type { Rule, CreateRulePayload, UpdateRulePayload } from '../types/strategy'
 import type { MarketContextData } from '../types/dashboard'
 
@@ -24,13 +25,26 @@ client.interceptors.request.use((config) => {
   return config
 })
 
-// 401 시 refresh 자동 갱신
+// 401 시 로컬 서버 우선 refresh → 클라우드 폴백
 client.interceptors.response.use(
   (res) => res,
   async (error) => {
     const original = error.config
     if (error.response?.status === 401 && !original._retry) {
       original._retry = true
+
+      // 1단계: 로컬 서버에서 최신 토큰 요청
+      try {
+        const restored = await localAuth.restore()
+        if (restored?.data?.access_token) {
+          sessionStorage.setItem(JWT_KEY, restored.data.access_token)
+          localStorage.setItem(RT_KEY, restored.data.refresh_token)
+          original.headers.Authorization = `Bearer ${restored.data.access_token}`
+          return client(original)
+        }
+      } catch { /* 로컬 서버 다운 — 폴백 진행 */ }
+
+      // 2단계: 폴백 — 클라우드 직접 refresh
       const rt = localStorage.getItem(RT_KEY)
       if (rt) {
         try {
@@ -40,6 +54,7 @@ client.interceptors.response.use(
           if (!newJwt || !newRt) throw new Error('Invalid refresh response')
           sessionStorage.setItem(JWT_KEY, newJwt)
           localStorage.setItem(RT_KEY, newRt)
+          localAuth.setAuthToken(newJwt, newRt).catch(() => {})
           original.headers.Authorization = `Bearer ${newJwt}`
           return client(original)
         } catch {

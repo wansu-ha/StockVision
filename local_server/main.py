@@ -62,6 +62,25 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except Exception as e:
         logger.warning("시스템 트레이 시작 실패 (GUI 환경이 아닐 수 있음): %s", e)
 
+    # 활성 사용자 복원 + 자동 로그인
+    from local_server.storage.credential import _restore_active_user, load_cloud_tokens, save_cloud_tokens
+    last_user = cfg.get("auth.last_user")
+    if last_user:
+        _restore_active_user(last_user)
+
+    access_token, refresh_token = load_cloud_tokens()
+    if not access_token and refresh_token:
+        cloud_url_for_refresh = cfg.get("cloud.url", "")
+        if cloud_url_for_refresh:
+            try:
+                from local_server.cloud.client import CloudClient
+                temp = CloudClient(base_url=cloud_url_for_refresh)
+                tokens = await temp.refresh_access_token(refresh_token)
+                save_cloud_tokens(tokens["access_token"], tokens["refresh_token"])
+                logger.info("서버 시작 시 토큰 자동 갱신 완료")
+            except Exception as e:
+                logger.warning("서버 시작 시 토큰 자동 갱신 실패 (수동 로그인 필요): %s", e)
+
     # 클라우드 하트비트 시작
     heartbeat_task: asyncio.Task | None = None
     cloud_url = cfg.get("cloud.url")
