@@ -11,9 +11,7 @@ from fastapi import APIRouter, Request
 
 from local_server.engine.safeguard import KillSwitchLevel
 from local_server.storage.credential import (
-    has_credential,
     load_credential,
-    KEY_CLOUD_ACCESS_TOKEN,
     KEY_KIWOOM_APP_KEY,
     KEY_KIWOOM_SECRET_KEY,
     KEY_APP_KEY,
@@ -33,6 +31,7 @@ async def get_status(request: Request) -> dict[str, Any]:
     """현재 로컬 서버의 종합 상태를 반환한다."""
     engine = getattr(request.app.state, "engine", None)
     broker = getattr(request.app.state, "broker", None)
+    broker_reason: str = getattr(request.app.state, "broker_reason", "disconnected")
 
     engine_running = engine.is_running if engine else False
     broker_connected = broker.is_connected if broker else False
@@ -72,13 +71,22 @@ async def get_status(request: Request) -> dict[str, Any]:
         },
     }
 
+    # 설정된 브로커 타입에 맞는 실제 키 존재 여부 확인
+    from local_server.config import get_config as _get_config
+    _broker_type = _get_config().get("broker.type", "kiwoom")
+    if _broker_type == "kis":
+        _has_creds = bool(load_credential(KEY_APP_KEY) and load_credential(KEY_APP_SECRET))
+    else:
+        _has_creds = bool(load_credential(KEY_KIWOOM_APP_KEY) and load_credential(KEY_KIWOOM_SECRET_KEY))
+
     return {
         "success": True,
         "data": {
             "server": "running",
             "broker": {
                 "connected": broker_connected,
-                "has_credentials": has_credential(KEY_CLOUD_ACCESS_TOKEN),
+                "reason": broker_reason,
+                "has_credentials": _has_creds,
                 "credentials": credentials,
                 "is_mock": _resolve_is_mock(broker),
             },

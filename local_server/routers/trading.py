@@ -121,21 +121,25 @@ async def start_strategy(request: Request, _: None = Depends(require_local_secre
             detail="전략 엔진이 이미 실행 중입니다.",
         )
 
-    try:
-        broker = create_broker_from_config()
-        await broker.connect()
-    except Exception as e:
-        logger.error("브로커 연결 실패: %s", e, exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"브로커 연결 실패: {e}",
-        ) from e
+    # app.state.broker 재사용 (lifespan 자동 연결 또는 이전 연결). 없으면 신규 생성
+    broker = getattr(request.app.state, "broker", None)
+    if not broker or not broker.is_connected:
+        try:
+            broker = create_broker_from_config()
+            await broker.connect()
+        except Exception as e:
+            logger.error("브로커 연결 실패: %s", e, exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"브로커 연결 실패: {e}",
+            ) from e
+        request.app.state.broker = broker
+        request.app.state.broker_reason = "connected"
 
     engine = StrategyEngine(broker)
     engine.set_rules(get_rules_cache().get_rules())
     engine.set_on_execution(_on_execution)
     request.app.state.engine = engine
-    request.app.state.broker = broker
 
     await engine.start()
 
@@ -162,11 +166,7 @@ async def stop_strategy(request: Request, _: None = Depends(require_local_secret
 
     await engine.stop()
 
-    broker = getattr(request.app.state, "broker", None)
-    if broker:
-        await broker.disconnect()
-        request.app.state.broker = None
-
+    # 브로커는 유지 (lifespan 종료까지 연결 유지)
     request.app.state.engine = None
 
     from local_server.cloud.heartbeat import set_engine_running

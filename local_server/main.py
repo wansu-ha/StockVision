@@ -18,6 +18,7 @@ from local_server.__version__ import __version__ as _VERSION
 from local_server.config import get_config
 from local_server.core.local_auth import generate_secret
 from local_server.routers import account, auth, config as config_router, logs, rules, status, trading, ws
+from local_server.routers import quote as quote_router, broker as broker_router
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +70,24 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         heartbeat_task = asyncio.create_task(start_heartbeat())
         logger.info("클라우드 하트비트 시작: %s", cloud_url)
 
+    # 브로커 자동 연결 (키 있으면 서버 시작 시 자동 연결)
+    app.state.broker = None
+    app.state.broker_reason = "disconnected"
+    try:
+        from local_server.broker.factory import create_broker_from_config
+        broker = create_broker_from_config()
+        await broker.connect()
+        app.state.broker = broker
+        app.state.broker_reason = "connected"
+        logger.info("브로커 자동 연결 완료")
+    except ValueError:
+        # 자격증명 미등록 — 정상 (키 없이 시작)
+        app.state.broker_reason = "no_credentials"
+        logger.info("브로커 자격증명 미등록, 연결 없이 시작")
+    except Exception as e:
+        app.state.broker_reason = "connect_failed"
+        logger.warning("브로커 자동 연결 실패: %s", e)
+
     # 트레이 아이콘 초록으로 전환
     if tray_thread is not None:
         try:
@@ -83,6 +102,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # --- 종료 훅 ---
     logger.info("로컬 서버 종료 중...")
+
+    # 브로커 연결 해제
+    broker = getattr(app.state, "broker", None)
+    if broker:
+        try:
+            await broker.disconnect()
+            logger.info("브로커 연결 해제")
+        except Exception as e:
+            logger.warning("브로커 연결 해제 실패: %s", e)
 
     # 하트비트 태스크 취소
     if heartbeat_task and not heartbeat_task.done():
@@ -158,6 +186,8 @@ def create_app() -> FastAPI:
     app.include_router(trading.router, prefix="/api", tags=["매매"])
     app.include_router(rules.router, prefix="/api/rules", tags=["규칙"])
     app.include_router(logs.router, prefix="/api/logs", tags=["로그"])
+    app.include_router(quote_router.router, prefix="/api/quote", tags=["시세"])
+    app.include_router(broker_router.router, prefix="/api/broker", tags=["브로커"])
     app.include_router(ws.router, tags=["WebSocket"])
 
     @app.get("/health", tags=["헬스체크"])

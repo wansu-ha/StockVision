@@ -23,7 +23,7 @@ def _get_broker(request: Request):
     if not broker or not broker.is_connected:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="브로커가 연결되어 있지 않습니다. 전략 엔진을 먼저 시작하세요.",
+            detail="브로커 미연결. 증권사 키를 확인하세요.",
         )
     return broker
 
