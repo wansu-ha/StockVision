@@ -1,6 +1,6 @@
 # JWT 자동갱신 + 프론트엔드 자동 로그인 구현 계획
 
-> 작성일: 2026-03-11 | 상태: 확정 | spec: `spec/jwt-offline-resilience/spec.md`
+> 작성일: 2026-03-11 | 상태: 구현 완료 | spec: `spec/jwt-offline-resilience/spec.md`
 
 ---
 
