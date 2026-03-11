@@ -1,10 +1,12 @@
 import type { Rule } from '../types/strategy'
 import { parseDirection } from '../types/strategy'
+import type { LastRuleResult } from '../types/rule-result'
 
 interface Props {
   rules: Rule[]
   namesMap?: Map<string, string>
   engineRunning?: boolean
+  lastResults?: Map<number, LastRuleResult>
   onToggle: (rule: Rule) => void
   onEdit: (rule: Rule) => void
   onDelete: (id: number) => void
@@ -16,7 +18,13 @@ const DIRECTION_STYLE: Record<string, string> = {
   '양방향': 'text-purple-400 bg-purple-900/30',
 }
 
-export default function RuleList({ rules, namesMap, engineRunning, onToggle, onEdit, onDelete }: Props) {
+const RESULT_BADGE: Record<string, { bg: string; text: string; label: string }> = {
+  SUCCESS: { bg: 'bg-green-100', text: 'text-green-600', label: '성공' },
+  BLOCKED: { bg: 'bg-orange-100', text: 'text-orange-600', label: '차단' },
+  FAILED: { bg: 'bg-red-100', text: 'text-red-600', label: '실패' },
+}
+
+export default function RuleList({ rules, namesMap, engineRunning, lastResults, onToggle, onEdit, onDelete }: Props) {
   if (rules.length === 0) {
     return <p className="text-gray-400 text-sm py-4 text-center">저장된 전략이 없습니다.</p>
   }
@@ -27,6 +35,8 @@ export default function RuleList({ rules, namesMap, engineRunning, onToggle, onE
         const direction = parseDirection(rule)
         const isRunning = engineRunning && rule.is_active
         const symbolName = namesMap?.get(rule.symbol)
+        const result = lastResults?.get(rule.id)
+        const badge = result ? RESULT_BADGE[result.status] : null
 
         return (
           <li key={rule.id} className="flex items-center gap-3 py-3">
@@ -65,6 +75,11 @@ export default function RuleList({ rules, namesMap, engineRunning, onToggle, onE
                   </span>
                 ) : (
                   <span className="text-xs text-gray-500">OFF</span>
+                )}
+                {badge && (
+                  <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${badge.bg} ${badge.text}`}>
+                    {badge.label}
+                  </span>
                 )}
               </div>
               <div className="text-xs text-gray-500 mt-0.5 truncate">

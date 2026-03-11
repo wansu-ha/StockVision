@@ -17,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from local_server.__version__ import __version__ as _VERSION
 from local_server.config import get_config
 from local_server.core.local_auth import generate_secret
-from local_server.routers import account, auth, config as config_router, logs, rules, status, trading, ws
+from local_server.routers import account, auth, config as config_router, logs, results, rules, status, trading, ws
 from local_server.routers import quote as quote_router, broker as broker_router
 
 logger = logging.getLogger(__name__)
@@ -185,6 +185,7 @@ def create_app() -> FastAPI:
     app.include_router(status.router, prefix="/api/status", tags=["상태"])
     app.include_router(trading.router, prefix="/api", tags=["매매"])
     app.include_router(rules.router, prefix="/api/rules", tags=["규칙"])
+    app.include_router(results.router, prefix="/api/rules", tags=["규칙 결과"])
     app.include_router(logs.router, prefix="/api/logs", tags=["로그"])
     app.include_router(quote_router.router, prefix="/api/quote", tags=["시세"])
     app.include_router(broker_router.router, prefix="/api/broker", tags=["브로커"])

@@ -4,6 +4,7 @@
  */
 import axios, { type AxiosInstance } from 'axios'
 import type { LogFilter, ExecutionLog } from '../types/log'
+import type { LastRuleResult } from '../types/rule-result'
 import type { LocalConfig } from '../types/settings'
 
 const LOCAL_URL = import.meta.env.VITE_LOCAL_API_URL || 'http://localhost:4020'
@@ -61,6 +62,10 @@ export const localConfig = {
 export const localRules = {
   sync: (rules: unknown[]) =>
     client.post('/rules/sync', { rules }).then((r) => r.data).catch(() => null),
+  lastResults: () =>
+    client.get<{ data: LastRuleResult[] }>('/rules/last-results')
+      .then((r) => r.data.data ?? [])
+      .catch(() => [] as LastRuleResult[]),
 }
 
 /** 로그 */
