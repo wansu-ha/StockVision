@@ -58,6 +58,11 @@ class LimitChecker:
         """체결 금액 누적 (일일 예산 추적)."""
         self._today_executed += amount
 
+    @property
+    def today_executed(self) -> Decimal:
+        """오늘 누적 체결 금액 (읽기용)."""
+        return self._today_executed
+
     def reset_daily(self) -> None:
         """일일 누적 리셋."""
         self._today_executed = Decimal(0)

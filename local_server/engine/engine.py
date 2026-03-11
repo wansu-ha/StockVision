@@ -1,11 +1,12 @@
 """StrategyEngine — 전략 엔진 통합.
 
 EngineScheduler가 1분마다 evaluate_all()을 호출하면
-활성 규칙을 순회하며 조건 평가 → 주문 실행을 수행한다.
+활성 규칙을 순회하며 조건 평가 → SystemTrader 판단 → 주문 실행을 수행한다.
 """
 from __future__ import annotations
 
 import logging
+import uuid
 from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Callable, Optional
@@ -20,6 +21,9 @@ from local_server.engine.price_verifier import PriceVerifier
 from local_server.engine.safeguard import KillSwitchLevel, Safeguard
 from local_server.engine.scheduler import EngineScheduler
 from local_server.engine.signal_manager import SignalManager
+from local_server.engine.result_store import ResultStatus, record_result
+from local_server.engine.system_trader import SystemTrader
+from local_server.engine.trader_models import CandidateSignal
 
 if TYPE_CHECKING:
     from sv_core.broker.base import BrokerAdapter
@@ -64,6 +68,10 @@ class StrategyEngine:
         )
         self._bar_builder = BarBuilder()
         self._indicator_provider = IndicatorProvider()
+        self._system_trader = SystemTrader(
+            max_positions=int(cfg.get("max_positions", 5)),
+            budget_ratio=Decimal(str(cfg.get("budget_ratio", "0.1"))),
+        )
         self._scheduler = EngineScheduler(self.evaluate_all)
 
         # 규칙 캐시 (외부에서 set)
@@ -139,7 +147,7 @@ class StrategyEngine:
     async def evaluate_all(self) -> None:
         """1분마다 호출되는 메인 루프.
 
-        v2: DSL 양방향 평가 + priority 정렬 + ABC 정합.
+        v3: 후보 수집 → SystemTrader 판단 → 선택된 후보만 실행.
         """
         if not self._running:
             return
@@ -181,30 +189,85 @@ class StrategyEngine:
 
             # Kill Switch / 손실 락 포함 최종 거래 가능 여부
             trading_enabled = self._safeguard.is_trading_enabled()
+            if not trading_enabled:
+                return
+
+            # ── 후보 수집 ──
+            cycle_id = uuid.uuid4().hex[:12]
+            candidates: list[CandidateSignal] = []
+            market_data_map: dict[str, dict[str, Any]] = {}
 
             for rule in active_rules:
-                await self._evaluate_rule(rule, balance, holding_symbols, trading_enabled)
+                for candidate, market_data in self._collect_candidates(rule, cycle_id):
+                    candidates.append(candidate)
+                    market_data_map[candidate.signal_id] = market_data
+
+            if not candidates:
+                return
+
+            # ── SystemTrader 판단 ──
+            batch = self._system_trader.process_cycle(
+                cycle_id=cycle_id,
+                candidates=candidates,
+                current_positions=holding_symbols,
+                cash=balance.cash,
+                today_executed=self._limit_checker.today_executed,
+            )
+
+            logger.info(
+                "[Cycle %s] 후보 %d개 → 선택 %d개, 차단 %d개",
+                cycle_id, len(candidates), len(batch.selected), len(batch.dropped),
+            )
+
+            for candidate, reason in batch.dropped:
+                logger.info(
+                    "[Cycle %s] 차단: Rule %d (%s %s) — %s",
+                    cycle_id, candidate.rule_id, candidate.side, candidate.symbol, reason.value,
+                )
+                record_result(candidate.rule_id, ResultStatus.BLOCKED, reason.value)
+
+            # ── 선택된 후보 실행 ──
+            for candidate in batch.selected:
+                md = market_data_map[candidate.signal_id]
+                result = await self._executor.execute(
+                    candidate.raw_rule, candidate.side, md, balance,
+                )
+                result.cycle_id = cycle_id
+                result.signal_id = candidate.signal_id
+                logger.info(
+                    "[Cycle %s] Rule %d %s: %s — %s",
+                    cycle_id, candidate.rule_id, candidate.side,
+                    result.status.value, result.message,
+                )
+                # result_store 기록
+                if result.status == ExecutionStatus.SUCCESS:
+                    record_result(candidate.rule_id, ResultStatus.SUCCESS, result.message)
+                elif result.status == ExecutionStatus.REJECTED:
+                    record_result(candidate.rule_id, ResultStatus.BLOCKED, result.message)
+                else:
+                    record_result(candidate.rule_id, ResultStatus.FAILED, result.message)
+                if self._on_execution:
+                    self._on_execution(result)
 
         except Exception:
             logger.exception("evaluate_all 오류")
 
-    async def _evaluate_rule(
+    def _collect_candidates(
         self,
         rule: dict,
-        balance: Any,
-        holding_symbols: set[str],
-        trading_enabled: bool,
-    ) -> None:
-        """개별 규칙 평가 → 매수/매도 각각 실행."""
+        cycle_id: str,
+    ) -> list[tuple[CandidateSignal, dict[str, Any]]]:
+        """개별 규칙 평가 → CandidateSignal 리스트. 양방향 규칙은 BUY+SELL 동시 생성."""
         rule_id = rule.get("id", 0)
         symbol = rule.get("symbol", "")
+        results: list[tuple[CandidateSignal, dict[str, Any]]] = []
 
         try:
             # 시세 조회
             latest = self._bar_builder.get_latest(symbol)
             if not latest:
                 logger.debug("Rule %d (%s): 시세 미수신", rule_id, symbol)
-                return
+                return results
 
             # 일봉 기반 기술적 지표 주입
             latest["indicators"] = self._indicator_provider.get(symbol)
@@ -214,24 +277,47 @@ class StrategyEngine:
             # 조건 평가 → (buy_result, sell_result)
             buy_result, sell_result = self._evaluator.evaluate(rule, latest, context)
 
-            # 매수: 조건 충족 + 미보유 + 거래 가능
-            if buy_result and symbol not in holding_symbols and trading_enabled:
-                logger.info("Rule %d (%s): 매수 조건 충족", rule_id, symbol)
-                result = await self._executor.execute(rule, "BUY", latest, balance)
-                logger.info("Rule %d BUY: %s — %s", rule_id, result.status.value, result.message)
-                if self._on_execution:
-                    self._on_execution(result)
+            priority = rule.get("priority", 0)
+            execution = rule.get("execution") or {}
+            qty = int(execution.get("qty_value", rule.get("qty", 1)))
+            price = float(latest.get("price", 0))
 
-            # 매도: 조건 충족 + 보유 중 + 거래 가능
-            if sell_result and symbol in holding_symbols and trading_enabled:
-                logger.info("Rule %d (%s): 매도 조건 충족", rule_id, symbol)
-                result = await self._executor.execute(rule, "SELL", latest, balance)
-                logger.info("Rule %d SELL: %s — %s", rule_id, result.status.value, result.message)
-                if self._on_execution:
-                    self._on_execution(result)
+            if buy_result:
+                signal = CandidateSignal(
+                    signal_id=uuid.uuid4().hex[:12],
+                    cycle_id=cycle_id,
+                    rule_id=rule_id,
+                    symbol=symbol,
+                    side="BUY",
+                    priority=priority,
+                    desired_qty=qty,
+                    detected_at=datetime.now(),
+                    latest_price=price,
+                    reason="매수 조건 충족",
+                    raw_rule=rule,
+                )
+                results.append((signal, latest))
+
+            if sell_result:
+                signal = CandidateSignal(
+                    signal_id=uuid.uuid4().hex[:12],
+                    cycle_id=cycle_id,
+                    rule_id=rule_id,
+                    symbol=symbol,
+                    side="SELL",
+                    priority=priority,
+                    desired_qty=qty,
+                    detected_at=datetime.now(),
+                    latest_price=price,
+                    reason="매도 조건 충족",
+                    raw_rule=rule,
+                )
+                results.append((signal, latest))
 
         except Exception:
-            logger.exception("Rule %d 평가 오류", rule_id)
+            logger.exception("Rule %d 후보 수집 오류", rule_id)
+
+        return results
 
     # ── 손실 제한 처리 ──
 

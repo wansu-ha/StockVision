@@ -62,10 +62,15 @@ interface ListViewProps {
   trades: Trade[]
   pendingOrders: PendingOrder[]
   onDetail: (stock: Stock) => void
+  engineRunning: boolean
+  brokerConnected: boolean
+  onStrategyToggle: () => void
+  strategyLoading: boolean
 }
 
 export default function ListView({
   tab, setTab, stocks, account, isMock, marketStatus, trades, pendingOrders, onDetail,
+  engineRunning, brokerConnected, onStrategyToggle, strategyLoading,
 }: ListViewProps) {
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
   const [hintVisible, setHintVisible] = useState(false)
@@ -104,16 +109,39 @@ export default function ListView({
             </span>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
-            <span className="w-2 h-2 rounded-full bg-green-400" />
-            <span className="text-green-400 text-xs">{marketStatus.status}</span>
+            <span className={`w-2 h-2 rounded-full ${marketStatus.status === '장중' ? 'bg-green-400' : 'bg-gray-600'}`} />
+            <span className={`text-xs ${marketStatus.status === '장중' ? 'text-green-400' : 'text-gray-500'}`}>{marketStatus.status}</span>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-x-3 sm:gap-x-4 gap-y-1 text-xs sm:text-sm text-gray-400">
-          <span>주문가능 <span className="font-mono text-gray-300">{account.availableCash.toLocaleString()}</span></span>
-          <span className="text-gray-700 hidden sm:inline">│</span>
-          <span>보유 <span className="font-mono text-gray-300">{account.holdings.length}종목</span></span>
-          <span className="text-gray-700 hidden sm:inline">│</span>
-          <span className="hidden sm:inline">{account.broker}{isMock !== null && <span className={`ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded ${isMock ? 'bg-yellow-900/50 text-yellow-400' : 'bg-red-900/50 text-red-400'}`}>{isMock ? '모의' : '실전'}</span>} <span className="text-gray-600">{account.accountNo}</span></span>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-x-3 sm:gap-x-4 gap-y-1 text-xs sm:text-sm text-gray-400">
+            <span>주문가능 <span className="font-mono text-gray-300">{account.availableCash.toLocaleString()}</span></span>
+            <span className="text-gray-700 hidden sm:inline">│</span>
+            <span>보유 <span className="font-mono text-gray-300">{account.holdings.length}종목</span></span>
+            <span className="text-gray-700 hidden sm:inline">│</span>
+            <span className="hidden sm:inline">{account.broker}{isMock !== null && <span className={`ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded ${isMock ? 'bg-yellow-900/50 text-yellow-400' : 'bg-red-900/50 text-red-400'}`}>{isMock ? '모의' : '실전'}</span>} <span className="text-gray-600">{account.accountNo}</span></span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span
+              className={`w-2 h-2 rounded-full ${engineRunning ? 'bg-green-400' : brokerConnected ? 'bg-yellow-400' : 'bg-gray-600'}`}
+              title={engineRunning ? '자동매매 중' : brokerConnected ? '브로커 연결됨' : '미연결'}
+            />
+            {brokerConnected ? (
+              <button
+                onClick={onStrategyToggle}
+                disabled={strategyLoading}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition ${
+                  engineRunning
+                    ? 'bg-red-900/50 text-red-400 border border-red-800 hover:bg-red-900'
+                    : 'bg-indigo-600 text-white hover:bg-indigo-500'
+                } disabled:opacity-40 disabled:cursor-not-allowed`}
+              >
+                {strategyLoading ? '...' : engineRunning ? '중지' : '전략 실행'}
+              </button>
+            ) : (
+              <span className="text-[11px] text-gray-500">설정에서 키 등록</span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -281,7 +309,7 @@ export default function ListView({
                     <td className="px-4 py-2.5 text-right font-mono">{o.price.toLocaleString()}</td>
                     <td className="px-4 py-2.5 text-right text-xs text-gray-400">{o.type}</td>
                     <td className="px-4 py-2.5 text-right">
-                      <button className="text-xs text-red-400 hover:text-red-300 transition">취소</button>
+                      <button className="text-xs text-gray-600 cursor-not-allowed" disabled title="준비 중">취소</button>
                     </td>
                   </tr>
                 ))}

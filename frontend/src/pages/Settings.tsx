@@ -1,10 +1,10 @@
 /** 설정 페이지 — API Key 등록, 엔진 제어, 프로필 */
-import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { localConfig, localEngine } from '../services/localClient'
+import { localEngine } from '../services/localClient'
 import { useAuth } from '../context/AuthContext'
 import { useAlertStore } from '../stores/alertStore'
 import { useAccountStatus } from '../hooks/useAccountStatus'
+import BrokerKeyForm from '../components/onboarding/BrokerKeyForm'
 
 export default function Settings() {
   const { email, logout } = useAuth()
@@ -12,30 +12,7 @@ export default function Settings() {
   const navigate = useNavigate()
   const { engineRunning, brokerConnected, credentials, isMock } = useAccountStatus()
 
-  // 증권사 API Key
-  const [brokerType, setBrokerType] = useState<'kiwoom' | 'kis'>('kiwoom')
-  const [appKey, setAppKey] = useState('')
-  const [appSecret, setAppSecret] = useState('')
-  const [saving, setSaving] = useState(false)
-
   const hasKeys = !!(credentials?.kiwoom?.app_key || credentials?.kis?.app_key)
-
-  const handleSaveKeys = async () => {
-    setSaving(true)
-    try {
-      const res = await localConfig.setBrokerKeys(brokerType, appKey, appSecret)
-      const label = res?.data?.is_mock ? '모의투자' : '실전투자'
-      addAlert(`API Key 등록 완료 (${label})`, 'success')
-      setAppKey('')
-      setAppSecret('')
-    } catch (e: unknown) {
-      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-        ?? 'API Key 등록 실패. 키를 확인하세요.'
-      addAlert(msg, 'error')
-    } finally {
-      setSaving(false)
-    }
-  }
 
   const handleEngineToggle = async () => {
     try {
@@ -146,40 +123,7 @@ export default function Settings() {
               )}
             </div>
           ) : (
-            /* 미등록 — 입력 폼 */
-            <div className="space-y-3">
-              <select
-                value={brokerType}
-                onChange={(e) => setBrokerType(e.target.value as 'kiwoom' | 'kis')}
-                className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-xl text-sm text-gray-300 focus:outline-none focus:border-indigo-500 transition"
-              >
-                <option value="kiwoom">키움증권</option>
-                <option value="kis">한국투자증권 (KIS)</option>
-              </select>
-              <input
-                type="password"
-                autoComplete="off"
-                placeholder="App Key"
-                value={appKey}
-                onChange={(e) => setAppKey(e.target.value)}
-                className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-xl text-sm placeholder-gray-500 focus:outline-none focus:border-indigo-500 transition"
-              />
-              <input
-                type="password"
-                autoComplete="off"
-                placeholder="App Secret"
-                value={appSecret}
-                onChange={(e) => setAppSecret(e.target.value)}
-                className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-xl text-sm placeholder-gray-500 focus:outline-none focus:border-indigo-500 transition"
-              />
-              <button
-                onClick={handleSaveKeys}
-                disabled={!appKey || !appSecret || saving}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed transition"
-              >
-                {saving ? '확인 중...' : '등록'}
-              </button>
-            </div>
+            <BrokerKeyForm onSuccess={() => addAlert('API Key 등록 완료', 'success')} />
           )}
         </section>
 

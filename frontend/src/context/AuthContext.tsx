@@ -44,25 +44,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } else if (rt) {
       // JWT 만료, RT 있음 → 클라우드에서 갱신
       cloudAuth.refresh(rt)
-        .then((res) => {
+        .then(async (res) => {
           const d = res.data
           sessionStorage.setItem(STORAGE_KEY_JWT, d.access_token)
           localStorage.setItem(STORAGE_KEY_RT, d.refresh_token)
-          localAuth.setAuthToken(d.access_token, d.refresh_token).then(() => {
-            setState(prev => ({ ...prev, localReady: true }))
-          })
+          await localAuth.setAuthToken(d.access_token, d.refresh_token)
           setState({
             jwt: d.access_token,
             refreshToken: d.refresh_token,
             email: localStorage.getItem(STORAGE_KEY_EMAIL),
             isAuthenticated: true,
-            localReady: false,
+            localReady: true,
           })
         })
         .catch(() => {
           localStorage.removeItem(STORAGE_KEY_RT)
           localStorage.removeItem(STORAGE_KEY_EMAIL)
+          setState(prev => ({ ...prev, localReady: true }))
         })
+    } else {
+      // 브라우저에 토큰 없음 → 로컬 서버에서 복원
+      localAuth.restore().then((res) => {
+        const d = res?.data
+        if (d?.access_token && d?.refresh_token) {
+          sessionStorage.setItem(STORAGE_KEY_JWT, d.access_token)
+          localStorage.setItem(STORAGE_KEY_RT, d.refresh_token)
+          if (d.email) localStorage.setItem(STORAGE_KEY_EMAIL, d.email)
+          setState({
+            jwt: d.access_token, refreshToken: d.refresh_token,
+            email: d.email ?? null, isAuthenticated: true, localReady: true,
+          })
+        } else {
+          setState(prev => ({ ...prev, localReady: true }))
+        }
+      })
     }
   }, [])
 

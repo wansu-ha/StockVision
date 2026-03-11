@@ -20,6 +20,10 @@ DEFAULT_TIMEOUT = 10.0
 class CloudClientError(Exception):
     """클라우드 서버 통신 실패 시 발생하는 예외."""
 
+    def __init__(self, message: str, status_code: int | None = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+
 
 class CloudClient:
     """클라우드 서버 HTTP 클라이언트."""
@@ -38,9 +42,20 @@ class CloudClient:
         """
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
+        self._api_token = api_token
         self._headers: dict[str, str] = {"Content-Type": "application/json"}
         if api_token:
             self._headers["Authorization"] = f"Bearer {api_token}"
+
+    def set_token(self, token: str) -> None:
+        """런타임에 인증 토큰을 교체한다."""
+        self._api_token = token
+        self._headers["Authorization"] = f"Bearer {token}"
+
+    def clear_token(self) -> None:
+        """인증 헤더를 제거한다."""
+        self._api_token = None
+        self._headers.pop("Authorization", None)
 
     def _make_url(self, path: str) -> str:
         """베이스 URL과 경로를 합쳐 완전한 URL을 반환한다."""
@@ -58,7 +73,8 @@ class CloudClient:
                 raise CloudClientError(f"요청 타임아웃 ({url}): {e}") from e
             except httpx.HTTPStatusError as e:
                 raise CloudClientError(
-                    f"HTTP 오류 {e.response.status_code} ({url}): {e.response.text}"
+                    f"HTTP 오류 {e.response.status_code} ({url}): {e.response.text}",
+                    status_code=e.response.status_code,
                 ) from e
             except httpx.RequestError as e:
                 raise CloudClientError(f"요청 실패 ({url}): {e}") from e
@@ -75,7 +91,8 @@ class CloudClient:
                 raise CloudClientError(f"요청 타임아웃 ({url}): {e}") from e
             except httpx.HTTPStatusError as e:
                 raise CloudClientError(
-                    f"HTTP 오류 {e.response.status_code} ({url}): {e.response.text}"
+                    f"HTTP 오류 {e.response.status_code} ({url}): {e.response.text}",
+                    status_code=e.response.status_code,
                 ) from e
             except httpx.RequestError as e:
                 raise CloudClientError(f"요청 실패 ({url}): {e}") from e
@@ -111,6 +128,11 @@ class CloudClient:
         logger.debug("하트비트 전송: %s", self._base_url)
         result = await self._post("/api/v1/heartbeat", payload)
         return result if isinstance(result, dict) else {"raw": result}
+
+    async def refresh_access_token(self, refresh_token: str) -> dict[str, str]:
+        """클라우드 서버에 refresh 요청을 보내 새 토큰 쌍을 반환한다."""
+        result = await self._post("/api/v1/auth/refresh", {"refresh_token": refresh_token})
+        return result.get("data", result)
 
     async def health_check(self) -> bool:
         """클라우드 서버의 헬스체크를 수행한다.

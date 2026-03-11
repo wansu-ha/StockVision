@@ -89,3 +89,21 @@ export const CONTEXT_FIELDS: Indicator[] = [
   { key: 'fear_greed', name: '공포/탐욕 지수' },
   { key: 'sector_score', name: '섹터 점수' },
 ]
+
+/** rule.script 또는 v1 조건 필드에서 매매 방향을 파싱 */
+export function parseDirection(rule: Rule): '매수' | '매도' | '양방향' | '없음' {
+  if (rule.script) {
+    const hasBuy = /^매수:/m.test(rule.script)
+    const hasSell = /^매도:/m.test(rule.script)
+    if (hasBuy && hasSell) return '양방향'
+    if (hasBuy) return '매수'
+    if (hasSell) return '매도'
+    return '없음'
+  }
+  const hasBuy = rule.buy_conditions != null
+  const hasSell = rule.sell_conditions != null
+  if (hasBuy && hasSell) return '양방향'
+  if (hasBuy) return '매수'
+  if (hasSell) return '매도'
+  return '없음'
+}

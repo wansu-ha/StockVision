@@ -4,8 +4,11 @@
  * (E) 뷰 전환 fade+translateY 애니메이션
  */
 import { useState, useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { Navigate } from 'react-router-dom'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import Header from '../components/main/Header'
+import OpsPanel from '../components/main/OpsPanel'
+import { useOnboarding } from '../hooks/useOnboarding'
 import ListView from '../components/main/ListView'
 import DetailView from '../components/main/DetailView'
 import { useAuth } from '../context/AuthContext'
@@ -13,14 +16,17 @@ import { useStockData } from '../hooks/useStockData'
 import { useAccountStatus } from '../hooks/useAccountStatus'
 import { useAccountBalance } from '../hooks/useAccountBalance'
 import { useMarketContext } from '../hooks/useMarketContext'
-import { localLogs } from '../services/localClient'
+import { localLogs, localEngine } from '../services/localClient'
 import type { Stock, AccountInfo, Trade, PendingOrder, MarketStatus } from '../components/main/ListView'
 
 export default function MainDashboard() {
+  const { completed: onboardingDone } = useOnboarding()
   const [view, setView] = useState<'list' | 'detail'>('list')
   const [selectedStock, setSelectedStock] = useState<Stock | null>(null)
   const [tab, setTab] = useState<'my' | 'watch'>('my')
+  const [strategyLoading, setStrategyLoading] = useState(false)
 
+  const queryClient = useQueryClient()
   const { localReady } = useAuth()
   const { myStocks, watchStocks, rules } = useStockData()
   const { engineRunning, brokerConnected, credentials, isMock } = useAccountStatus()
@@ -41,7 +47,7 @@ export default function MainDashboard() {
   // 증권사 이름 — 등록된 키 기반
   const brokerName = credentials?.kiwoom?.app_key ? '키움증권'
     : credentials?.kis?.app_key ? '한국투자증권'
-    : '—'
+    : '미등록'
 
   // 계좌 정보
   const account: AccountInfo = useMemo(() => {
@@ -100,6 +106,20 @@ export default function MainDashboard() {
     closeTime: '15:30',
   }
 
+  const handleStrategyToggle = async () => {
+    setStrategyLoading(true)
+    try {
+      if (engineRunning) {
+        await localEngine.stop()
+      } else {
+        await localEngine.start()
+      }
+      queryClient.invalidateQueries({ queryKey: ['localStatus'] })
+    } finally {
+      setStrategyLoading(false)
+    }
+  }
+
   const handleDetail = (stock: Stock) => {
     setSelectedStock(stock)
     setView('detail')
@@ -109,6 +129,8 @@ export default function MainDashboard() {
     setView('list')
     setSelectedStock(null)
   }
+
+  if (!onboardingDone) return <Navigate to="/onboarding" replace />
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
@@ -121,6 +143,13 @@ export default function MainDashboard() {
       <main className="w-full max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-5">
         <div key={view} className="animate-[fadeSlideIn_200ms_ease-out]">
           {view === 'list' ? (
+            <>
+            <OpsPanel
+              localConnected={localReady}
+              brokerConnected={brokerConnected}
+              engineRunning={engineRunning}
+              isMock={isMock}
+            />
             <ListView
               tab={tab}
               setTab={setTab}
@@ -131,7 +160,12 @@ export default function MainDashboard() {
               trades={trades}
               pendingOrders={pendingOrders}
               onDetail={handleDetail}
+              engineRunning={engineRunning}
+              brokerConnected={brokerConnected}
+              onStrategyToggle={handleStrategyToggle}
+              strategyLoading={strategyLoading}
             />
+            </>
           ) : (
             <DetailView
               stock={selectedStock!}

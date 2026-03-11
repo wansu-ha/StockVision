@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 """PyInstaller 번들 설정.
 
-단일 .exe 파일로 로컬 서버를 패키징한다.
+onedir 모드로 로컬 서버를 패키징한다.
 빌드 명령: pyinstaller local_server/pyinstaller.spec
 
 출력: dist/stockvision-local/stockvision-local.exe
@@ -51,6 +51,14 @@ a = Analysis(
         "PIL",
         "PIL.Image",
         "PIL.ImageDraw",
+        # yfinance + 의존성
+        "yfinance",
+        "packaging",
+        # 토스트 알림
+        "winotify",
+        # 딥링크 + 뮤텍스
+        "local_server.utils.deeplink",
+        "local_server.utils.mutex",
     ],
     hookspath=[],
     hooksconfig={},
@@ -59,8 +67,6 @@ a = Analysis(
         # 불필요한 대형 패키지 제외
         "tkinter",
         "matplotlib",
-        "numpy",
-        "pandas",
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
@@ -73,17 +79,14 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)  # noqa: F821
 exe = EXE(  # noqa: F821
     pyz,
     a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
     [],
+    exclude_binaries=True,
     name="stockvision-local",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
     upx_exclude=[],
-    runtime_tmpdir=None,
     console=False,         # 콘솔 창 숨김 (트레이 앱이므로)
     disable_windowed_traceback=False,
     argv_emulation=False,
@@ -93,4 +96,15 @@ exe = EXE(  # noqa: F821
     # Windows 아이콘 (선택적 — 파일이 없으면 기본 아이콘 사용)
     # icon=str(ROOT / "assets" / "tray_icon.ico"),
     version_file=None,
+)
+
+coll = COLLECT(  # noqa: F821
+    exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name="stockvision-local",
 )

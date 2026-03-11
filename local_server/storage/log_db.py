@@ -88,6 +88,7 @@ class LogDB:
         symbol: str | None = None,
         limit: int = 100,
         offset: int = 0,
+        date_from: str | None = None,
     ) -> tuple[list[dict[str, Any]], int]:
         """로그를 조회한다.
 
@@ -96,6 +97,7 @@ class LogDB:
             symbol: 필터할 종목 코드 (None이면 전체)
             limit: 최대 조회 수
             offset: 건너뛸 수
+            date_from: 시작 날짜 필터 ('YYYY-MM-DD', 이 날짜 이후만)
 
         Returns:
             (로그 목록, 전체 건수) 튜플
@@ -109,6 +111,9 @@ class LogDB:
         if symbol:
             conditions.append("symbol = ?")
             params.append(symbol)
+        if date_from:
+            conditions.append("ts >= ?")
+            params.append(date_from)
 
         where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
 
@@ -139,6 +144,26 @@ class LogDB:
             for row in rows
         ]
         return items, total
+
+    def count_by_type(self, date_from: str) -> dict[str, int]:
+        """특정 날짜 이후 log_type별 건수를 반환한다.
+
+        Args:
+            date_from: 시작 날짜 ('YYYY-MM-DD')
+
+        Returns:
+            { 'FILL': 3, 'STRATEGY': 12, 'ERROR': 0, ... }
+        """
+        with sqlite3.connect(str(self._path)) as conn:
+            rows = conn.execute(
+                "SELECT log_type, COUNT(*) FROM logs WHERE ts >= ? GROUP BY log_type",
+                (date_from,),
+            ).fetchall()
+
+        result = {lt: 0 for lt in (LOG_TYPE_FILL, LOG_TYPE_ORDER, LOG_TYPE_ERROR, LOG_TYPE_SYSTEM, LOG_TYPE_STRATEGY)}
+        for log_type, count in rows:
+            result[log_type] = count
+        return result
 
     def today_realized_pnl(self) -> "Decimal":
         """당일 FILL 로그의 실현손익(realized_pnl)을 합산한다."""

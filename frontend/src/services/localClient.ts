@@ -4,6 +4,7 @@
  */
 import axios, { type AxiosInstance } from 'axios'
 import type { LogFilter, ExecutionLog } from '../types/log'
+import type { LastRuleResult } from '../types/rule-result'
 import type { LocalConfig } from '../types/settings'
 
 const LOCAL_URL = import.meta.env.VITE_LOCAL_API_URL || 'http://localhost:4020'
@@ -40,6 +41,15 @@ export const localAuth = {
     return result
   },
   status: () => client.get('/auth/status').then((r) => r.data).catch(() => null),
+  restore: async () => {
+    try {
+      const res = await client.post('/auth/restore')
+      localSecret = res.data?.data?.local_secret ?? null
+      return res.data
+    } catch {
+      return null
+    }
+  },
 }
 
 /** 상태 */
@@ -61,14 +71,30 @@ export const localConfig = {
 export const localRules = {
   sync: (rules: unknown[]) =>
     client.post('/rules/sync', { rules }).then((r) => r.data).catch(() => null),
+  lastResults: () =>
+    client.get<{ data: LastRuleResult[] }>('/rules/last-results')
+      .then((r) => r.data.data ?? [])
+      .catch(() => [] as LastRuleResult[]),
 }
 
 /** 로그 */
+export interface LogSummary {
+  date: string
+  signals: number
+  fills: number
+  orders: number
+  errors: number
+}
+
 export const localLogs = {
   get: (filters?: LogFilter) =>
     client.get<{ data: ExecutionLog[] }>('/logs', { params: filters })
       .then((r) => r.data.data ?? r.data)
       .catch(() => []),
+  summary: (date?: string) =>
+    client.get<{ data: LogSummary }>('/logs/summary', { params: date ? { date } : undefined })
+      .then((r) => r.data.data ?? null)
+      .catch(() => null),
 }
 
 /** 계좌 (잔고 + 미체결) */
@@ -113,6 +139,11 @@ export const localAccount = {
 export const localEngine = {
   start: () => client.post('/strategy/start', null, { timeout: 30_000 }).then((r) => r.data),
   stop: () => client.post('/strategy/stop', null, { timeout: 15_000 }).then((r) => r.data),
+}
+
+/** 브로커 재연결 */
+export const localBroker = {
+  reconnect: () => client.post('/broker/reconnect', null, { timeout: 15_000 }).then((r) => r.data).catch(() => null),
 }
 
 /** 헬스 체크 (버전 포함) */

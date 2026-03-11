@@ -22,6 +22,7 @@ import ProtoA from './pages/ProtoA'
 import ProtoB from './pages/ProtoB'
 import ProtoC from './pages/ProtoC'
 import MainDashboard from './pages/MainDashboard'
+import OnboardingWizard from './pages/OnboardingWizard'
 import Layout from './components/Layout'
 import AlertContainer from './components/AlertContainer'
 import ToastContainer from './components/ToastContainer'
@@ -66,6 +67,13 @@ function AppRoutes() {
         </ProtectedRoute>
       } />
 
+      {/* 온보딩 (Layout 없음) */}
+      <Route path="/onboarding" element={
+        <ProtectedRoute>
+          <OnboardingWizard />
+        </ProtectedRoute>
+      } />
+
       {/* 설정 (Layout 없음 — 자체 헤더 사용) */}
       <Route path="/settings" element={
         <ProtectedRoute>
@@ -93,6 +101,7 @@ function AppRoutes() {
                 <Route path="ai" element={<AdminAiMonitor />} />
                 <Route path="errors" element={<AdminErrorLogs />} />
               </Route>
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Layout>
         </ProtectedRoute>
