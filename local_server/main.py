@@ -321,10 +321,10 @@ if __name__ == "__main__":
     # sys.argv 화이트리스트 검증
     _parse_deeplink_argv()
 
+    # PyInstaller exe에서는 모듈 문자열 import가 실패하므로 앱 객체 직접 전달
     uvicorn.run(
-        "local_server.main:app",
+        app,
         host=cfg.get("server.host", "127.0.0.1"),
         port=port,
-        reload=False,
         log_level="info",
     )
