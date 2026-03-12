@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import OAuthButtons from '../components/OAuthButtons'
 
 export default function Login() {
   const { login } = useAuth()
@@ -71,6 +72,8 @@ export default function Login() {
             {loading ? '로그인 중...' : '로그인'}
           </button>
         </form>
+
+        <OAuthButtons onError={(msg) => setError(msg)} />
 
         <div className="mt-4 text-sm text-center space-y-1">
           <p>

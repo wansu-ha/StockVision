@@ -15,6 +15,10 @@ from cloud_server.models.fundamental import CompanyFinancial, CompanyDividend  #
 from cloud_server.models.ai import AIAnalysisLog  # noqa: F401
 from cloud_server.models.briefing import MarketBriefing  # noqa: F401
 from cloud_server.models.stock_briefing import StockBriefing  # noqa: F401
+from cloud_server.models.pending_command import PendingCommand  # noqa: F401
+from cloud_server.models.audit_log import AuditLog  # noqa: F401
+from cloud_server.models.oauth_account import OAuthAccount  # noqa: F401
+from cloud_server.models.device import Device  # noqa: F401
 
 
 def init_db() -> None:

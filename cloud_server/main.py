@@ -29,6 +29,8 @@ from cloud_server.api.stocks import router as stocks_router
 from cloud_server.api.watchlist import router as watchlist_router
 from cloud_server.api.market_data import router as market_data_router
 from cloud_server.api.ai import router as ai_router
+from cloud_server.api.ws_relay import router as ws_relay_router
+from cloud_server.api.devices import router as devices_router
 
 logger = logging.getLogger(__name__)
 
@@ -127,6 +129,8 @@ app.include_router(market_data_router)
 app.include_router(stocks_router)
 app.include_router(watchlist_router)
 app.include_router(ai_router)
+app.include_router(ws_relay_router)
+app.include_router(devices_router)
 
 
 # ── 기본 엔드포인트 ──────────────────────────────────────────────────

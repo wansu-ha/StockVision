@@ -6,6 +6,7 @@ import { useAlertStore } from '../stores/alertStore'
 import { useAccountStatus } from '../hooks/useAccountStatus'
 import BrokerKeyForm from '../components/onboarding/BrokerKeyForm'
 import AlertSettings from '../components/AlertSettings'
+import DeviceManager from '../components/DeviceManager'
 
 export default function Settings() {
   const { email, logout } = useAuth()
@@ -157,6 +158,11 @@ export default function Settings() {
               로그아웃
             </button>
           </div>
+        </section>
+
+        {/* 디바이스 관리 */}
+        <section className="bg-gray-800/50 rounded-xl p-6 border border-gray-700/50">
+          <DeviceManager />
         </section>
 
       </main>
