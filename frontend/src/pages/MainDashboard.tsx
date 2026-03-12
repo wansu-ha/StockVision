@@ -29,7 +29,7 @@ export default function MainDashboard() {
   const queryClient = useQueryClient()
   const { localReady } = useAuth()
   const { myStocks, watchStocks, rules } = useStockData()
-  const { engineRunning, brokerConnected, credentials, isMock } = useAccountStatus()
+  const { engineRunning, brokerConnected, credentials, isMock, killSwitch, lossLock } = useAccountStatus()
   const { balance, openOrders } = useAccountBalance(brokerConnected)
   const { context } = useMarketContext()
 
@@ -149,6 +149,8 @@ export default function MainDashboard() {
               brokerConnected={brokerConnected}
               engineRunning={engineRunning}
               isMock={isMock}
+              killSwitch={killSwitch}
+              lossLock={lossLock}
             />
             <ListView
               tab={tab}

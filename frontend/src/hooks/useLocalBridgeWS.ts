@@ -87,18 +87,25 @@ function handleMessage(
   notif: ReturnType<typeof useNotifStore.getState>,
 ) {
   switch (msg.type) {
-    case 'signal_sent': {
-      const d = msg.data as { rule_name: string; side: string; symbol: string; quantity: number }
-      const text = `${d.rule_name} — ${d.side === 'BUY' ? '매수' : '매도'} ${d.symbol} ${d.quantity}주 주문 전송`
-      toast.showToast(text, 'info')
-      notif.add(text, 'info')
-      break
-    }
-    case 'execution_result': {
-      const d = msg.data as { side: string; stock_code: string; qty: number; price: number }
-      const text = `체결: ${d.side === 'BUY' ? '매수' : '매도'} ${d.stock_code} ${d.qty}주 @${d.price?.toLocaleString()}원`
-      toast.showToast(text, 'success')
-      notif.add(text, 'success')
+    case 'execution': {
+      const d = msg.data as {
+        rule_id: number; symbol: string; side: string;
+        status: string; order_id: string; message: string
+      }
+      const sideText = d.side === 'buy' ? '매수' : '매도'
+      if (d.status === 'FILLED') {
+        const text = `체결: ${sideText} ${d.symbol} — ${d.message}`
+        toast.showToast(text, 'success')
+        notif.add(text, 'success')
+      } else if (d.status === 'FAILED') {
+        const text = `주문 실패: ${sideText} ${d.symbol} — ${d.message}`
+        toast.showToast(text, 'error')
+        notif.add(text, 'error')
+      } else {
+        const text = `주문: ${sideText} ${d.symbol} [${d.status}] — ${d.message}`
+        toast.showToast(text, 'info')
+        notif.add(text, 'info')
+      }
       break
     }
     case 'broker_disconnected':
