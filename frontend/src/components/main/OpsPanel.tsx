@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom'
 import { cloudHealth } from '../../services/cloudClient'
 import { localLogs, localHealth, localStatus } from '../../services/localClient'
 import type { LogSummary, DailyPnL } from '../../services/localClient'
+import AlertsDropdown from '../AlertsDropdown'
 
 interface OpsPanelProps {
   localConnected: boolean
@@ -211,7 +212,7 @@ export default function OpsPanel({ localConnected, brokerConnected, engineRunnin
           ))}
         </div>
 
-        {/* 오늘의 요약: P&L + 신호/체결/오류 */}
+        {/* 오늘의 요약: P&L + 신호/체결/오류 + 경고 배지 */}
         <div className="flex items-center gap-3 text-xs text-gray-400 shrink-0">
           {/* C1: 일일 P&L */}
           {dailyPnl != null && (
@@ -232,6 +233,7 @@ export default function OpsPanel({ localConnected, brokerConnected, engineRunnin
               </span>
             </>
           )}
+          <AlertsDropdown />
         </div>
       </div>
 

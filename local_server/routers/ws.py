@@ -38,6 +38,7 @@ router = APIRouter()
 WS_TYPE_PRICE_UPDATE = "price_update"    # 호가/현재가 갱신 (QuoteEvent)
 WS_TYPE_EXECUTION = "execution"          # 체결 이벤트
 WS_TYPE_STATUS_CHANGE = "status_change"  # 주문 상태 변경
+WS_TYPE_ALERT = "alert"                  # 실시간 경고
 
 
 class ConnectionManager:

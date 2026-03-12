@@ -11,6 +11,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
+from local_server.engine.alert_monitor import AlertMonitor
 from local_server.engine.bar_builder import BarBuilder
 from local_server.engine.context_cache import ContextCache
 from local_server.engine.evaluator import RuleEvaluator
@@ -80,6 +81,12 @@ class StrategyEngine:
         # 콜백 (실행 결과 알림, WS 등)
         self._on_execution: Optional[Callable[[ExecutionResult], Any]] = None
 
+        # AlertMonitor (alerts 설정 섹션 전달)
+        self._alert_monitor = AlertMonitor(config=cfg.get("alerts"))
+
+        # HealthWatchdog가 참조하는 마지막 evaluate 시각
+        self._last_evaluate_ts: Optional[datetime] = None
+
     # ── 라이프사이클 ──
 
     async def start(self) -> None:
@@ -119,6 +126,14 @@ class StrategyEngine:
     def set_on_execution(self, callback: Callable[[ExecutionResult], Any]) -> None:
         """실행 결과 콜백 등록."""
         self._on_execution = callback
+
+    def set_alert_broadcast(self, callback: Any) -> None:
+        """AlertMonitor WS 브로드캐스트 콜백 등록."""
+        self._alert_monitor.set_broadcast(callback)
+
+    @property
+    def alert_monitor(self) -> AlertMonitor:
+        return self._alert_monitor
 
     # ── 서브 모듈 접근자 ──
 
@@ -174,18 +189,22 @@ class StrategyEngine:
             if not active_rules:
                 return
 
-            # 잔고 조회 (ABC: 파라미터 없음)
+            # 잔고 / 미체결 조회 + 당일 손익 (AlertMonitor에 필요, 무조건 조회)
             balance = await self._broker.get_balance()
             holding_symbols = {p.symbol for p in balance.positions}
+            open_orders = await self._broker.get_open_orders()
+            from local_server.storage.log_db import get_log_db
+            today_pnl = get_log_db().today_realized_pnl()
 
-            # 최대 손실 제한 체크 (당일 실현손익 from logs.db)
+            # AlertMonitor 경고 평가 (trading_enabled 여부와 무관하게 실행)
+            await self._alert_monitor.check_all(balance, open_orders, today_pnl)
+
+            # 최대 손실 제한 체크
             if self._safeguard.is_trading_enabled():
-                from local_server.storage.log_db import get_log_db
-                today_pnl = get_log_db().today_realized_pnl()
                 loss_ok = self._safeguard.check_max_loss(today_pnl, balance.cash + balance.total_eval)
                 if not loss_ok:
                     await self._cancel_open_orders()
-                    self._notify_loss_lock(today_pnl)
+                    await self._notify_loss_lock(today_pnl)
 
             # Kill Switch / 손실 락 포함 최종 거래 가능 여부
             trading_enabled = self._safeguard.is_trading_enabled()
@@ -269,6 +288,9 @@ class StrategyEngine:
                     record_result(candidate.rule_id, ResultStatus.FAILED, result.message)
                 if self._on_execution:
                     self._on_execution(result)
+
+            # 마지막 evaluate 시각 갱신 (HealthWatchdog 하트비트용)
+            self._last_evaluate_ts = datetime.now()
 
         except Exception:
             logger.exception("evaluate_all 오류")
@@ -359,31 +381,22 @@ class StrategyEngine:
             logger.error("미체결 조회 실패: %s", e)
         return cancelled
 
-    def _notify_loss_lock(self, today_pnl: float) -> None:
-        """손실 제한 발동을 WS + logs.db로 알린다."""
+    async def _notify_loss_lock(self, today_pnl: float) -> None:
+        """손실 제한 발동을 AlertMonitor.fire()를 통해 알린다."""
         msg = f"최대 손실 제한 발동: 당일 실현손익 {today_pnl:,.0f}원"
         logger.warning(msg)
-
-        # logs.db 기록
         try:
-            from local_server.storage.log_db import get_log_db, LOG_TYPE_STRATEGY
-            get_log_db().write(LOG_TYPE_STRATEGY, msg)
+            await self._alert_monitor.fire(
+                alert_type="loss_lock",
+                severity="critical",
+                title="손실 락 발동",
+                message=msg,
+                action_label="로그 확인",
+                action_route="/logs",
+                alert_key="loss_lock",
+            )
         except Exception as e:
-            logger.error("손실 락 로그 기록 실패: %s", e)
-
-        # WS 브로드캐스트 (콜백 경유)
-        if self._on_execution:
-            try:
-                alert = ExecutionResult(
-                    rule_id=0,
-                    symbol="",
-                    side="",
-                    status=ExecutionStatus.REJECTED,
-                    message=msg,
-                )
-                self._on_execution(alert)
-            except Exception:
-                pass
+            logger.error("손실 락 AlertMonitor.fire() 실패: %s", e)
 
     # ── WS 콜백 ──
 

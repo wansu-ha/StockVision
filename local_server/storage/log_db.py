@@ -23,6 +23,7 @@ LOG_TYPE_ORDER = "ORDER"       # 주문
 LOG_TYPE_ERROR = "ERROR"       # 에러
 LOG_TYPE_SYSTEM = "SYSTEM"     # 시스템 이벤트
 LOG_TYPE_STRATEGY = "STRATEGY" # 전략 엔진 이벤트
+LOG_TYPE_ALERT = "ALERT"       # 실시간 경고
 
 # DDL
 _CREATE_TABLE_SQL = """
@@ -171,7 +172,7 @@ class LogDB:
                 (date_from,),
             ).fetchall()
 
-        result = {lt: 0 for lt in (LOG_TYPE_FILL, LOG_TYPE_ORDER, LOG_TYPE_ERROR, LOG_TYPE_SYSTEM, LOG_TYPE_STRATEGY)}
+        result = {lt: 0 for lt in (LOG_TYPE_FILL, LOG_TYPE_ORDER, LOG_TYPE_ERROR, LOG_TYPE_SYSTEM, LOG_TYPE_STRATEGY, LOG_TYPE_ALERT)}
         for log_type, count in rows:
             result[log_type] = count
         return result
