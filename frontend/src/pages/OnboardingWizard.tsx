@@ -70,9 +70,10 @@ export default function OnboardingWizard() {
             {/* Step 2: 로컬 서버 연결 */}
             {step === 2 && (
               <>
-                <h2 className="text-lg font-bold mb-1">로컬 서버 연결</h2>
+                <h2 className="text-lg font-bold mb-1">로컬 서버 설치</h2>
                 <p className="text-xs text-gray-500 mb-5">
-                  주문 실행을 위한 로컬 프로그램을 설치하고 실행하세요.
+                  StockVision 로컬 서버는 주문을 이 PC에서만 실행합니다.
+                  비밀번호는 Windows 자격 증명에 안전하게 저장됩니다.
                 </p>
                 <BridgeInstaller onConnected={() => setStep(3)} />
               </>
@@ -97,13 +98,19 @@ export default function OnboardingWizard() {
 
                 <div className="space-y-2 mb-6">
                   <SummaryRow label="계정" value={email ?? '로그인됨'} ok />
-                  <SummaryRow label="로컬 서버" value="연결됨" ok={localReady} />
+                  <SummaryRow
+                    label="로컬 서버"
+                    value={localReady ? '연결됨' : '미연결'}
+                    ok={localReady}
+                    onFix={!localReady ? () => setStep(2) : undefined}
+                  />
                   <SummaryRow
                     label="증권사"
                     value={brokerConnected
                       ? `연결됨${isMock !== null ? (isMock ? ' (모의)' : ' (실전)') : ''}`
                       : '미연결'}
                     ok={brokerConnected}
+                    onFix={!brokerConnected ? () => setStep(3) : undefined}
                   />
                 </div>
 
@@ -118,7 +125,7 @@ export default function OnboardingWizard() {
 
                 <button
                   onClick={handleFinish}
-                  className="w-full py-3 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-500 transition"
+                  className="w-full py-3 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-500 transition animate-[fadeIn_0.5s_ease-in-out]"
                 >
                   대시보드로 이동
                 </button>
@@ -143,13 +150,18 @@ export default function OnboardingWizard() {
   )
 }
 
-function SummaryRow({ label, value, ok }: { label: string; value: string; ok: boolean }) {
+function SummaryRow({ label, value, ok, onFix }: { label: string; value: string; ok: boolean; onFix?: () => void }) {
   return (
     <div className="flex items-center justify-between bg-gray-800/50 border border-gray-700 rounded-lg px-4 py-3">
       <span className="text-sm text-gray-400">{label}</span>
       <div className="flex items-center gap-2">
         <span className={`w-2 h-2 rounded-full ${ok ? 'bg-green-400' : 'bg-yellow-400'}`} />
         <span className={`text-sm ${ok ? 'text-gray-200' : 'text-gray-500'}`}>{value}</span>
+        {onFix && (
+          <button onClick={onFix} className="text-xs text-indigo-400 hover:underline ml-1">
+            설정하기
+          </button>
+        )}
       </div>
     </div>
   )
