@@ -8,6 +8,7 @@ import { Navigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import Header from '../components/main/Header'
 import OpsPanel from '../components/main/OpsPanel'
+import BriefingCard from '../components/BriefingCard'
 import { useOnboarding } from '../hooks/useOnboarding'
 import ListView from '../components/main/ListView'
 import DetailView from '../components/main/DetailView'
@@ -164,6 +165,7 @@ export default function MainDashboard() {
               killSwitch={killSwitch}
               lossLock={lossLock}
             />
+            <BriefingCard />
             <ListView
               tab={tab}
               setTab={setTab}

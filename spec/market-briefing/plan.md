@@ -1,4 +1,4 @@
-> 작성일: 2026-03-12 | 상태: 초안 | Phase D (D2)
+> 작성일: 2026-03-12 | 상태: 구현 완료 | Phase D (D2)
 
 # D2 시장 브리핑 구현 계획
 
@@ -109,12 +109,15 @@ class BriefingService:
 
     def generate_today(self) -> None:
         """스케줄러 진입점. DB 세션 내부 생성."""
-        with get_db_session() as db:
+        db = get_db_session()
+        try:
             today = date.today()
             existing = db.query(MarketBriefing).filter_by(date=today).first()
             if existing:
                 return   # 이미 있으면 skip
             self._generate(today, db)
+        finally:
+            db.close()
 
     def _generate(self, target_date: date, db: Session) -> dict:
         """실제 생성 로직. 실패 시 스텁 반환."""
@@ -126,8 +129,8 @@ class BriefingService:
         return result
 
     def _fetch_indices(self, target_date: date) -> dict:
-        """YFinanceService로 지수/환율 수집. 실패 시 None 필드."""
-        ...  # YFinanceService().fetch_daily([^KS11, ^KQ11, ^GSPC, ^IXIC, USDKRW=X])
+        """YFinanceService로 전날(target_date - 1일) 지수/환율 수집. 실패 시 None 필드."""
+        ...  # YFinanceService().fetch_daily([^KS11, ^KQ11, ^GSPC, ^IXIC, USDKRW=X], target_date - timedelta(days=1))
 
     def _call_claude_or_stub(self, indices: dict, context: dict) -> dict:
         """Claude API 호출 실패 시 스텁 반환."""
@@ -159,11 +162,11 @@ from cloud_server.services.briefing_service import BriefingService
 
 @router.get("/briefing")
 def get_briefing(
-    date: str = Query(None, description="YYYY-MM-DD, default: today"),
+    date_str: str = Query(None, alias="date", description="YYYY-MM-DD, default: today"),
     user: dict = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    target = _parse_date(date) or date_.today()
+    target = _parse_date(date_str) or date_.today()
     service = BriefingService()
     result = service.get_briefing(target, db)
     return {"success": True, "data": result}

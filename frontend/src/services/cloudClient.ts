@@ -181,6 +181,30 @@ export const cloudQuote = {
       .then((r) => r.data.data ?? null),
 }
 
+/** 시장 브리핑 — /api/v1/ai/briefing */
+export interface MarketBriefing {
+  date: string
+  summary: string
+  sentiment: 'bearish' | 'slightly_bearish' | 'neutral' | 'slightly_bullish' | 'bullish'
+  indices: {
+    kospi:   { close: number; change_pct: number } | null
+    kosdaq:  { close: number; change_pct: number } | null
+    sp500:   { close: number; change_pct: number } | null
+    nasdaq:  { close: number; change_pct: number } | null
+    usd_krw: number | null
+  }
+  source: 'claude' | 'cache' | 'stub'
+  generated_at: string
+}
+
+export const cloudAI = {
+  getBriefing: (date?: string) =>
+    client.get<{ success: boolean; data: MarketBriefing }>(
+      '/api/v1/ai/briefing',
+      date ? { params: { date } } : undefined,
+    ).then((r) => r.data.data),
+}
+
 /** 헬스 체크 — /health */
 export const cloudHealth = {
   check: () =>

@@ -13,6 +13,7 @@ from cloud_server.models.market import StockMaster, DailyBar, MinuteBar, Watchli
 from cloud_server.models.template import StrategyTemplate, BrokerServiceKey  # noqa: F401
 from cloud_server.models.fundamental import CompanyFinancial, CompanyDividend  # noqa: F401
 from cloud_server.models.ai import AIAnalysisLog  # noqa: F401
+from cloud_server.models.briefing import MarketBriefing  # noqa: F401
 
 
 def init_db() -> None:
