@@ -81,9 +81,33 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             except Exception as e:
                 logger.warning("서버 시작 시 토큰 자동 갱신 실패 (수동 로그인 필요): %s", e)
 
-    # 클라우드 하트비트 시작
-    heartbeat_task: asyncio.Task | None = None
+    # 클라우드 WS 릴레이 클라이언트 시작
+    ws_relay_task_ref: asyncio.Task | None = None
     cloud_url = cfg.get("cloud.url")
+    if cloud_url:
+        from local_server.cloud.ws_relay_client import WsRelayClient, set_ws_relay_client
+        ws_url = cfg.get("cloud.ws_url", "")
+        if not ws_url:
+            # http → ws, https → wss 자동 변환
+            ws_url = cloud_url.replace("https://", "wss://").replace("http://", "ws://")
+            ws_url = ws_url.rstrip("/") + "/ws/relay"
+
+        access_token, _ = load_cloud_tokens()
+        if access_token:
+            ws_client = WsRelayClient()
+
+            # command 핸들러 등록 (킬스위치, arm 등)
+            async def _handle_remote_command(msg: dict) -> None:
+                from local_server.cloud._command_handler import handle_command
+                await handle_command(app, msg)
+            ws_client.set_command_handler(_handle_remote_command)
+
+            set_ws_relay_client(ws_client)
+            await ws_client.start(ws_url, access_token)
+            logger.info("클라우드 WS 릴레이 시작: %s", ws_url)
+
+    # 클라우드 하트비트 시작 (WS 연결 여부와 관계없이 — HTTP 폴백용)
+    heartbeat_task: asyncio.Task | None = None
     if cloud_url:
         from local_server.cloud.heartbeat import start_heartbeat
         heartbeat_task = asyncio.create_task(start_heartbeat())
@@ -148,6 +172,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if wd:
         await wd.stop()
         logger.info("HealthWatchdog 중지")
+
+    # WS 릴레이 클라이언트 종료
+    from local_server.cloud.ws_relay_client import get_ws_relay_client
+    ws_client = get_ws_relay_client()
+    if ws_client:
+        await ws_client.stop()
+        logger.info("클라우드 WS 릴레이 종료")
 
     # 하트비트 태스크 취소
     if heartbeat_task and not heartbeat_task.done():
@@ -228,6 +259,9 @@ def create_app() -> FastAPI:
     app.include_router(quote_router.router, prefix="/api/quote", tags=["시세"])
     app.include_router(broker_router.router, prefix="/api/broker", tags=["브로커"])
     app.include_router(ws.router, tags=["WebSocket"])
+
+    from local_server.routers import devices as devices_router
+    app.include_router(devices_router.router, tags=["디바이스"])
 
     @app.get("/health", tags=["헬스체크"])
     async def health_check() -> dict:

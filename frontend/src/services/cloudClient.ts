@@ -222,6 +222,61 @@ export interface StockAnalysis {
   generated_at: string
 }
 
+/** OAuth2 — /api/v1/auth/oauth */
+export const cloudOAuth = {
+  getGoogleLoginUrl: (redirectUri: string) =>
+    client.get<{ data: { auth_url: string } }>(
+      '/api/v1/auth/oauth/google/login',
+      { params: { redirect_uri: redirectUri } },
+    ).then((r) => r.data.data.auth_url),
+
+  googleCallback: (code: string, redirectUri: string) =>
+    client.post<{ data: { access_token: string; refresh_token: string; expires_in: number } }>(
+      '/api/v1/auth/oauth/google/callback',
+      { code, redirect_uri: redirectUri },
+    ).then((r) => r.data.data),
+
+  getKakaoLoginUrl: (redirectUri: string) =>
+    client.get<{ data: { auth_url: string } }>(
+      '/api/v1/auth/oauth/kakao/login',
+      { params: { redirect_uri: redirectUri } },
+    ).then((r) => r.data.data.auth_url),
+
+  kakaoCallback: (code: string, redirectUri: string) =>
+    client.post<{ data: { access_token: string; refresh_token: string; expires_in: number } }>(
+      '/api/v1/auth/oauth/kakao/callback',
+      { code, redirect_uri: redirectUri },
+    ).then((r) => r.data.data),
+}
+
+/** 디바이스 관리 — /api/v1/devices */
+export interface DeviceInfo {
+  id: string
+  name: string | null
+  platform: string | null
+  registered_at: string | null
+  last_seen_at: string | null
+}
+
+export const cloudDevices = {
+  list: () =>
+    client.get<{ data: DeviceInfo[]; count: number }>('/api/v1/devices')
+      .then((r) => r.data.data),
+
+  register: (deviceId: string, name?: string, platform?: string) =>
+    client.post('/api/v1/devices/register', { device_id: deviceId, name, platform }),
+
+  deactivate: (deviceId: string) =>
+    client.delete(`/api/v1/devices/${deviceId}`),
+}
+
+/** 비밀번호 재검증 — /api/v1/auth/verify-password */
+export const cloudVerifyPassword = {
+  verify: (password: string) =>
+    client.post<{ success: boolean }>('/api/v1/auth/verify-password', { password })
+      .then((r) => r.data.success),
+}
+
 /** 헬스 체크 — /health */
 export const cloudHealth = {
   check: () =>

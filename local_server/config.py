@@ -22,6 +22,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     },
     "cloud": {
         "url": "",           # 클라우드 서버 URL (비어있으면 클라우드 연동 비활성화)
+        "ws_url": "",        # 클라우드 WS URL (비어있으면 cloud.url에서 자동 생성)
         "heartbeat_interval": 30,  # 하트비트 전송 간격 (초)
     },
     "broker": {

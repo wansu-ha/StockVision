@@ -12,6 +12,7 @@ from typing import Any
 
 from local_server.__version__ import __version__ as _VERSION
 from local_server.cloud.client import CloudClient, CloudClientError
+from local_server.cloud.ws_relay_client import get_ws_relay_client
 from local_server.config import get_config
 
 logger = logging.getLogger(__name__)
@@ -94,28 +95,39 @@ async def start_heartbeat() -> None:
     while True:
         try:
             payload = _build_heartbeat_payload()
-            resp = await client.send_heartbeat(payload)
-            logger.debug("하트비트 전송 완료")
 
-            # 버전 감지 → 자동 fetch
-            await _check_version_changes(
-                client, resp,
-                last_rules_version, last_context_version,
-                last_watchlist_version, last_stock_master_version,
-            )
+            # WS 우선, HTTP 폴백
+            ws_client = get_ws_relay_client()
+            if ws_client and ws_client.is_connected:
+                await ws_client.send_heartbeat(payload)
+                logger.debug("하트비트 전송 완료 (WS)")
+                # WS heartbeat_ack는 ws_relay_client._handle_heartbeat_ack에서 처리
+                # 버전 체크를 위해 HTTP 응답 형식으로 변환은 후속 개선
+                resp = None
+            else:
+                resp = await client.send_heartbeat(payload)
+                logger.debug("하트비트 전송 완료 (HTTP 폴백)")
 
-            # 서버 버전 업데이트 알림
-            _check_server_version(resp)
+            if resp:
+                # 버전 감지 → 자동 fetch
+                await _check_version_changes(
+                    client, resp,
+                    last_rules_version, last_context_version,
+                    last_watchlist_version, last_stock_master_version,
+                )
 
-            # 버전 갱신 (cloud가 int를 보내도 str로 통일)
-            if resp.get("rules_version") is not None:
-                last_rules_version = str(resp["rules_version"])
-            if resp.get("context_version") is not None:
-                last_context_version = str(resp["context_version"])
-            if resp.get("watchlist_version") is not None:
-                last_watchlist_version = str(resp["watchlist_version"])
-            if resp.get("stock_master_version") is not None:
-                last_stock_master_version = str(resp["stock_master_version"])
+                # 서버 버전 업데이트 알림
+                _check_server_version(resp)
+
+                # 버전 갱신 (cloud가 int를 보내도 str로 통일)
+                if resp.get("rules_version") is not None:
+                    last_rules_version = str(resp["rules_version"])
+                if resp.get("context_version") is not None:
+                    last_context_version = str(resp["context_version"])
+                if resp.get("watchlist_version") is not None:
+                    last_watchlist_version = str(resp["watchlist_version"])
+                if resp.get("stock_master_version") is not None:
+                    last_stock_master_version = str(resp["stock_master_version"])
 
             # 성공 → 실패 카운터 리셋 + 트레이 초록
             if consecutive_failures > 0:

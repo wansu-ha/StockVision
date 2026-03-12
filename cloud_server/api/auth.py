@@ -1,13 +1,16 @@
 """
 인증 API
 
-POST /api/v1/auth/register        회원가입 + 이메일 인증 발송
-GET  /api/v1/auth/verify-email    이메일 인증 완료
-POST /api/v1/auth/login           JWT + Refresh Token 발급
-POST /api/v1/auth/refresh         JWT 갱신 (Token Rotation)
-POST /api/v1/auth/logout          Refresh Token 무효화
-POST /api/v1/auth/forgot-password 재설정 이메일 발송
-POST /api/v1/auth/reset-password  새 비밀번호 설정
+POST /api/v1/auth/register                    회원가입 + 이메일 인증 발송
+GET  /api/v1/auth/verify-email                이메일 인증 완료
+POST /api/v1/auth/login                       JWT + Refresh Token 발급
+POST /api/v1/auth/refresh                     JWT 갱신 (Token Rotation)
+POST /api/v1/auth/logout                      Refresh Token 무효화
+POST /api/v1/auth/forgot-password             재설정 이메일 발송
+POST /api/v1/auth/reset-password              새 비밀번호 설정
+GET  /api/v1/auth/oauth/{provider}/login      OAuth 인증 URL 반환
+POST /api/v1/auth/oauth/{provider}/callback   OAuth code 교환 → JWT 발급
+POST /api/v1/auth/verify-password             비밀번호 재검증 (원격 arm용)
 """
 from datetime import datetime, timedelta
 
@@ -24,6 +27,7 @@ from cloud_server.core.security import (
 from cloud_server.models.user import (
     EmailVerificationToken, PasswordResetToken, RefreshToken, User
 )
+from cloud_server.api.dependencies import current_user
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
@@ -271,3 +275,92 @@ def reset_password(body: ResetPasswordBody, db: Session = Depends(get_db)):
     db.commit()
 
     return {"success": True, "message": "비밀번호가 재설정되었습니다."}
+
+
+# ── OAuth2 소셜 로그인 ─────────────────────────────────────────────
+
+
+class OAuthCallbackBody(BaseModel):
+    code: str
+    redirect_uri: str
+
+
+@router.get("/oauth/{provider}/login")
+def oauth_login(provider: str, redirect_uri: str = ""):
+    """OAuth2 인증 URL 반환."""
+    from cloud_server.services.oauth_service import OAuthService
+
+    if provider == "google":
+        url = OAuthService.get_google_auth_url(redirect_uri)
+    elif provider == "kakao":
+        url = OAuthService.get_kakao_auth_url(redirect_uri)
+    else:
+        raise HTTPException(status_code=400, detail=f"지원하지 않는 제공자: {provider}")
+
+    return {"success": True, "data": {"auth_url": url}}
+
+
+@router.post("/oauth/{provider}/callback")
+async def oauth_callback(
+    provider: str,
+    body: OAuthCallbackBody,
+    db: Session = Depends(get_db),
+):
+    """OAuth2 code 교환 → JWT 발급."""
+    from cloud_server.services.oauth_service import OAuthService
+
+    try:
+        if provider == "google":
+            tokens = await OAuthService.exchange_google_code(body.code, body.redirect_uri)
+            profile = await OAuthService.get_google_profile(tokens["access_token"])
+            provider_user_id = profile.get("id", "")
+            email = profile.get("email", "")
+            name = profile.get("name", "")
+        elif provider == "kakao":
+            tokens = await OAuthService.exchange_kakao_code(body.code, body.redirect_uri)
+            profile = await OAuthService.get_kakao_profile(tokens["access_token"])
+            provider_user_id = profile.get("id", "")
+            email = profile.get("email", "")
+            name = profile.get("name", "")
+        else:
+            raise HTTPException(status_code=400, detail=f"지원하지 않는 제공자: {provider}")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"OAuth2 인증 실패: {e}")
+
+    result = OAuthService.login_or_register(
+        provider=provider,
+        provider_user_id=provider_user_id,
+        email=email,
+        name=name,
+        db=db,
+    )
+    return {"success": True, "data": result}
+
+
+# ── 비밀번호 재검증 (원격 arm용) ────────────────────────────────────
+
+
+class VerifyPasswordBody(BaseModel):
+    password: str
+
+
+@router.post("/verify-password")
+def verify_password_endpoint(
+    body: VerifyPasswordBody,
+    user: dict = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    """비밀번호 재검증 (원격 arm 확인용). JWT 발급 없이 성공/실패만 반환."""
+    from cloud_server.api.dependencies import current_user  # noqa: already imported above
+
+    db_user = db.query(User).filter(User.id == user["sub"]).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+
+    if not db_user.password_hash:
+        raise HTTPException(status_code=400, detail="OAuth 전용 계정입니다. OAuth 재인증을 사용하세요.")
+
+    if not verify_password(db_user.password_hash, body.password):
+        raise HTTPException(status_code=401, detail="비밀번호가 올바르지 않습니다.")
+
+    return {"success": True}

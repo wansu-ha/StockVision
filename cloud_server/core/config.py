@@ -57,6 +57,21 @@ class Settings:
     # Redis (AI 캐시 + 향후 rate_limit 공용)
     REDIS_URL: str = os.environ.get("REDIS_URL", "")
 
+    # OAuth2 — Google
+    GOOGLE_CLIENT_ID: str = os.environ.get("GOOGLE_CLIENT_ID", "")
+    GOOGLE_CLIENT_SECRET: str = os.environ.get("GOOGLE_CLIENT_SECRET", "")
+    GOOGLE_REDIRECT_URI: str = os.environ.get("GOOGLE_REDIRECT_URI", "")
+
+    # OAuth2 — Kakao
+    KAKAO_CLIENT_ID: str = os.environ.get("KAKAO_CLIENT_ID", "")
+    KAKAO_CLIENT_SECRET: str = os.environ.get("KAKAO_CLIENT_SECRET", "")
+    KAKAO_REDIRECT_URI: str = os.environ.get("KAKAO_REDIRECT_URI", "")
+
+    # 이메일 발송 (SendGrid)
+    EMAIL_PROVIDER: str = os.environ.get("EMAIL_PROVIDER", "sendgrid")
+    EMAIL_API_KEY: str = os.environ.get("EMAIL_API_KEY", "")
+    EMAIL_FROM: str = os.environ.get("EMAIL_FROM", "noreply@stockvision.com")
+
     # 로컬 서버 버전 정보
     LOCAL_SERVER_LATEST_VERSION: str = os.environ.get("LOCAL_SERVER_LATEST_VERSION", "1.0.0")
     LOCAL_SERVER_MIN_SUPPORTED: str = os.environ.get("LOCAL_SERVER_MIN_SUPPORTED", "1.0.0")

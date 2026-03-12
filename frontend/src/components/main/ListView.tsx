@@ -65,7 +65,7 @@ interface ListViewProps {
   onDetail: (stock: Stock) => void
   engineRunning: boolean
   brokerConnected: boolean
-  onStrategyToggle: () => void
+  onStrategyToggle?: () => void
   strategyLoading: boolean
 }
 
@@ -133,7 +133,7 @@ export default function ListView({
             {brokerConnected ? (
               <button
                 onClick={onStrategyToggle}
-                disabled={strategyLoading}
+                disabled={strategyLoading || !onStrategyToggle}
                 className={`px-2.5 py-1 rounded-lg text-xs font-medium transition ${
                   engineRunning
                     ? 'bg-red-900/50 text-red-400 border border-red-800 hover:bg-red-900'

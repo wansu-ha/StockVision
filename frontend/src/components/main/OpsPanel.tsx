@@ -17,6 +17,8 @@ interface OpsPanelProps {
   isMock: boolean | null
   killSwitch?: boolean
   lossLock?: boolean
+  isRemote?: boolean
+  remoteConnected?: boolean
 }
 
 interface StatusItem {
@@ -80,7 +82,7 @@ function StatusPopover({
   }
 }
 
-export default function OpsPanel({ localConnected, brokerConnected, engineRunning, isMock, killSwitch, lossLock }: OpsPanelProps) {
+export default function OpsPanel({ localConnected, brokerConnected, engineRunning, isMock, killSwitch, lossLock, isRemote, remoteConnected }: OpsPanelProps) {
   const navigate = useNavigate()
   const [openPopover, setOpenPopover] = useState<string | null>(null)
 
@@ -184,6 +186,14 @@ export default function OpsPanel({ localConnected, brokerConnected, engineRunnin
       {/* 상태 + 요약 */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4 sm:gap-5 flex-wrap">
+          {/* 원격 모드 배지 */}
+          {isRemote && (
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+              remoteConnected ? 'bg-blue-900/50 text-blue-400' : 'bg-gray-700 text-gray-400'
+            }`}>
+              {remoteConnected ? '원격' : '원격 (연결 중...)'}
+            </span>
+          )}
           {statuses.map((s) => (
             <div key={s.label} className="relative">
               <button
