@@ -1,0 +1,39 @@
+services:
+  # 클라우드 서버 (FastAPI)
+  - type: web
+    name: stockvision-api
+    runtime: docker
+    dockerfilePath: cloud_server/Dockerfile
+    dockerContext: .
+    branch: dev
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: stockvision-db
+          property: connectionString
+      - key: SECRET_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: DART_API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        value: https://stockvision.pages.dev
+      - key: CLOUD_URL
+        value: https://stockvision-api.onrender.com
+      - key: ENV
+        value: production
+
+  # Redis (선택 — 없으면 in-memory 폴백)
+  - type: redis
+    name: stockvision-redis
+    plan: free
+    maxmemoryPolicy: allkeys-lru
+
+databases:
+  - name: stockvision-db
+    plan: free
+    databaseName: stockvision
+    user: stockvision_user
