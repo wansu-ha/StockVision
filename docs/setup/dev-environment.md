@@ -11,44 +11,59 @@
 
 ---
 
-## 1. Cloudflare Pages 설정 (프론트엔드)
+## 1. Netlify 설정 (프론트엔드)
 
-### 1-1. 계정 생성
-1. [dash.cloudflare.com](https://dash.cloudflare.com) 접속
-2. 이메일로 가입 (무료)
+### 1-1. 계정 생성 + 프로젝트 연결
+1. [app.netlify.com](https://app.netlify.com) 접속
+2. **GitHub 계정으로 로그인**
+3. **Add new site** → **Import an existing project**
+4. **GitHub** 선택 → StockVision 레포 선택
 
-### 1-2. Pages 프로젝트 생성
-1. 좌측 메뉴 → **Workers & Pages**
-2. **Create** → **Pages** → **Connect to Git**
-3. GitHub 계정 연결 → StockVision 레포 선택
-4. 설정 입력:
+### 1-2. 빌드 설정
 
 | 항목 | 값 |
 |------|-----|
-| Production branch | `dev` |
-| Framework preset | `None` |
-| Build command | `cd frontend && npm install && npm run build` |
-| Build output directory | `frontend/dist` |
-| Root directory | `/` (비워두면 됨) |
+| **Branch to deploy** | `dev` |
+| **Base directory** | `frontend` |
+| **Build command** | `npm install && npm run build` |
+| **Publish directory** | `frontend/dist` |
 
 ### 1-3. 환경변수 설정
-Settings → Environment Variables → **Production** 탭:
+
+같은 화면 아래 **Environment variables** 섹션에서 추가:
 
 | 변수 | 값 |
 |------|-----|
 | `VITE_CLOUD_API_URL` | `https://stockvision-api.onrender.com` |
-| `NODE_VERSION` | `22` |
 
-> Preview 탭에도 동일하게 설정하면 PR 프리뷰에서도 API가 연결됩니다.
+### 1-4. 배포
 
-### 1-4. 배포 확인
-1. **Save and Deploy** 클릭
-2. 빌드 로그에서 성공 확인 (1-2분 소요)
-3. 부여된 URL 확인: `https://{프로젝트명}.pages.dev`
-4. 접속 → 로그인 페이지 표시되면 성공
+1. **Deploy site** 클릭
+2. 빌드 로그 실시간 확인 (1-2분 소요)
+3. 성공 시 URL 부여: `https://{랜덤}.netlify.app`
 
-> 프로젝트명 `stockvision`이 점유되었으면 `stockvision-dev` 등으로 변경.
-> 이 경우 Render의 CORS_ORIGINS도 변경된 URL로 맞춰야 합니다.
+### 1-5. 사이트 이름 변경
+
+1. **Site configuration** → **Site details** → **Change site name**
+2. `stockvision`으로 변경 → `https://stockvision.netlify.app`
+3. 이미 점유되었으면 `stockvision-dev` 등
+
+> ⚠️ 사이트 이름 변경 시 Render의 `CORS_ORIGINS`도 새 URL로 맞춰야 합니다.
+
+### 1-6. 배포 확인
+
+- [ ] `https://stockvision.netlify.app` 접속 가능
+- [ ] 로그인 페이지 표시
+- [ ] SPA 라우팅 동작 (`/settings` 직접 접속 시 404 아닌 정상 표시)
+
+> SPA 라우팅은 `frontend/public/_redirects` 파일(`/* /index.html 200`)이 처리합니다.
+> Netlify도 `_redirects` 파일을 동일하게 지원합니다.
+
+### 1-7. 자동 배포
+
+- `dev` 브랜치에 push하면 Netlify가 자동 빌드 + 배포
+- PR을 열면 프리뷰 URL 자동 생성 (Deploy Previews)
+- **Deploys** 탭에서 빌드 기록 확인 가능
 
 ---
 
@@ -75,7 +90,7 @@ Dashboard → `stockvision-api` → **Environment** 탭:
 | `SECRET_KEY` | `python -c "import secrets; print(secrets.token_urlsafe(32))"` 결과 | JWT 서명 키 |
 | `ANTHROPIC_API_KEY` | Claude API 키 | AI 분석용 |
 | `DART_API_KEY` | 금감원 API 키 | 재무 데이터 |
-| `CORS_ORIGINS` | `https://stockvision.pages.dev` | Cloudflare Pages URL |
+| `CORS_ORIGINS` | `https://stockvision.netlify.app` | Netlify URL (정확히 일치해야 함) |
 | `CLOUD_URL` | `https://stockvision-api.onrender.com` | 이메일 링크 등에 사용 |
 | `ENV` | `production` | 환경 구분 |
 
@@ -90,7 +105,7 @@ Dashboard → `stockvision-api` → **Environment** 탭:
 
 ### 2-5. CORS 확인
 프론트엔드에서 API 호출이 되는지 확인:
-1. `https://stockvision.pages.dev` 접속
+1. `https://stockvision.netlify.app` 접속
 2. 로그인 시도 → API 호출이 CORS 에러 없이 처리되면 성공
 3. CORS 에러 발생 시 → Render 환경변수 `CORS_ORIGINS` 값 확인
 
@@ -98,9 +113,11 @@ Dashboard → `stockvision-api` → **Environment** 탭:
 
 ## 3. UptimeRobot 설정 (슬립 방지)
 
+Render 무료 티어는 15분 미활동 시 서버가 슬립됩니다. UptimeRobot이 5분마다 핑을 보내서 방지.
+
 ### 3-1. 계정 생성
 1. [uptimerobot.com](https://uptimerobot.com) 접속
-2. 이메일로 가입 (무료)
+2. 이메일로 가입 (무료 — 50개 모니터, 5분 간격)
 
 ### 3-2. 모니터 생성
 1. Dashboard → **Add New Monitor**
@@ -130,12 +147,12 @@ Dashboard → `stockvision-api` → **Environment** 탭:
 1. `feat/*` 브랜치에서 프론트엔드 파일 수정
 2. `dev` 브랜치에 머지 (PR 또는 직접 머지)
 3. 확인:
-   - [ ] Cloudflare Pages 대시보드 → 빌드 시작됨
+   - [ ] Netlify 대시보드 → 빌드 시작됨
    - [ ] Render 대시보드 → 배포 시작됨
    - [ ] GitHub Actions → CI 워크플로우 실행됨
 
 ### 프론트엔드 확인
-- [ ] `https://stockvision.pages.dev` 접속 가능
+- [ ] `https://stockvision.netlify.app` 접속 가능
 - [ ] 로그인 페이지 표시
 - [ ] SPA 라우팅 동작 (`/settings` 직접 접속 시 404 아닌 정상 표시)
 
@@ -172,18 +189,26 @@ git push origin v1.0.0-dev
 
 ## 6. 트러블슈팅
 
-### Cloudflare Pages 빌드 실패
-- **`npm ci` 실패**: `NODE_VERSION` 환경변수가 `22`인지 확인
-- **`tsc` 에러**: 로컬에서 `npm run build` 먼저 확인
-- **`_redirects` 미적용**: `frontend/public/_redirects` 파일 존재 확인
+### Netlify
 
-### Render 배포 실패
-- **Docker 빌드 실패**: 로컬에서 `docker build -f cloud_server/Dockerfile .` 테스트
-- **health check 실패**: `SECRET_KEY` 환경변수가 설정되었는지 확인 (없으면 서버 시작 실패)
-- **DB 연결 실패**: `DATABASE_URL`이 자동 주입되는지 render.yaml 확인
+| 증상 | 원인 | 해결 |
+|------|------|------|
+| `npm install` 실패 | Node 버전 불일치 | 환경변수 `NODE_VERSION=22` 추가 |
+| `tsc` 에러 | TypeScript 빌드 에러 | 로컬에서 `cd frontend && npm run build` 먼저 확인 |
+| SPA 라우팅 404 | `_redirects` 파일 누락 | `frontend/public/_redirects` 존재 확인 |
+| 환경변수 변경 후 반영 안 됨 | 재빌드 필요 | Deploys 탭 → Trigger deploy → Deploy site |
+| `dev`가 아닌 `main`으로 배포됨 | Branch 설정 | Site configuration → Branch & deploy contexts → Production branch를 `dev`로 변경 |
+
+### Render
+
+| 증상 | 원인 | 해결 |
+|------|------|------|
+| Docker 빌드 실패 | Dockerfile 문제 | 로컬에서 `docker build -f cloud_server/Dockerfile .` 테스트 |
+| health check 실패 | SECRET_KEY 미설정 | `SECRET_KEY` 환경변수 확인 (없으면 서버 시작 실패) |
+| DB 연결 실패 | DATABASE_URL 미주입 | render.yaml의 `fromDatabase` 설정 확인 |
 
 ### CORS 에러
-- Render 환경변수 `CORS_ORIGINS`가 Cloudflare Pages URL과 정확히 일치하는지 확인
+- Render 환경변수 `CORS_ORIGINS`가 Netlify URL과 **정확히** 일치하는지 확인
 - 프로토콜 (`https://`) 포함, 끝에 `/` 없이
 
 ### Render 슬립
