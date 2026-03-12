@@ -37,6 +37,7 @@ class CandidateSignal:
     latest_price: float
     reason: str
     raw_rule: dict[str, Any] = field(default_factory=dict)
+    intent_id: str | None = None  # 로그 추적용 (타임라인 그룹핑)
 
 
 @dataclass

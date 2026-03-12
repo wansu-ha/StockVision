@@ -32,11 +32,13 @@ CREATE TABLE IF NOT EXISTS logs (
     log_type  TEXT    NOT NULL,
     symbol    TEXT,
     message   TEXT    NOT NULL,
-    meta      TEXT    DEFAULT '{}'
+    meta      TEXT    DEFAULT '{}',
+    intent_id TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_logs_ts ON logs(ts);
 CREATE INDEX IF NOT EXISTS idx_logs_type ON logs(log_type);
+CREATE INDEX IF NOT EXISTS idx_logs_intent ON logs(intent_id);
 """
 
 
@@ -48,10 +50,16 @@ class LogDB:
         self._init_db()
 
     def _init_db(self) -> None:
-        """DB 초기화 및 테이블 생성."""
+        """DB 초기화 및 테이블 생성 + 마이그레이션."""
         self._path.parent.mkdir(parents=True, exist_ok=True)
         with sqlite3.connect(str(self._path)) as conn:
             conn.executescript(_CREATE_TABLE_SQL)
+            # 기존 DB 마이그레이션: intent_id 컬럼 없으면 추가
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(logs)").fetchall()}
+            if "intent_id" not in columns:
+                conn.execute("ALTER TABLE logs ADD COLUMN intent_id TEXT")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_logs_intent ON logs(intent_id)")
+                logger.info("로그 DB 마이그레이션: intent_id 컬럼 추가")
         logger.debug("로그 DB 초기화: %s", self._path)
 
     def write(
@@ -60,6 +68,7 @@ class LogDB:
         message: str,
         symbol: str | None = None,
         meta: dict[str, Any] | None = None,
+        intent_id: str | None = None,
     ) -> int:
         """로그를 기록하고 생성된 ID를 반환한다.
 
@@ -68,6 +77,7 @@ class LogDB:
             message: 로그 메시지
             symbol: 관련 종목 코드 (없으면 None)
             meta: 추가 메타데이터 (JSON 직렬화 가능한 딕셔너리)
+            intent_id: 주문 단위 그룹핑 ID (타임라인 추적용)
 
         Returns:
             생성된 로그 레코드 ID
@@ -77,8 +87,8 @@ class LogDB:
 
         with sqlite3.connect(str(self._path)) as conn:
             cursor = conn.execute(
-                "INSERT INTO logs (ts, log_type, symbol, message, meta) VALUES (?, ?, ?, ?, ?)",
-                (ts, log_type, symbol, message, meta_json),
+                "INSERT INTO logs (ts, log_type, symbol, message, meta, intent_id) VALUES (?, ?, ?, ?, ?, ?)",
+                (ts, log_type, symbol, message, meta_json, intent_id),
             )
             return cursor.lastrowid  # type: ignore[return-value]
 
@@ -140,6 +150,7 @@ class LogDB:
                 "symbol": row["symbol"],
                 "message": row["message"],
                 "meta": json.loads(row["meta"] or "{}"),
+                "intent_id": row["intent_id"] if "intent_id" in row.keys() else None,
             }
             for row in rows
         ]

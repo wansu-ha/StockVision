@@ -86,6 +86,15 @@ export interface LogSummary {
   errors: number
 }
 
+export interface DailyPnL {
+  date: string
+  realized_pnl: number
+  fill_count: number
+  win_count: number
+  loss_count: number
+  win_rate: number
+}
+
 export const localLogs = {
   get: (filters?: LogFilter) =>
     client.get<{ data: ExecutionLog[] }>('/logs', { params: filters })
@@ -93,6 +102,10 @@ export const localLogs = {
       .catch(() => []),
   summary: (date?: string) =>
     client.get<{ data: LogSummary }>('/logs/summary', { params: date ? { date } : undefined })
+      .then((r) => r.data.data ?? null)
+      .catch(() => null),
+  dailyPnl: (date?: string) =>
+    client.get<{ data: DailyPnL }>('/logs/daily-pnl', { params: date ? { date } : undefined })
       .then((r) => r.data.data ?? null)
       .catch(() => null),
 }

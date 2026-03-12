@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { logsApi } from '../services/logs'
-import type { LogEntry } from '../services/logs'
+import type { LogEntry, TimelineEntry } from '../services/logs'
 import ExecutionTimeline from '../components/main/ExecutionTimeline'
 
 const LOG_TYPE_STYLE: Record<string, string> = {
@@ -54,6 +54,7 @@ function formatTime(ts: string): string {
 export default function ExecutionLog() {
   const [dateFrom, setDateFrom] = useState('')
   const [viewMode, setViewMode] = useState<'table' | 'timeline'>('table')
+  const [stateFilter, setStateFilter] = useState<string | undefined>()
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['execution-logs', dateFrom],
@@ -70,7 +71,21 @@ export default function ExecutionLog() {
     refetchInterval: 10_000,
   })
 
+  // 타임라인 데이터 (별도 쿼리)
+  const today = new Date().toISOString().split('T')[0]
+  const { data: timelineData, isLoading: timelineLoading, error: timelineError } = useQuery({
+    queryKey: ['execution-timeline', dateFrom || today, stateFilter],
+    queryFn: () => logsApi.getTimeline({
+      date_from: dateFrom || today,
+      limit: 50,
+      state: stateFilter,
+    }),
+    enabled: viewMode === 'timeline',
+    refetchInterval: 10_000,
+  })
+
   const logs: LogEntry[] = data?.data?.items ?? []
+  const timeline: TimelineEntry[] = timelineData?.data?.items ?? []
   const sum = summary?.data
 
   return (
@@ -114,6 +129,22 @@ export default function ExecutionLog() {
               초기화
             </button>
           )}
+          {/* 타임라인 전용 필터 */}
+          {viewMode === 'timeline' && (
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">상태</label>
+              <select
+                value={stateFilter || ''}
+                onChange={e => setStateFilter(e.target.value || undefined)}
+                className="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm text-gray-300"
+              >
+                <option value="">전체</option>
+                <option value="FILLED">체결</option>
+                <option value="BLOCKED">차단</option>
+                <option value="FAILED">실패</option>
+              </select>
+            </div>
+          )}
         </div>
 
         {/* 뷰 토글 */}
@@ -135,7 +166,7 @@ export default function ExecutionLog() {
 
       {/* 뷰 */}
       {viewMode === 'timeline' ? (
-        <ExecutionTimeline logs={logs} isLoading={isLoading} error={!!error} />
+        <ExecutionTimeline items={timeline} isLoading={timelineLoading} error={!!timelineError} />
       ) : (
         <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
           {isLoading ? (

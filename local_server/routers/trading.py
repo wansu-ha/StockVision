@@ -39,23 +39,10 @@ def _get_engine(request: Request) -> StrategyEngine | None:
 
 
 def _on_execution(result: ExecutionResult) -> None:
-    """엔진 실행 결과 콜백 — logs.db 기록 + WS 브로드캐스트."""
-    log_db = get_log_db()
-    log_db.write(
-        LOG_TYPE_FILL,
-        f"{result.side} {result.symbol} — {result.status.value}: {result.message}",
-        symbol=result.symbol,
-        meta={
-            "rule_id": result.rule_id,
-            "side": result.side,
-            "order_id": result.order_id,
-            "status": result.status.value,
-            "realized_pnl": str(result.realized_pnl) if result.realized_pnl else None,
-            "cycle_id": result.cycle_id,
-            "signal_id": result.signal_id,
-        },
-    )
+    """엔진 실행 결과 콜백 — WS 브로드캐스트.
 
+    Note: log_db 기록은 executor.py에서 intent_id 포함하여 직접 수행.
+    """
     ws_msg = {
         "type": WS_TYPE_EXECUTION,
         "data": {
