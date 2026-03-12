@@ -1,6 +1,6 @@
 # 원격 제어 (Remote Control)
 
-> 작성일: 2026-03-12 | 상태: 초안 | Phase C
+> 작성일: 2026-03-12 | 상태: 확정 | Phase C (C6 + C7 + C8)
 
 ## 1. 배경
 
@@ -205,3 +205,141 @@ Body: { confirm_code: string }
 - [ ] 원격에서 2단계 확인을 거쳐 엔진을 재개할 수 있다
 - [ ] 조건 미충족 시 구체적 사유가 표시된다
 - [ ] 로컬 서버 오프라인 시 재개가 금지된다
+
+### PWA + 웹 푸시
+- [ ] 프론트엔드가 PWA로 설치 가능하다 (manifest.json + Service Worker)
+- [ ] Android Chrome에서 웹 푸시 알림이 수신된다
+- [ ] iOS Safari (16.4+)에서 홈화면 추가 후 웹 푸시가 수신된다
+- [ ] 체결/오류/긴급 상황별 개인화된 알림이 전송된다
+- [ ] 푸시 알림 클릭 시 해당 화면으로 이동한다
+
+### 외부 주문 감지
+- [ ] 엔진 외부에서 발생한 주문이 감지된다
+- [ ] 외부 주문 감지 시 경고 알림이 표시된다
+- [ ] 설정에 따라 외부 주문 감지 시 엔진 자동 정지가 가능하다
+
+---
+
+## 11. 전달 채널: PWA + 웹 푸시 (FCM)
+
+### 11.1 채널 결정 (2026-03-12)
+
+| 결정 | 내용 |
+|------|------|
+| 주 채널 | **PWA** — 기존 React SPA에 반응형 + Service Worker 추가 |
+| 알림 | **웹 푸시 (FCM)** — Android 완벽, iOS 16.4+ 지원 |
+| 메신저 | 당장은 안 함. iOS 푸시 불만 시 보조 채널로 검토 |
+| 네이티브 앱 | 과도. 사용자 규모 커지면 검토 |
+
+근거: 프론트엔드 코드베이스 하나로 PC(풀 기능) + 모바일(모니터링/알림/긴급 제어) 커버. 별도 앱/봇 코드베이스 불필요. 한국 Android 70%+ 점유율.
+
+### 11.2 PWA 구성
+
+**프론트엔드 추가 파일**:
+- `public/manifest.json` — 앱 이름, 아이콘, 테마 색상, display: standalone
+- `public/sw.js` — Service Worker (캐시 전략 + 푸시 수신)
+- `public/firebase-messaging-sw.js` — FCM 백그라운드 메시지 처리
+
+**기존 파일 수정**:
+- `index.html` — manifest 링크, 메타 태그 (theme-color, apple-mobile-web-app-capable)
+- `App.tsx` — Service Worker 등록, 푸시 권한 요청 흐름
+
+### 11.3 푸시 알림 아키텍처
+
+```
+로컬 서버 (이벤트 발생)
+    ↓ 하트비트/이벤트 채널
+클라우드 서버
+    ↓ FCM HTTP v1 API
+Firebase Cloud Messaging
+    ↓
+사용자 브라우저/PWA (Service Worker)
+    ↓
+OS 알림 센터
+```
+
+### 11.4 푸시 토큰 관리
+
+```
+POST /api/v1/push/register
+Body: { push_token: string, platform: 'web' | 'android' | 'ios' }
+```
+
+- 사용자 로그인 시 브라우저가 FCM 토큰 발급
+- 프론트가 클라우드 서버에 `{ user_id, push_token }` 등록
+- JWT 만료와 무관 — 푸시 토큰은 별도 채널
+- 토큰 갱신 시 자동 업데이트
+
+### 11.5 알림 유형
+
+| 이벤트 | 제목 | 본문 예시 | 우선순위 |
+|--------|------|-----------|---------|
+| 체결 | "체결 완료" | "삼성전자 10주 매수 — 72,400원" | normal |
+| 주문 실패 | "주문 실패" | "SK하이닉스 매수 실패 — 일일 예산 초과" | high |
+| Kill Switch | "긴급: 엔진 정지" | "Kill Switch 발동 — 신규 주문 차단됨" | high |
+| Loss Lock | "손실 한도 도달" | "일일 손실 한도 도달 — 자동 정지" | high |
+| 엔진 중단 | "엔진 응답 없음" | "엔진이 3분째 응답 없음 — 확인 필요" | high |
+| 브로커 연결 해제 | "브로커 연결 끊김" | "키움증권 연결 해제 — 재연결 시도 중" | high |
+
+### 11.6 모바일 반응형 UI
+
+기존 PC 레이아웃을 모바일에서도 사용 가능하도록 반응형 처리:
+- OpsPanel: 가로 스크롤 또는 2줄 래핑
+- ListView: 카드형 레이아웃 전환
+- DetailView: 탭 기반 세로 배치
+- 킬스위치 버튼: 하단 고정 FAB (Floating Action Button)
+
+---
+
+## 12. 외부 주문 감지 (C8)
+
+### 12.1 배경
+
+사용자가 HTS/MTS에서 직접 주문을 넣으면 StockVision 엔진이 알지 못하는 포지션 변동이 발생한다. 이로 인해:
+- 엔진이 이미 매수된 종목에 중복 매수를 시도할 수 있음
+- 리스크 한도 계산이 실제와 맞지 않을 수 있음
+- 일일 P&L 집계가 불완전할 수 있음
+
+### 12.2 감지 방식
+
+엔진의 주기적 잔고 조회(reconciliation) 시:
+1. 브로커 API로 현재 잔고 조회
+2. 엔진이 알고 있는 포지션(`PortfolioSnapshot`)과 비교
+3. 불일치 발견 시 `external_order_detected = True` 플래그 설정
+
+### 12.3 감지 시 동작
+
+| 설정 | 동작 |
+|------|------|
+| `warn_only` (기본) | 경고 로그 + WS 알림 + OpsPanel 배너. 엔진 계속 실행 |
+| `auto_stop` | 경고 + 엔진 자동 정지. 사용자 확인 후 재개 |
+
+### 12.4 API
+
+```
+GET /api/status → data.strategy_engine.external_order_detected: boolean
+```
+
+기존 status 엔드포인트에 필드 추가.
+
+### 12.5 프론트엔드
+
+OpsPanel 경고 배너에 추가:
+```
+⚠ 외부 주문 감지 — StockVision 외부에서 주문이 실행되었습니다. 잔고를 확인하세요.
+```
+
+### 12.6 수용 기준
+
+- [ ] 엔진 외부에서 발생한 포지션 변동이 감지된다
+- [ ] 감지 시 OpsPanel에 경고 배너가 표시된다
+- [ ] `auto_stop` 설정 시 엔진이 자동 정지된다
+- [ ] 감지 이벤트가 실행 로그에 기록된다
+
+## 13. 참고
+
+- 권한 모델: `docs/product/remote-permission-model.md`
+- 벤치마크: `docs/research/phase-c-dashboard-benchmark.md` §7
+- System Trader: `spec/system-trader/spec.md` (PortfolioSnapshot, external_order_detected)
+- 기존 상태 API: `local_server/routers/status.py`
+- WS 이벤트: `frontend/src/hooks/useLocalBridgeWS.ts`
