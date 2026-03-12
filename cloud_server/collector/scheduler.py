@@ -7,6 +7,8 @@
 - 08:00 KST: 종목 마스터 갱신
 - 17:00 KST: yfinance 보조 수집
 - 18:00 KST: 데이터 정합성 체크
+- 06:00 KST (평일): 시장 브리핑 생성
+- 07:00 KST (평일): 종목별 AI 분석 생성
 """
 import asyncio
 import logging
@@ -18,6 +20,7 @@ from apscheduler.triggers.cron import CronTrigger
 from cloud_server.collector.kis_collector import KisCollector, get_major_symbols
 from cloud_server.core.broker_factory import BrokerFactory
 from cloud_server.core.database import get_db_session
+from cloud_server.services.briefing_service import BriefingService
 from cloud_server.services.market_repository import MarketRepository
 from cloud_server.services.yfinance_service import YFinanceService, DEFAULT_SYMBOLS
 
@@ -94,6 +97,22 @@ class CollectorScheduler:
             self.update_corp_codes,
             trigger=CronTrigger(day_of_week="mon", hour=8, minute=30, timezone="Asia/Seoul"),
             id="corp_code_update",
+            replace_existing=True,
+        )
+
+        # 06:00 KST 평일 — 시장 브리핑 생성
+        self.scheduler.add_job(
+            self._run_briefing,
+            trigger=CronTrigger(hour=6, minute=0, day_of_week="mon-fri", timezone="Asia/Seoul"),
+            id="market_briefing",
+            replace_existing=True,
+        )
+
+        # 07:00 KST 평일 — 종목별 AI 분석 생성
+        self.scheduler.add_job(
+            self._run_stock_analysis,
+            trigger=CronTrigger(hour=7, minute=0, day_of_week="mon-fri", timezone="Asia/Seoul"),
+            id="stock_analysis",
             replace_existing=True,
         )
 
@@ -319,3 +338,24 @@ class CollectorScheduler:
         except Exception as e:
             _collector_status["error_count"] += 1
             logger.error(f"정합성 체크 실패: {e}")
+
+    async def _run_briefing(self) -> None:
+        """시장 브리핑 생성 (06:00 KST 평일)"""
+        try:
+            BriefingService().generate_today()
+            logger.info("시장 브리핑 생성 완료")
+        except Exception as e:
+            logger.error("시장 브리핑 생성 실패: %s", e)
+
+    async def _run_stock_analysis(self) -> None:
+        """종목별 AI 분석 생성 (07:00 KST 평일).
+        generate_all_today()는 동기 함수이고 최대 50종목 × Claude 호출로 장시간 실행.
+        asyncio.to_thread로 백그라운드 스레드에서 순차 실행 → 이벤트 루프 블로킹 방지.
+        """
+        import asyncio
+        try:
+            from cloud_server.services.stock_analysis_service import StockAnalysisService
+            await asyncio.to_thread(StockAnalysisService().generate_all_today)
+            logger.info("종목별 분석 생성 완료")
+        except Exception as e:
+            logger.error("종목별 분석 생성 실패: %s", e)

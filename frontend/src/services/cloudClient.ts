@@ -181,6 +181,47 @@ export const cloudQuote = {
       .then((r) => r.data.data ?? null),
 }
 
+/** 시장 브리핑 — /api/v1/ai/briefing */
+export interface MarketBriefing {
+  date: string
+  summary: string
+  sentiment: 'bearish' | 'slightly_bearish' | 'neutral' | 'slightly_bullish' | 'bullish'
+  indices: {
+    kospi:   { close: number; change_pct: number } | null
+    kosdaq:  { close: number; change_pct: number } | null
+    sp500:   { close: number; change_pct: number } | null
+    nasdaq:  { close: number; change_pct: number } | null
+    usd_krw: number | null
+  }
+  source: 'claude' | 'cache' | 'stub'
+  generated_at: string
+}
+
+export const cloudAI = {
+  getBriefing: (date?: string) =>
+    client.get<{ success: boolean; data: MarketBriefing }>(
+      '/api/v1/ai/briefing',
+      date ? { params: { date } } : undefined,
+    ).then((r) => r.data.data),
+
+  getStockAnalysis: (symbol: string, date?: string) =>
+    client.get<{ success: boolean; data: StockAnalysis }>(
+      `/api/v1/ai/stock-analysis/${symbol}`,
+      date ? { params: { date } } : undefined,
+    ).then((r) => r.data.data),
+}
+
+/** 종목별 AI 분석 — /api/v1/ai/stock-analysis/{symbol} */
+export interface StockAnalysis {
+  symbol: string
+  name: string | null
+  date: string
+  summary: string | null
+  sentiment: 'bearish' | 'slightly_bearish' | 'neutral' | 'slightly_bullish' | 'bullish'
+  source: 'claude' | 'cache' | 'stub'
+  generated_at: string
+}
+
 /** 헬스 체크 — /health */
 export const cloudHealth = {
   check: () =>

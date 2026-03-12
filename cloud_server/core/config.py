@@ -52,6 +52,7 @@ class Settings:
     CLAUDE_MODEL: str = os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-20250514")
     AI_DAILY_LIMIT: int = int(os.environ.get("AI_DAILY_LIMIT", "100"))
     AI_CACHE_TTL: int = int(os.environ.get("AI_CACHE_TTL", "3600"))
+    AI_STOCK_LIMIT: int = int(os.environ.get("AI_STOCK_LIMIT", "50"))
 
     # Redis (AI 캐시 + 향후 rate_limit 공용)
     REDIS_URL: str = os.environ.get("REDIS_URL", "")
