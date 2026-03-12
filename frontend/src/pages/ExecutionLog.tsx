@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { logsApi } from '../services/logs'
 import type { LogEntry, TimelineEntry } from '../services/logs'
@@ -54,8 +55,12 @@ function formatTime(ts: string): string {
 }
 
 export default function ExecutionLog() {
+  const [searchParams] = useSearchParams()
   const [dateFrom, setDateFrom] = useState('')
-  const [viewMode, setViewMode] = useState<'table' | 'timeline' | 'alerts'>('table')
+  const initialTab = searchParams.get('tab')
+  const [viewMode, setViewMode] = useState<'table' | 'timeline' | 'alerts'>(
+    initialTab === 'alerts' ? 'alerts' : initialTab === 'timeline' ? 'timeline' : 'table'
+  )
   const [stateFilter, setStateFilter] = useState<string | undefined>()
 
   const { data, isLoading, error } = useQuery({
