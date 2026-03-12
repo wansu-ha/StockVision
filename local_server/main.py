@@ -17,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from local_server.__version__ import __version__ as _VERSION
 from local_server.config import get_config
 from local_server.core.local_auth import generate_secret
-from local_server.routers import account, auth, config as config_router, logs, results, rules, status, trading, ws
+from local_server.routers import account, alerts as alerts_router, auth, config as config_router, logs, results, rules, status, trading, ws
 from local_server.routers import quote as quote_router, broker as broker_router
 
 logger = logging.getLogger(__name__)
@@ -107,6 +107,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.broker_reason = "connect_failed"
         logger.warning("브로커 자동 연결 실패: %s", e)
 
+    # HealthWatchdog 시작
+    from local_server.engine.alert_monitor import AlertMonitor
+    from local_server.engine.health_watchdog import HealthWatchdog
+    app.state.alert_monitor = AlertMonitor(config=cfg.get("alerts"))
+    watchdog = HealthWatchdog(alert_monitor=app.state.alert_monitor)
+    if app.state.broker:
+        watchdog.set_broker(app.state.broker)
+    # 엔진은 나중에 시작될 수 있으므로 app.state에 watchdog 저장 (엔진 시작 시 주입)
+    app.state.watchdog = watchdog
+    await watchdog.start()
+    logger.info("HealthWatchdog 시작")
+
     # 트레이 아이콘 초록으로 전환
     if tray_thread is not None:
         try:
@@ -130,6 +142,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             logger.info("브로커 연결 해제")
         except Exception as e:
             logger.warning("브로커 연결 해제 실패: %s", e)
+
+    # HealthWatchdog 중지
+    wd = getattr(app.state, "watchdog", None)
+    if wd:
+        await wd.stop()
+        logger.info("HealthWatchdog 중지")
 
     # 하트비트 태스크 취소
     if heartbeat_task and not heartbeat_task.done():
@@ -199,6 +217,7 @@ def create_app() -> FastAPI:
 
     # 라우터 등록
     app.include_router(account.router, prefix="/api/account", tags=["계좌"])
+    app.include_router(alerts_router.router, prefix="/api", tags=["경고 설정"])
     app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
     app.include_router(config_router.router, prefix="/api/config", tags=["설정"])
     app.include_router(status.router, prefix="/api/status", tags=["상태"])

@@ -13,12 +13,19 @@ export interface Notification {
   type: 'info' | 'success' | 'error'
   read: boolean
   ts: string
+  // 실시간 경고 전용 필드
+  severity?: 'warning' | 'critical'
+  alertType?: string
+  title?: string
+  symbol?: string | null
+  action?: { label: string; route: string }
 }
 
 interface NotifStore {
   items: Notification[]
   unread: number
-  add: (msg: string, type: Notification['type']) => void
+  unreadAlerts: number  // severity 있는 미확인 경고 수
+  add: (msg: string, type: Notification['type'], extra?: Partial<Notification>) => void
   markAllRead: () => void
 }
 
@@ -27,18 +34,24 @@ let _nid = 1
 export const useNotifStore = create<NotifStore>((set) => ({
   items:  [],
   unread: 0,
-  add: (msg, type) => {
+  unreadAlerts: 0,
+  add: (msg, type, extra) => {
     const item: Notification = {
       id:      _nid++,
       message: msg,
       type,
       read:    false,
       ts:      new Date().toLocaleTimeString('ko-KR'),
+      ...extra,
     }
-    set(s => ({ items: [item, ...s.items].slice(0, 50), unread: s.unread + 1 }))
+    set(s => ({
+      items:        [item, ...s.items].slice(0, 50),
+      unread:       s.unread + 1,
+      unreadAlerts: item.severity ? s.unreadAlerts + 1 : s.unreadAlerts,
+    }))
   },
   markAllRead: () =>
-    set(s => ({ items: s.items.map(n => ({ ...n, read: true })), unread: 0 })),
+    set(s => ({ items: s.items.map(n => ({ ...n, read: true })), unread: 0, unreadAlerts: 0 })),
 }))
 
 // ── WS 연결 훅 ───────────────────────────────────────────────
@@ -113,10 +126,24 @@ function handleMessage(
       notif.add('증권사 연결 단절', 'error')
       break
     case 'alert': {
-      const d = msg.data as { level: string; message: string }
-      const t = d.level === 'error' ? 'error' : d.level === 'warn' ? 'info' : 'info'
-      toast.showToast(d.message, t as Notification['type'])
-      notif.add(d.message, t as Notification['type'])
+      const d = msg.data as {
+        id: string; alert_type: string; severity: string
+        symbol?: string | null; title: string; message: string; ts: string
+        action?: { label: string; route: string }
+      }
+      const toastType: Notification['type'] = d.severity === 'critical' ? 'error' : 'info'
+      toast.showToast(d.message, toastType, { persistent: d.severity === 'critical' })
+      notif.add(d.message, toastType, {
+        severity:  d.severity as 'warning' | 'critical',
+        alertType: d.alert_type,
+        title:     d.title,
+        symbol:    d.symbol,
+        action:    d.action,
+      })
+      // 브라우저 Web Notification
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        new Notification(d.title, { body: d.message, tag: d.id })
+      }
       break
     }
   }

@@ -40,6 +40,20 @@ DEFAULT_CONFIG: dict[str, Any] = {
     },
     "sleep_prevent": True,   # Windows 수면 방지 활성화 여부
     "log_level": "INFO",
+    "alerts": {
+        "master_enabled": True,
+        "rules": {
+            "position_loss":        {"enabled": True,  "threshold_pct": -3.0},
+            "volatility":           {"enabled": True,  "threshold_pct": 5.0},
+            "stale_order":          {"enabled": True,  "threshold_min": 10},
+            "daily_loss_proximity": {"enabled": True},
+            "market_close_orders":  {"enabled": True},
+            "engine_health":        {"enabled": True},
+            "broker_health":        {"enabled": True},
+            "kill_switch":          {"enabled": True},
+            "loss_lock":            {"enabled": True},
+        },
+    },
 }
 
 

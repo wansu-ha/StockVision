@@ -1,10 +1,11 @@
-/** 설정 페이지 — API Key 등록, 엔진 제어, 프로필 */
+/** 설정 페이지 — API Key 등록, 엔진 제어, 알림 설정, 프로필 */
 import { useNavigate } from 'react-router-dom'
 import { localEngine } from '../services/localClient'
 import { useAuth } from '../context/AuthContext'
 import { useAlertStore } from '../stores/alertStore'
 import { useAccountStatus } from '../hooks/useAccountStatus'
 import BrokerKeyForm from '../components/onboarding/BrokerKeyForm'
+import AlertSettings from '../components/AlertSettings'
 
 export default function Settings() {
   const { email, logout } = useAuth()
@@ -127,6 +128,12 @@ export default function Settings() {
           )}
         </section>
 
+
+        {/* 알림 설정 */}
+        <section className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+          <h2 className="text-base font-semibold mb-4">알림 설정</h2>
+          <AlertSettings />
+        </section>
 
         {/* 프로필 */}
         <section className="bg-gray-900 border border-gray-800 rounded-xl p-6">

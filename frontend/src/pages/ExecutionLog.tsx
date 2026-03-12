@@ -10,6 +10,7 @@ const LOG_TYPE_STYLE: Record<string, string> = {
   STRATEGY: 'bg-purple-900/50 text-purple-400',
   ERROR:    'bg-red-900/50 text-red-400',
   SYSTEM:   'bg-gray-800 text-gray-400',
+  ALERT:    'bg-yellow-900/50 text-yellow-400',
 }
 
 const LOG_TYPE_LABEL: Record<string, string> = {
@@ -18,6 +19,7 @@ const LOG_TYPE_LABEL: Record<string, string> = {
   STRATEGY: '전략',
   ERROR:    '오류',
   SYSTEM:   '시스템',
+  ALERT:    '경고',
 }
 
 function MetaToggle({ meta }: { meta: Record<string, unknown> }) {
@@ -53,7 +55,7 @@ function formatTime(ts: string): string {
 
 export default function ExecutionLog() {
   const [dateFrom, setDateFrom] = useState('')
-  const [viewMode, setViewMode] = useState<'table' | 'timeline'>('table')
+  const [viewMode, setViewMode] = useState<'table' | 'timeline' | 'alerts'>('table')
   const [stateFilter, setStateFilter] = useState<string | undefined>()
 
   const { data, isLoading, error } = useQuery({
@@ -84,8 +86,17 @@ export default function ExecutionLog() {
     refetchInterval: 10_000,
   })
 
+  // 경고 탭 데이터
+  const { data: alertsData, isLoading: alertsLoading } = useQuery({
+    queryKey: ['alert-logs', dateFrom],
+    queryFn: () => logsApi.getLogs({ log_type: 'ALERT', date_from: dateFrom || undefined, limit: 200 }),
+    enabled: viewMode === 'alerts',
+    refetchInterval: 10_000,
+  })
+
   const logs: LogEntry[] = data?.data?.items ?? []
   const timeline: TimelineEntry[] = timelineData?.data?.items ?? []
+  const alertLogs: LogEntry[] = alertsData?.data?.items ?? []
   const sum = summary?.data
 
   return (
@@ -161,12 +172,57 @@ export default function ExecutionLog() {
           >
             타임라인
           </button>
+          <button
+            onClick={() => setViewMode('alerts')}
+            className={`px-3 py-1.5 text-xs ${viewMode === 'alerts' ? 'bg-gray-700 text-yellow-400' : 'text-gray-500 hover:text-gray-300'}`}
+          >
+            경고
+          </button>
         </div>
       </div>
 
       {/* 뷰 */}
       {viewMode === 'timeline' ? (
         <ExecutionTimeline items={timeline} isLoading={timelineLoading} error={!!timelineError} />
+      ) : viewMode === 'alerts' ? (
+        <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+          {alertsLoading ? (
+            <div className="p-8 text-center text-gray-500">로딩 중...</div>
+          ) : alertLogs.length === 0 ? (
+            <div className="p-8 text-center text-gray-500">경고 기록이 없습니다.</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="border-b border-gray-800">
+                <tr>
+                  {['시각', '심각도', '종목', '메시지'].map(h => (
+                    <th key={h} className="px-4 py-3 text-left font-medium text-gray-500">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-800/50">
+                {alertLogs.map(log => {
+                  const severity = (log.meta as Record<string, unknown>)?.severity as string | undefined
+                  return (
+                    <tr key={log.id} className="hover:bg-gray-800/30">
+                      <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">{formatTime(log.ts)}</td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-0.5 rounded text-xs font-medium
+                          ${severity === 'critical' ? 'bg-red-900/50 text-red-400' : 'bg-yellow-900/50 text-yellow-400'}`}>
+                          {severity === 'critical' ? '심각' : '경고'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 font-mono text-gray-400 text-xs">{log.symbol ?? '—'}</td>
+                      <td className="px-4 py-3 text-gray-300 text-xs">
+                        <div>{log.message}</div>
+                        <MetaToggle meta={log.meta} />
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
       ) : (
         <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
           {isLoading ? (
