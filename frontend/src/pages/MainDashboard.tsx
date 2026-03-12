@@ -9,6 +9,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import Header from '../components/main/Header'
 import OpsPanel from '../components/main/OpsPanel'
 import BriefingCard from '../components/BriefingCard'
+import KillSwitchFAB from '../components/KillSwitchFAB'
+import ArmDialog from '../components/ArmDialog'
 import { useOnboarding } from '../hooks/useOnboarding'
 import ListView from '../components/main/ListView'
 import DetailView from '../components/main/DetailView'
@@ -17,6 +19,8 @@ import { useStockData } from '../hooks/useStockData'
 import { useAccountStatus } from '../hooks/useAccountStatus'
 import { useAccountBalance } from '../hooks/useAccountBalance'
 import { useMarketContext } from '../hooks/useMarketContext'
+import { useRemoteMode } from '../hooks/useRemoteMode'
+import { useRemoteControl } from '../hooks/useRemoteControl'
 import { localLogs, localEngine } from '../services/localClient'
 import type { Stock, AccountInfo, Trade, PendingOrder, MarketStatus } from '../components/main/ListView'
 
@@ -26,6 +30,7 @@ export default function MainDashboard() {
   const [selectedStock, setSelectedStock] = useState<Stock | null>(null)
   const [tab, setTab] = useState<'my' | 'watch'>('my')
   const [strategyLoading, setStrategyLoading] = useState(false)
+  const [showArmDialog, setShowArmDialog] = useState(false)
 
   const queryClient = useQueryClient()
   const { localReady } = useAuth()
@@ -33,6 +38,16 @@ export default function MainDashboard() {
   const { engineRunning, brokerConnected, credentials, isMock, killSwitch, lossLock } = useAccountStatus()
   const { balance, openOrders } = useAccountBalance(brokerConnected)
   const { context } = useMarketContext()
+
+  // 원격 모드 감지
+  const { isRemote } = useRemoteMode()
+  const { state: remoteState, connected: remoteConnected, sendKill, sendArm } = useRemoteControl(isRemote)
+
+  // 원격 모드일 때 remoteState 기반 값 오버라이드
+  const effectiveEngine = isRemote ? (remoteState?.engine_state === 'running' || remoteState?.engine_state === 'armed') : engineRunning
+  const effectiveBroker = isRemote ? (remoteState?.broker_connected ?? false) : brokerConnected
+  const effectiveKill = isRemote ? (remoteState?.kill_switch ?? false) : killSwitch
+  const effectiveLoss = isRemote ? (remoteState?.loss_lock ?? false) : lossLock
 
   // 체결 로그 (fill 타입만) — localSecret 준비 후 실행
   const { data: logData } = useQuery({
@@ -158,12 +173,14 @@ export default function MainDashboard() {
           {view === 'list' ? (
             <>
             <OpsPanel
-              localConnected={localReady}
-              brokerConnected={brokerConnected}
-              engineRunning={engineRunning}
-              isMock={isMock}
-              killSwitch={killSwitch}
-              lossLock={lossLock}
+              localConnected={isRemote ? (remoteState?.local_online ?? false) : localReady}
+              brokerConnected={effectiveBroker}
+              engineRunning={effectiveEngine}
+              isMock={isRemote ? null : isMock}
+              killSwitch={effectiveKill}
+              lossLock={effectiveLoss}
+              isRemote={isRemote}
+              remoteConnected={remoteConnected}
             />
             <BriefingCard />
             <ListView
@@ -171,14 +188,14 @@ export default function MainDashboard() {
               setTab={setTab}
               stocks={stocks}
               account={account}
-              isMock={isMock}
+              isMock={isRemote ? null : isMock}
               marketStatus={marketStatus}
               trades={trades}
               pendingOrders={pendingOrders}
               onDetail={handleDetail}
-              engineRunning={engineRunning}
-              brokerConnected={brokerConnected}
-              onStrategyToggle={handleStrategyToggle}
+              engineRunning={effectiveEngine}
+              brokerConnected={effectiveBroker}
+              onStrategyToggle={isRemote ? undefined : handleStrategyToggle}
               strategyLoading={strategyLoading}
             />
             </>
@@ -193,6 +210,23 @@ export default function MainDashboard() {
           )}
         </div>
       </main>
+
+      {/* 원격 모드: Kill Switch FAB + Arm 다이얼로그 */}
+      {isRemote && remoteConnected && (
+        <>
+          <KillSwitchFAB
+            onKill={sendKill}
+            disabled={effectiveKill}
+          />
+          {showArmDialog && remoteState && (
+            <ArmDialog
+              state={remoteState}
+              onArm={sendArm}
+              onClose={() => setShowArmDialog(false)}
+            />
+          )}
+        </>
+      )}
     </div>
   )
 }

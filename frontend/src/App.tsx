@@ -27,6 +27,7 @@ import Layout from './components/Layout'
 import AlertContainer from './components/AlertContainer'
 import ToastContainer from './components/ToastContainer'
 import AdminGuard from './components/AdminGuard'
+import OAuthCallback from './pages/OAuthCallback'
 import { AuthProvider, useAuth } from './context/AuthContext'
 
 const queryClient = new QueryClient({
@@ -56,6 +57,7 @@ function AppRoutes() {
       <Route path="/register" element={<Register />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/oauth/callback" element={<OAuthCallback />} />
       <Route path="/proto-a" element={<ProtoA />} />
       <Route path="/proto-b" element={<ProtoB />} />
       <Route path="/proto-c" element={<ProtoC />} />
@@ -108,6 +110,15 @@ function AppRoutes() {
       } />
     </Routes>
   )
+}
+
+// PWA: Service Worker 등록
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      // SW 등록 실패 — 무시 (PWA 미지원 환경)
+    })
+  })
 }
 
 function App() {
