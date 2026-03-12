@@ -2,11 +2,13 @@
 
 GET /api/logs — 체결/에러 로그 조회 (필터, 페이지네이션)
 GET /api/logs/summary — 날짜별 로그 타입별 건수 요약
+GET /api/logs/daily-pnl — 일일 실현손익
 """
 from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
@@ -62,6 +64,51 @@ async def log_summary(
             "fills": counts.get(LOG_TYPE_FILL, 0),
             "orders": counts.get(LOG_TYPE_ORDER, 0),
             "errors": counts.get(LOG_TYPE_ERROR, 0),
+        },
+        "count": 1,
+    }
+
+
+@router.get("/daily-pnl", summary="일일 실현손익")
+async def daily_pnl(
+    date: str | None = Query(None, description="기준 날짜 (YYYY-MM-DD). 미지정 시 오늘."),
+    _: None = Depends(require_local_secret),
+) -> dict[str, Any]:
+    """당일 FILL 로그의 실현손익을 합산하여 반환한다."""
+    if not date:
+        date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    db = get_log_db()
+    fills, _ = db.query(log_type=LOG_TYPE_FILL, date_from=date, limit=1000)
+
+    # 당일 FILL만 필터링
+    today_fills = [f for f in fills if f["ts"].startswith(date)]
+
+    realized_pnl = Decimal("0")
+    win_count = 0
+    loss_count = 0
+    for fill in today_fills:
+        pnl_raw = fill.get("meta", {}).get("realized_pnl")
+        if pnl_raw is not None:
+            pnl = Decimal(str(pnl_raw))
+            realized_pnl += pnl
+            if pnl > 0:
+                win_count += 1
+            elif pnl < 0:
+                loss_count += 1
+
+    fill_count = len(today_fills)
+    win_rate = round(win_count / fill_count, 3) if fill_count > 0 else 0.0
+
+    return {
+        "success": True,
+        "data": {
+            "date": date,
+            "realized_pnl": float(realized_pnl),
+            "fill_count": fill_count,
+            "win_count": win_count,
+            "loss_count": loss_count,
+            "win_rate": win_rate,
         },
         "count": 1,
     }

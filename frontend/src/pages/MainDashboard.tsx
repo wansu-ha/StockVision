@@ -42,6 +42,15 @@ export default function MainDashboard() {
     retry: 1,
   })
 
+  // 일일 P&L (C1)
+  const { data: dailyPnl } = useQuery({
+    queryKey: ['dailyPnl'],
+    queryFn: () => localLogs.dailyPnl(),
+    enabled: localReady,
+    refetchInterval: 30_000,
+    retry: false,
+  })
+
   const stocks = tab === 'my' ? myStocks : watchStocks
 
   // 증권사 이름 — 등록된 키 기반
@@ -56,7 +65,10 @@ export default function MainDashboard() {
       accountNo: brokerConnected ? '연결됨' : '미연결',
       totalValue: balance?.total_eval ?? 0,
       availableCash: balance?.cash ?? 0,
-      dailyReturn: 0,
+      dailyReturn: (dailyPnl?.realized_pnl && balance?.total_eval)
+        ? Math.round((dailyPnl.realized_pnl / balance.total_eval) * 10000) / 100
+        : 0,
+      dailyPnl: dailyPnl?.realized_pnl ?? 0,
       holdings: balance?.positions.map(p => ({
         symbol: p.symbol,
         name: p.symbol,
@@ -65,7 +77,7 @@ export default function MainDashboard() {
         currentPrice: p.current_price,
       })) ?? [],
     }
-  }, [balance, brokerName, brokerConnected])
+  }, [balance, brokerName, brokerConnected, dailyPnl])
 
   // 체결 내역 변환
   const trades: Trade[] = useMemo(() => {

@@ -39,6 +39,7 @@ export interface AccountInfo {
   totalValue: number
   availableCash: number
   dailyReturn: number
+  dailyPnl?: number
   holdings: { symbol: string; name: string; qty: number; avgPrice: number; currentPrice: number }[]
 }
 
@@ -105,7 +106,10 @@ export default function ListView({
                 ? 'text-red-400 bg-red-400/10'
                 : 'text-blue-400 bg-blue-400/10'
             }`}>
-              {account.dailyReturn >= 0 ? '+' : ''}{account.dailyReturn}%
+              {account.dailyPnl != null && account.dailyPnl !== 0 && (
+                <>{account.dailyPnl >= 0 ? '+' : ''}{account.dailyPnl.toLocaleString('ko-KR')}원 </>
+              )}
+              ({account.dailyReturn >= 0 ? '+' : ''}{account.dailyReturn}%)
             </span>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
