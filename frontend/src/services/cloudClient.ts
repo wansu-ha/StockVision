@@ -203,6 +203,23 @@ export const cloudAI = {
       '/api/v1/ai/briefing',
       date ? { params: { date } } : undefined,
     ).then((r) => r.data.data),
+
+  getStockAnalysis: (symbol: string, date?: string) =>
+    client.get<{ success: boolean; data: StockAnalysis }>(
+      `/api/v1/ai/stock-analysis/${symbol}`,
+      date ? { params: { date } } : undefined,
+    ).then((r) => r.data.data),
+}
+
+/** 종목별 AI 분석 — /api/v1/ai/stock-analysis/{symbol} */
+export interface StockAnalysis {
+  symbol: string
+  name: string | null
+  date: string
+  summary: string | null
+  sentiment: 'bearish' | 'slightly_bearish' | 'neutral' | 'slightly_bullish' | 'bullish'
+  source: 'claude' | 'cache' | 'stub'
+  generated_at: string
 }
 
 /** 헬스 체크 — /health */

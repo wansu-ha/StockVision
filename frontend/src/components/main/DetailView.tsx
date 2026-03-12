@@ -6,6 +6,7 @@ import { useState, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import PriceChart from './PriceChart'
 import ExecutionTimeline from './ExecutionTimeline'
+import StockAnalysisCard from '../StockAnalysisCard'
 import { cloudRules, cloudWatchlist } from '../../services/cloudClient'
 import { logsApi } from '../../services/logs'
 import type { Stock, Trade } from './ListView'
@@ -117,6 +118,12 @@ export default function DetailView({ stock, trades, rules: propRules, context, o
             ))}
           </div>
         )}
+      </section>
+
+      {/* AI 분석 */}
+      <section className="mb-6">
+        <h3 className="text-sm font-medium text-gray-400 mb-3">AI 분석</h3>
+        <StockAnalysisCard symbol={stock.symbol} />
       </section>
 
       {/* 규칙 */}

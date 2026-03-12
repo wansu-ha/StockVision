@@ -1,10 +1,11 @@
 """
 AI 분석 API
 
-GET /api/v1/ai/analysis/{symbol}   종목 AI 분석
-GET /api/v1/ai/status              AI 모듈 상태
-GET /api/v1/ai/history             분석 이력 (어드민)
-GET /api/v1/ai/briefing            시장 브리핑
+GET /api/v1/ai/analysis/{symbol}        종목 AI 분석 (온디맨드, AIService)
+GET /api/v1/ai/status                   AI 모듈 상태
+GET /api/v1/ai/history                  분석 이력 (어드민)
+GET /api/v1/ai/briefing                 시장 브리핑
+GET /api/v1/ai/stock-analysis/{symbol}  종목별 일일 분석 (StockAnalysisService)
 """
 from datetime import date as date_
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -15,6 +16,7 @@ from cloud_server.core.database import get_db
 from cloud_server.models.ai import AIAnalysisLog
 from cloud_server.services.ai_service import AIService
 from cloud_server.services.briefing_service import BriefingService
+from cloud_server.services.stock_analysis_service import StockAnalysisService
 
 router = APIRouter(prefix="/api/v1/ai", tags=["ai"])
 
@@ -104,4 +106,18 @@ def get_briefing(
     target = _parse_date(date_str) or date_.today()
     service = BriefingService()
     result = service.get_briefing(target, db)
+    return {"success": True, "data": result}
+
+
+@router.get("/stock-analysis/{symbol}")
+def stock_analysis(
+    symbol: str,
+    date_str: str | None = Query(None, alias="date", description="YYYY-MM-DD, 기본값: 오늘"),
+    user: dict = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    """종목별 일일 AI 분석 (오늘: 캐시→DB→온디맨드, 과거: DB only)"""
+    target = _parse_date(date_str) or date_.today()
+    service = StockAnalysisService()
+    result = service.get_analysis(symbol, target, db)
     return {"success": True, "data": result}

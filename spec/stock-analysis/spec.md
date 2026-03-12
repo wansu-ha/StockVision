@@ -1,4 +1,4 @@
-> 작성일: 2026-03-12 | 상태: 초안 | Phase D (D3)
+> 작성일: 2026-03-12 | 상태: 구현 완료 | Phase D (D3)
 
 # D3 종목별 분석 spec
 
@@ -53,13 +53,13 @@
 
 ## 3. 수용 기준
 
-- [ ] 매일 07:00 KST 스케줄러 job 실행 확인
-- [ ] `GET /api/v1/ai/stock-analysis/{symbol}` 응답 200, JSON 구조 정확
-- [ ] Redis 캐시 적중 시 두 번째 호출이 Claude 미호출 (source: "cache")
-- [ ] Claude API 키 없을 때 스텁 반환 — 앱 에러 없음
-- [ ] 분석 대상 종목 없으면 스케줄러 조용히 종료
-- [ ] DetailView에 AI 분석 섹션 렌더링 (텍스트 + sentiment)
-- [ ] 로딩/스텁/정상 3상태 모두 처리
+- [x] 매일 07:00 KST 스케줄러 job 실행 확인
+- [x] `GET /api/v1/ai/stock-analysis/{symbol}` 응답 200, JSON 구조 정확
+- [x] Redis 캐시 적중 시 두 번째 호출이 Claude 미호출 (source: "cache")
+- [x] Claude API 키 없을 때 스텁 반환 — 앱 에러 없음
+- [x] 분석 대상 종목 없으면 스케줄러 조용히 종료
+- [x] DetailView에 AI 분석 섹션 렌더링 (텍스트 + sentiment)
+- [x] 로딩/스텁/정상 3상태 모두 처리
 
 ## 4. 범위
 
