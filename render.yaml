@@ -30,7 +30,7 @@ services:
   - type: redis
     name: stockvision-redis
     plan: free
-    maxmemoryPolicy: allkeys-lru
+    ipAllowList: []
 
 databases:
   - name: stockvision-db
