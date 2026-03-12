@@ -225,12 +225,33 @@ class StrategyEngine:
                     cycle_id, candidate.rule_id, candidate.side, candidate.symbol, reason.value,
                 )
                 record_result(candidate.rule_id, ResultStatus.BLOCKED, reason.value)
+                # 차단 로그 (intent_id로 타임라인 추적)
+                from local_server.storage.log_db import get_log_db, LOG_TYPE_ERROR
+                get_log_db().write(
+                    LOG_TYPE_ERROR,
+                    f"{reason.value}: {candidate.symbol} {candidate.side} 거부",
+                    symbol=candidate.symbol,
+                    meta={"rule_id": candidate.rule_id, "side": candidate.side,
+                          "block_reason": reason.value},
+                    intent_id=candidate.intent_id,
+                )
 
             # ── 선택된 후보 실행 ──
             for candidate in batch.selected:
                 md = market_data_map[candidate.signal_id]
+                # PROPOSED 로그 (전략 평가 통과)
+                from local_server.storage.log_db import get_log_db, LOG_TYPE_STRATEGY
+                get_log_db().write(
+                    LOG_TYPE_STRATEGY,
+                    f"{candidate.reason}: {candidate.symbol} {candidate.side}",
+                    symbol=candidate.symbol,
+                    meta={"rule_id": candidate.rule_id, "side": candidate.side,
+                          "qty": candidate.desired_qty, "price": candidate.latest_price},
+                    intent_id=candidate.intent_id,
+                )
                 result = await self._executor.execute(
                     candidate.raw_rule, candidate.side, md, balance,
+                    intent_id=candidate.intent_id,
                 )
                 result.cycle_id = cycle_id
                 result.signal_id = candidate.signal_id
@@ -295,6 +316,7 @@ class StrategyEngine:
                     latest_price=price,
                     reason="매수 조건 충족",
                     raw_rule=rule,
+                    intent_id=uuid.uuid4().hex[:12],
                 )
                 results.append((signal, latest))
 
@@ -311,6 +333,7 @@ class StrategyEngine:
                     latest_price=price,
                     reason="매도 조건 충족",
                     raw_rule=rule,
+                    intent_id=uuid.uuid4().hex[:12],
                 )
                 results.append((signal, latest))
 

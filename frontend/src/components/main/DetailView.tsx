@@ -28,10 +28,11 @@ export default function DetailView({ stock, trades, rules: propRules, context, o
 
   const stockTrades = trades.filter(t => t.symbol === stock.symbol || t.symbol === stock.name)
 
-  // 종목별 최근 실행 로그 (FILL 타입, 최근 5건)
-  const { data: recentLogs, isLoading: logsLoading, error: logsError } = useQuery({
-    queryKey: ['symbol-logs', stock.symbol],
-    queryFn: () => logsApi.getLogs({ log_type: 'FILL', symbol: stock.symbol, limit: 5 }),
+  // 종목별 최근 실행 타임라인
+  const today = new Date().toISOString().split('T')[0]
+  const { data: recentTimeline, isLoading: logsLoading, error: logsError } = useQuery({
+    queryKey: ['symbol-timeline', stock.symbol],
+    queryFn: () => logsApi.getTimeline({ date_from: today, symbol: stock.symbol, limit: 10 }),
     refetchInterval: 30_000,
   })
 
@@ -197,7 +198,7 @@ export default function DetailView({ stock, trades, rules: propRules, context, o
       <section className="mt-6">
         <h3 className="text-sm font-medium text-gray-400 mb-3">최근 실행</h3>
         <ExecutionTimeline
-          logs={recentLogs?.data?.items ?? []}
+          items={recentTimeline?.data?.items ?? []}
           isLoading={logsLoading}
           error={!!logsError}
         />

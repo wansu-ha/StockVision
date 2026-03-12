@@ -30,6 +30,32 @@ interface SummaryResponse {
   count: number
 }
 
+/** 타임라인 데이터 모델 */
+export interface TimelineStep {
+  state: string
+  ts: string
+  message: string
+  meta?: Record<string, unknown>
+}
+
+export interface TimelineEntry {
+  intent_id: string
+  rule_id: number
+  symbol: string
+  side: 'BUY' | 'SELL'
+  state: 'PROPOSED' | 'SUBMITTED' | 'FILLED' | 'BLOCKED' | 'FAILED' | 'CANCELLED'
+  steps: TimelineStep[]
+  started_at: string
+  ended_at: string | null
+  duration_ms: number | null
+}
+
+interface TimelineResponse {
+  success: boolean
+  data: { items: TimelineEntry[]; total: number }
+  count: number
+}
+
 export const logsApi = {
   getLogs: (params?: {
     log_type?: string
@@ -43,5 +69,14 @@ export const logsApi = {
 
   getSummary: (date?: string) =>
     client.get<SummaryResponse>('/logs/summary', { params: date ? { date } : undefined })
+      .then(r => r.data),
+
+  getTimeline: (params: {
+    date_from: string
+    limit?: number
+    symbol?: string
+    state?: string
+  }) =>
+    client.get<TimelineResponse>('/logs/timeline', { params })
       .then(r => r.data),
 }
