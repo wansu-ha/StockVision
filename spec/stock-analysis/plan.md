@@ -213,6 +213,77 @@ class StockAnalysisService:
             f"변동성: {v(ctx.get('volatility'))}",
         ])
         return system, user
+
+    def _call_claude_or_stub(self, symbol: str, name: str | None, ctx: dict, target_date: date) -> dict:
+        """Claude 호출. API 키 없거나 실패 시 stub 반환."""
+        if not settings.ANTHROPIC_API_KEY:
+            return self._to_stub(symbol, target_date)
+        system, user = self._build_prompt(symbol, name, ctx)
+        now = datetime.now(timezone.utc)
+        try:
+            import anthropic
+            client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY, timeout=30.0)
+            response = client.messages.create(
+                model=settings.CLAUDE_MODEL,
+                max_tokens=400,
+                system=system,
+                messages=[{"role": "user", "content": user}],
+            )
+            raw = response.content[0].text
+            parsed = self._parse_response(raw)
+            return {
+                "symbol": symbol,
+                "name": name,
+                "date": target_date.isoformat(),
+                "summary": parsed["summary"],
+                "sentiment": parsed["sentiment"],
+                "source": "claude",
+                "token_input": response.usage.input_tokens,
+                "token_output": response.usage.output_tokens,
+                "model": settings.CLAUDE_MODEL,
+                "generated_at": now.isoformat(),
+            }
+        except Exception as e:
+            logger.error("Claude 종목 분석 실패 %s: %s", symbol, e)
+            return self._to_stub(symbol, target_date)
+
+    def _parse_response(self, raw: str) -> dict:
+        """briefing_service._parse_response와 동일 패턴."""
+        # JSON 추출 → sentiment 검증 → 기본값 fallback
+        ...  # briefing_service 참조
+
+    def _to_stub(self, symbol: str, target_date: date) -> dict:
+        """API 키 없거나 실패 시 반환값. DB 저장 안 함."""
+        return {
+            "symbol": symbol,
+            "name": None,
+            "date": target_date.isoformat(),
+            "summary": None,
+            "sentiment": "neutral",
+            "source": "stub",
+            "token_input": None,
+            "token_output": None,
+            "model": None,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    def _upsert(self, symbol: str, target_date: date, result: dict, db: Session) -> None:
+        """symbol+date 기준 upsert. stub은 호출하지 않음."""
+        # briefing_service._upsert와 동일 패턴
+        # result["source"] == "stub"이면 저장 생략
+        ...
+
+    def _row_to_dict(self, row: StockBriefing) -> dict:
+        """DB 행 → API 응답 dict. name은 None (StockMaster JOIN 없이 저장)."""
+        return {
+            "symbol": row.symbol,
+            "name": None,           # StockMaster 조회 없이 저장 — 조회 시점에 채워도 됨
+            "date": row.date.isoformat() if row.date else None,
+            "summary": row.summary,
+            "sentiment": row.sentiment,
+            "source": row.source,
+            "generated_at": row.generated_at.isoformat() if row.generated_at else None,
+        }
 ```
 
 > verify: `python -c "from cloud_server.services.stock_analysis_service import StockAnalysisService"` — import 에러 없음
@@ -264,10 +335,15 @@ self.scheduler.add_job(
 메서드 추가:
 ```python
 async def _run_stock_analysis(self) -> None:
-    """종목별 AI 분석 생성 (07:00 KST 평일)"""
+    """종목별 AI 분석 생성 (07:00 KST 평일)
+    asyncio.to_thread: generate_all_today()는 동기 함수이고 50종목 × Claude 호출로 장시간 실행.
+    to_thread로 백그라운드 스레드에서 순차 실행 → 이벤트 루프 블로킹 방지.
+    (종목 간 병렬화 불필요 — 07:00 배치는 수 분 내 완료면 충분)
+    """
+    import asyncio
     try:
         from cloud_server.services.stock_analysis_service import StockAnalysisService
-        StockAnalysisService().generate_all_today()
+        await asyncio.to_thread(StockAnalysisService().generate_all_today)
         logger.info("종목별 분석 생성 완료")
     except Exception as e:
         logger.error("종목별 분석 생성 실패: %s", e)
