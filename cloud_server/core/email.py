@@ -156,7 +156,7 @@ def send_verification_email(to: str, token: str) -> None:
 
 def send_password_reset_email(to: str, token: str) -> None:
     """비밀번호 재설정 링크 발송."""
-    link = f"{settings.CLOUD_URL}/reset-password?token={token}"
+    link = f"{settings.FRONTEND_URL}/reset-password?token={token}"
     _provider.send(
         to=to,
         subject="[StockVision] 비밀번호 재설정",

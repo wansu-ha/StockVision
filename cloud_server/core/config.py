@@ -41,8 +41,11 @@ class Settings:
     SMTP_PASSWORD: str = os.environ.get("SMTP_PASSWORD", "")
     SMTP_FROM: str = os.environ.get("SMTP_FROM", "noreply@stockvision.com")
 
-    # 클라우드 서버 공개 URL (이메일 링크용)
+    # 클라우드 서버 공개 URL (API 링크용)
     CLOUD_URL: str = os.environ.get("CLOUD_URL", "http://localhost:4010")
+
+    # 프론트엔드 공개 URL (이메일 내 프론트 링크용)
+    FRONTEND_URL: str = os.environ.get("FRONTEND_URL", "http://localhost:5173")
 
     # DART OpenAPI (금융감독원 전자공시)
     DART_API_KEY: str = os.environ.get("DART_API_KEY", "")
