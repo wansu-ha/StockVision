@@ -29,6 +29,8 @@ export default function Settings() {
   // Bridge 연결 상태 (localReady와 독립적으로 /health 직접 폴링)
   const [bridgeConnected, setBridgeConnected] = useState(false)
   const [bridgeUptime, setBridgeUptime] = useState<number | null>(null)
+  const [launchWaiting, setLaunchWaiting] = useState(false)
+  const [launchFailed, setLaunchFailed] = useState(false)
 
   useEffect(() => {
     const check = () =>
@@ -52,6 +54,32 @@ export default function Settings() {
     const id = setInterval(check, 10_000)
     return () => clearInterval(id)
   }, [])
+
+  const handleLaunch = () => {
+    setLaunchFailed(false)
+    setLaunchWaiting(true)
+    window.location.href = 'stockvision://launch'
+    let attempts = 0
+    const id = setInterval(() => {
+      attempts++
+      fetch(`${LOCAL_URL}/health`).then(r => r.ok ? r.json() : Promise.reject())
+        .then(data => {
+          if (data.app === 'stockvision') {
+            clearInterval(id)
+            setLaunchWaiting(false)
+            setBridgeConnected(true)
+            setBridgeUptime(data.uptime ?? null)
+          }
+        })
+        .catch(() => {
+          if (attempts >= 5) {
+            clearInterval(id)
+            setLaunchWaiting(false)
+            setLaunchFailed(true)
+          }
+        })
+    }, 2000)
+  }
 
   const hasKeys = !!(credentials?.kiwoom?.app_key || credentials?.kis?.app_key)
 
@@ -112,14 +140,13 @@ export default function Settings() {
                 주문 실행과 증권사 연결을 위해 이 PC에서 로컬 서버가 실행되어야 합니다.
               </p>
               <div className="flex items-center gap-3">
-                {localStorage.getItem('sv_installed') === '1' && (
-                  <button
-                    onClick={() => { window.location.href = 'stockvision://launch' }}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-500 transition"
-                  >
-                    서버 시작
-                  </button>
-                )}
+                <button
+                  onClick={handleLaunch}
+                  disabled={launchWaiting}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-500 transition disabled:opacity-50"
+                >
+                  {launchWaiting ? '연결 대기 중...' : '서버 시작'}
+                </button>
                 <a
                   href={DOWNLOAD_URL}
                   className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-500 transition"
@@ -127,6 +154,11 @@ export default function Settings() {
                   설치파일 다운로드
                 </a>
               </div>
+              {launchFailed && (
+                <p className="text-xs text-red-400">
+                  서버를 찾을 수 없습니다. 설치파일을 다운로드하여 먼저 설치해 주세요.
+                </p>
+              )}
               <details className="text-xs text-gray-500">
                 <summary className="cursor-pointer hover:text-gray-300 transition">수동 실행 경로</summary>
                 <code className="block mt-1.5 bg-gray-800 rounded px-2.5 py-1.5 text-[11px] text-gray-400 select-all">
