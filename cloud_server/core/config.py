@@ -80,7 +80,7 @@ class Settings:
     LOCAL_SERVER_MIN_SUPPORTED: str = os.environ.get("LOCAL_SERVER_MIN_SUPPORTED", "1.0.0")
     LOCAL_SERVER_DOWNLOAD_URL: str = os.environ.get(
         "LOCAL_SERVER_DOWNLOAD_URL",
-        "https://github.com/stockvision/releases/latest",
+        "https://github.com/wansu-ha/StockVision/releases/latest",
     )
 
     # CORS 허용 오리진 (환경변수: 콤마 구분 문자열)
