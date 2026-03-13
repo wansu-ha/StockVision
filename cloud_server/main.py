@@ -137,7 +137,7 @@ app.include_router(devices_router)
 # ── 기본 엔드포인트 ──────────────────────────────────────────────────
 
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 async def health():
     """서버 상태 확인"""
     return {
