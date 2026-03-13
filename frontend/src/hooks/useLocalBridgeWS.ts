@@ -78,10 +78,9 @@ export function useLocalBridgeWS() {
       }
 
       ws.onclose = () => {
-        if (retries.current < 3) {
-          retries.current++
-          timeout = setTimeout(connect, 3000 * retries.current)
-        }
+        const delay = Math.min(1000 * Math.pow(2, retries.current), 30000)
+        retries.current += 1
+        timeout = setTimeout(connect, delay)
       }
 
       ws.onopen = () => {
