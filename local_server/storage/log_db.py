@@ -5,6 +5,7 @@ SQLite(logs.db)에 구조화된 로그를 저장하고 조회한다.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import sqlite3
@@ -91,6 +92,10 @@ class LogDB:
                 (ts, log_type, symbol, message, meta_json, intent_id),
             )
             return cursor.lastrowid  # type: ignore[return-value]
+
+    async def async_write(self, *args, **kwargs) -> int:
+        """비동기 컨텍스트에서 write()를 스레드 풀로 오프로드한다."""
+        return await asyncio.to_thread(self.write, *args, **kwargs)
 
     def query(
         self,

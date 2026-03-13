@@ -14,6 +14,7 @@ interface AuthState {
 interface AuthContextValue extends AuthState {
   login: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
+  loginWithTokens: (jwt: string, rt: string) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -97,6 +98,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
+  const loginWithTokens = useCallback(async (jwt: string, rt: string) => {
+    sessionStorage.setItem(STORAGE_KEY_JWT, jwt)
+    localStorage.setItem(STORAGE_KEY_RT, rt)
+    await localAuth.setAuthToken(jwt, rt)
+    setState(prev => ({ ...prev, jwt, refreshToken: rt, isAuthenticated: true, localReady: true }))
+  }, [])
+
   const logout = useCallback(async () => {
     // 즉시 스토리지 정리 + 상태 초기화 (서버 응답 안 기다림)
     const rt = localStorage.getItem(STORAGE_KEY_RT)
@@ -110,7 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ ...state, login, logout }}>
+    <AuthContext.Provider value={{ ...state, login, logout, loginWithTokens }}>
       {children}
     </AuthContext.Provider>
   )

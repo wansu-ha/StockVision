@@ -8,6 +8,8 @@ import logging
 from datetime import datetime, timedelta
 
 import httpx
+from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from cloud_server.core.config import settings
@@ -127,6 +129,13 @@ class OAuthService:
         db: Session,
     ) -> dict:
         """OAuth2 로그인 or 자동 가입. JWT 발급."""
+        # 이메일 필수 검증 (Kakao 미동의 등)
+        if not email:
+            raise HTTPException(
+                status_code=400,
+                detail="이메일 동의가 필요합니다. Kakao 설정에서 이메일 제공을 허용해주세요.",
+            )
+
         # 1. 기존 OAuth 연동 확인
         oauth = db.query(OAuthAccount).filter(
             OAuthAccount.provider == provider,
@@ -142,12 +151,18 @@ class OAuthService:
                 # 3. 신규 가입
                 user = User(
                     email=email,
-                    password_hash="",  # OAuth 전용 계정 — 비밀번호 없음
+                    password_hash=None,  # OAuth 전용 계정 — 비밀번호 없음
                     nickname=name,
                     email_verified=True,  # OAuth2는 자동 인증
                 )
                 db.add(user)
-                db.flush()
+                try:
+                    db.flush()
+                except IntegrityError:
+                    db.rollback()
+                    user = db.query(User).filter(User.email == email).first()
+                    if not user:
+                        raise  # 진짜 에러 (이메일 외 unique 제약 위반)
 
             # OAuth 연동 레코드 생성
             oauth = OAuthAccount(

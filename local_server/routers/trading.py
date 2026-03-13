@@ -140,7 +140,7 @@ async def start_strategy(request: Request, _: None = Depends(require_local_secre
     from local_server.cloud.heartbeat import set_engine_running
     set_engine_running(True)
 
-    get_log_db().write(LOG_TYPE_STRATEGY, "전략 엔진 시작")
+    await get_log_db().async_write(LOG_TYPE_STRATEGY, "전략 엔진 시작")
     logger.info("전략 엔진 시작")
     return {"success": True, "data": {"strategy_engine": "running"}, "count": 1}
 
@@ -166,7 +166,7 @@ async def stop_strategy(request: Request, _: None = Depends(require_local_secret
     from local_server.cloud.heartbeat import set_engine_running
     set_engine_running(False)
 
-    get_log_db().write(LOG_TYPE_STRATEGY, "전략 엔진 중지")
+    await get_log_db().async_write(LOG_TYPE_STRATEGY, "전략 엔진 중지")
     logger.info("전략 엔진 중지")
     return {"success": True, "data": {"strategy_engine": "stopped"}, "count": 1}
 
@@ -199,7 +199,7 @@ async def kill_strategy(
     if engine:
         engine.safeguard.set_kill_switch(level)
 
-    log_db.write(LOG_TYPE_STRATEGY, f"Kill Switch: {body.mode}")
+    await log_db.async_write(LOG_TYPE_STRATEGY, f"Kill Switch: {body.mode}")
     logger.warning("Kill Switch: %s", body.mode)
 
     result_data: dict[str, Any] = {"mode": body.mode, "open_orders": "retained"}
@@ -235,7 +235,7 @@ async def unlock_strategy(request: Request, _: None = Depends(require_local_secr
         engine.safeguard.unlock_loss_lock()
 
     log_db = get_log_db()
-    log_db.write(LOG_TYPE_STRATEGY, "손실 락 해제")
+    await log_db.async_write(LOG_TYPE_STRATEGY, "손실 락 해제")
     logger.info("손실 락 해제 완료")
     return {
         "success": True,
@@ -299,7 +299,7 @@ async def place_order(
         ) from e
 
     log_db = get_log_db()
-    log_db.write(
+    await log_db.async_write(
         LOG_TYPE_ORDER,
         f"수동 주문: {body.side} {body.qty}주 {body.symbol} ({body.order_type})",
         symbol=body.symbol,

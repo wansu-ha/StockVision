@@ -26,7 +26,7 @@ class User(Base):
     id             = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
     email          = Column(String(255), unique=True, nullable=False, index=True)
     email_verified = Column(Boolean, default=False, nullable=False)
-    password_hash  = Column(String(255), nullable=False)
+    password_hash  = Column(String(255), nullable=True)
     nickname       = Column(String(100), nullable=True)
     role           = Column(String(20), default="user", nullable=False)  # "user" | "admin"
     is_active      = Column(Boolean, default=True, nullable=False)
