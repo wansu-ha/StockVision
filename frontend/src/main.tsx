@@ -4,6 +4,8 @@ import './index.css'
 import App from './App.tsx'
 import { HeroUIProvider } from '@heroui/react'
 
+document.documentElement.classList.add('dark')
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <HeroUIProvider>
