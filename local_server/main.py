@@ -237,11 +237,7 @@ def create_app() -> FastAPI:
     )
 
     # CORS 미들웨어 (Step 8)
-    origins: list[str] = cfg.get("cors.origins") or [
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "https://stock-vision-two.vercel.app",
-    ]
+    origins: list[str] = cfg.get("cors.origins")
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins,

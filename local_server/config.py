@@ -37,7 +37,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "max_loss_pct": 5.0,         # 최대 손실률 (%)
     "max_orders_per_minute": 10, # 분당 최대 주문 수
     "cors": {
-        "origins": ["http://localhost:5173"],
+        "origins": [
+            "http://localhost:5173",
+            "http://localhost:3000",
+            "https://stock-vision-two.vercel.app",
+        ],
     },
     "sleep_prevent": True,   # Windows 수면 방지 활성화 여부
     "log_level": "INFO",
