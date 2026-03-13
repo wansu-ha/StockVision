@@ -1,3 +1,5 @@
+> SUPERSEDED — Phase 3 아키텍처로 대체됨. 참고: `docs/architecture.md`
+
 # 🚀 StockVision 통합 개발 계획서
 
 ## 📋 프로젝트 개요
