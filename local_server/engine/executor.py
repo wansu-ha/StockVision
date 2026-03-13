@@ -229,8 +229,8 @@ class OrderExecutor:
                 if pos and pos.avg_price:
                     pnl = (ws_price - pos.avg_price) * qty
 
-            # 체결 로그
-            db.write(LOG_TYPE_FILL, f"체결 완료 ({ws_price}원, {qty}주)",
+            # 체결 로그 (TS-3: 주문 제출 시점 기록 — 실제 체결가는 Reconciler에서 확정)
+            db.write(LOG_TYPE_FILL, f"주문 제출 완료 ({ws_price}원, {qty}주)",
                      symbol=symbol, meta={"rule_id": rule_id, "side": side,
                                           "order_id": result.order_id, "fill_price": float(ws_price),
                                           "qty": qty, "realized_pnl": float(pnl) if pnl else None},

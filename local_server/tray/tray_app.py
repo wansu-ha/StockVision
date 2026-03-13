@@ -109,7 +109,7 @@ def _on_toggle_engine(icon: Any, item: Any) -> None:
     ).start()
 
 
-def _call_engine_api(action: str) -> None:
+def _call_engine_api(action: str, json_body: dict[str, Any] | None = None) -> None:
     """로컬 서버 전략 엔진 API를 호출한다."""
     try:
         import httpx
@@ -120,7 +120,7 @@ def _call_engine_api(action: str) -> None:
     url = f"http://127.0.0.1:{_local_port}/api/strategy/{action}"
     headers = {"X-Local-Secret": _local_secret or ""}
     try:
-        resp = httpx.post(url, headers=headers, timeout=10)
+        resp = httpx.post(url, headers=headers, json=json_body, timeout=10)
         resp.raise_for_status()
         logger.info("트레이 엔진 %s 성공", action)
     except Exception as e:
@@ -133,15 +133,19 @@ def _call_engine_api(action: str) -> None:
 
 
 def _on_kill_switch(icon: Any, item: Any) -> None:
-    """긴급 정지 (Kill Switch)."""
-    from local_server.cloud.heartbeat import set_engine_running
-    set_engine_running(False)
+    """긴급 정지 (Kill Switch) — API를 통해 safeguard 활성화."""
+    threading.Thread(
+        target=_call_engine_api,
+        args=("kill",),
+        kwargs={"json_body": {"mode": "STOP_NEW"}},
+        daemon=True,
+    ).start()
     update_tray_status("warning")
-    logger.warning("트레이 Kill Switch 발동: 전략 엔진 중지")
+    logger.warning("트레이 Kill Switch 발동")
 
     try:
         from local_server.utils.toast import show_toast
-        show_toast("StockVision 긴급 정지", "전략 엔진이 중지되었습니다.")
+        show_toast("StockVision 긴급 정지", "Kill Switch 활성화 — 신규 주문이 차단됩니다.")
     except Exception:
         pass
 

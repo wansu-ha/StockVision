@@ -39,7 +39,6 @@ CREATE TABLE IF NOT EXISTS logs (
 
 CREATE INDEX IF NOT EXISTS idx_logs_ts ON logs(ts);
 CREATE INDEX IF NOT EXISTS idx_logs_type ON logs(log_type);
-CREATE INDEX IF NOT EXISTS idx_logs_intent ON logs(intent_id);
 """
 
 
@@ -59,8 +58,8 @@ class LogDB:
             columns = {row[1] for row in conn.execute("PRAGMA table_info(logs)").fetchall()}
             if "intent_id" not in columns:
                 conn.execute("ALTER TABLE logs ADD COLUMN intent_id TEXT")
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_logs_intent ON logs(intent_id)")
                 logger.info("로그 DB 마이그레이션: intent_id 컬럼 추가")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_logs_intent ON logs(intent_id)")
         logger.debug("로그 DB 초기화: %s", self._path)
 
     def write(
@@ -176,6 +175,27 @@ class LogDB:
         for log_type, count in rows:
             result[log_type] = count
         return result
+
+    def today_executed_amount(self) -> "Decimal":
+        """당일 ORDER 로그의 실행 금액(price × qty)을 합산한다."""
+        from decimal import Decimal
+
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        with sqlite3.connect(str(self._path)) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                "SELECT meta FROM logs WHERE log_type = ? AND ts >= ?",
+                (LOG_TYPE_ORDER, today),
+            ).fetchall()
+
+        total = Decimal("0")
+        for row in rows:
+            meta = json.loads(row["meta"] or "{}")
+            price = meta.get("price")
+            qty = meta.get("qty")
+            if price and qty:
+                total += Decimal(str(price)) * Decimal(str(qty))
+        return total
 
     def today_realized_pnl(self) -> "Decimal":
         """당일 FILL 로그의 실현손익(realized_pnl)을 합산한다."""

@@ -132,6 +132,11 @@ async def start_strategy(request: Request, _: None = Depends(require_local_secre
 
     await engine.start()
 
+    # Watchdog에 엔진 참조 주입 (TS-6: 하트비트 체크 활성화)
+    watchdog = getattr(request.app.state, "watchdog", None)
+    if watchdog:
+        watchdog.set_engine(engine)
+
     from local_server.cloud.heartbeat import set_engine_running
     set_engine_running(True)
 
@@ -252,6 +257,14 @@ async def place_order(
     _: None = Depends(require_local_secret),
 ) -> dict[str, Any]:
     """수동으로 주문을 발행한다."""
+    # TS-7: Kill Switch 활성 시 수동 주문도 차단
+    engine = _get_engine(request)
+    if engine and not engine.safeguard.is_trading_enabled():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Kill Switch 활성 — 주문 불가",
+        )
+
     if body.order_type == "LIMIT" and body.limit_price is None:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

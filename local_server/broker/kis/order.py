@@ -29,6 +29,14 @@ _ORDER_TR_ID: dict[tuple[OrderSide, OrderType], str] = {
     (OrderSide.SELL, OrderType.LIMIT): "TTTC0801U",   # 매도 지정가
 }
 
+# 모의투자 주문 tr_id 매핑 (V 접두어)
+_MOCK_ORDER_TR_ID: dict[tuple[OrderSide, OrderType], str] = {
+    (OrderSide.BUY, OrderType.MARKET): "VTTC0802U",
+    (OrderSide.BUY, OrderType.LIMIT): "VTTC0801U",
+    (OrderSide.SELL, OrderType.MARKET): "VTTC0801U",
+    (OrderSide.SELL, OrderType.LIMIT): "VTTC0801U",
+}
+
 # 주문 구분 코드 (ord_dvsn)
 _ORD_DVSN: dict[tuple[OrderSide, OrderType], str] = {
     (OrderSide.BUY, OrderType.MARKET): "01",   # 시장가 매수
@@ -43,8 +51,10 @@ _SIDE_CODE: dict[OrderSide, str] = {
     OrderSide.SELL: "02",  # 매도
 }
 
-TR_CANCEL = "TTTC0803U"      # 주문 취소
-TR_OPEN_ORDERS = "TTTC8036R"  # 미체결 조회
+TR_CANCEL = "TTTC0803U"           # 주문 취소 (실전)
+TR_CANCEL_MOCK = "VTTC0803U"      # 주문 취소 (모의)
+TR_OPEN_ORDERS = "TTTC8036R"      # 미체결 조회 (실전)
+TR_OPEN_ORDERS_MOCK = "VTTC8036R"  # 미체결 조회 (모의)
 
 
 class KisOrder:
@@ -96,7 +106,8 @@ class KisOrder:
         if order_type == OrderType.LIMIT and not limit_price:
             raise ValueError("지정가 주문에는 limit_price가 필요합니다")
 
-        tr_id = _ORDER_TR_ID[(side, order_type)]
+        tr_map = _MOCK_ORDER_TR_ID if self._is_mock else _ORDER_TR_ID
+        tr_id = tr_map[(side, order_type)]
         ord_dvsn = _ORD_DVSN[(side, order_type)]
 
         headers = await self._auth.build_headers()
@@ -154,7 +165,7 @@ class KisOrder:
             httpx.HTTPStatusError: API 오류 시
         """
         headers = await self._auth.build_headers()
-        headers["tr_id"] = TR_CANCEL
+        headers["tr_id"] = TR_CANCEL_MOCK if self._is_mock else TR_CANCEL
 
         body = {
             "CANO": self._account_no[:8],
@@ -198,7 +209,7 @@ class KisOrder:
             httpx.HTTPStatusError: API 오류 시
         """
         headers = await self._auth.build_headers()
-        headers["tr_id"] = TR_OPEN_ORDERS
+        headers["tr_id"] = TR_OPEN_ORDERS_MOCK if self._is_mock else TR_OPEN_ORDERS
 
         params = {
             "CANO": self._account_no[:8],
