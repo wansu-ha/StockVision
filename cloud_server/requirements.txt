@@ -1,0 +1,38 @@
+# 클라우드 서버 의존성 (Phase 3 Unit 4)
+
+# 웹 프레임워크
+fastapi>=0.116.1
+uvicorn>=0.35.0
+
+# 데이터베이스
+sqlalchemy>=2.0.43
+psycopg2-binary>=2.9.9  # PostgreSQL (운영)
+
+# 데이터 처리
+pandas>=2.3.2
+numpy>=2.3.2
+yfinance>=0.2.65
+
+# 인증/보안
+argon2-cffi>=23.1.0
+python-jose[cryptography]>=3.3.0
+cryptography>=42.0.0
+
+# 설정
+python-dotenv>=1.1.1
+pydantic[email]>=2.11.7
+
+# HTTP 클라이언트
+httpx>=0.28.1
+
+# 스케줄러
+APScheduler>=3.10.4
+
+# AI (Claude API) - v2에서 활성화
+anthropic>=0.25.0
+
+# WebSocket (키움 WS - sv_core 경유)
+websockets>=12.0
+
+# 공유 패키지 (Unit 1 완성 후 활성화)
+# -e ../sv_core

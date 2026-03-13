@@ -1,43 +1,42 @@
-import axios from 'axios'
-
-const api = axios.create({ baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000' })
-
-api.interceptors.request.use(cfg => {
-  const token = localStorage.getItem('jwt')
-  if (token) cfg.headers.Authorization = `Bearer ${token}`
-  return cfg
-})
-
-export interface AdminStats {
-  users: { total: number; active_30d: number; new_7d: number; onboarding_done: number }
-  templates: { total: number; active: number }
-}
-
-export interface AdminUser {
-  id: string
-  email: string
-  nickname: string | null
-  role: string
-  email_verified: boolean
-  created_at: string
-}
-
-export interface AdminTemplate {
-  id: number
-  name: string
-  category: string | null
-  difficulty: string | null
-  is_active: boolean
-  backtest_summary: { cagr: number; mdd: number; sharpe: number } | null
-  tags: string[]
-}
+/** 어드민 API 클라이언트 — /api/v1/admin/ */
+import api from './cloudClient'
 
 export const adminApi = {
-  getStats: () => api.get<{ success: boolean; data: AdminStats }>('/api/admin/stats').then(r => r.data.data),
-  listUsers: (page = 1) =>
-    api.get<{ success: boolean; data: AdminUser[]; total: number }>(`/api/admin/users?page=${page}`).then(r => r.data),
-  listTemplates: () =>
-    api.get<{ success: boolean; data: AdminTemplate[] }>('/api/admin/templates').then(r => r.data.data),
-  deleteTemplate: (id: number) =>
-    api.delete(`/api/admin/templates/${id}`).then(r => r.data),
+  // 통계
+  getStats: () => api.get('/api/v1/admin/stats'),
+
+  // 유저
+  getUsers: (params?: { page?: number; search?: string }) =>
+    api.get('/api/v1/admin/users', { params }),
+  updateUser: (id: string, body: Record<string, unknown>) =>
+    api.patch(`/api/v1/admin/users/${id}`, body),
+
+  // 접속 통계
+  getConnectionStats: (period: string) =>
+    api.get('/api/v1/admin/stats/connections', { params: { period } }),
+
+  // 서비스 키
+  getServiceKeys: () => api.get('/api/v1/admin/service-keys'),
+  createServiceKey: (body: { api_key: string; api_secret: string; app_name?: string }) =>
+    api.post('/api/v1/admin/service-keys', body),
+  deleteServiceKey: (id: number) => api.delete(`/api/v1/admin/service-keys/${id}`),
+
+  // 템플릿
+  getTemplates: () => api.get('/api/v1/admin/templates'),
+  createTemplate: (body: Record<string, unknown>) => api.post('/api/v1/admin/templates', body),
+  updateTemplate: (id: number, body: Record<string, unknown>) =>
+    api.put(`/api/v1/admin/templates/${id}`, body),
+  deleteTemplate: (id: number) => api.delete(`/api/v1/admin/templates/${id}`),
+
+  // 클라우드 서버 상태
+  getCollectorStatus: () => api.get('/api/v1/admin/collector-status'),
+
+  // AI 분석
+  getAiStats: () => api.get('/api/v1/admin/ai/stats'),
+  getAiRecent: (limit = 10) => api.get('/api/v1/admin/ai/recent', { params: { limit } }),
+
+  // 에러 로그
+  getErrors: (params?: { level?: string; limit?: number; offset?: number }) =>
+    api.get('/api/v1/admin/errors', { params }),
+
 }

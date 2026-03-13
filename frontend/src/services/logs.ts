@@ -1,41 +1,82 @@
-import axios from 'axios'
+import client from './localClient'
 
-const local = axios.create({ baseURL: 'http://127.0.0.1:8765', timeout: 5000 })
-
-export interface ExecutionLog {
+/** 백엔드 log_db 실제 응답 구조 */
+export interface LogEntry {
   id: number
-  rule_id: number
-  rule_name: string
-  symbol: string
-  side: 'BUY' | 'SELL'
-  quantity: number
-  order_no: string | null
-  filled_price: number | null
-  filled_qty: number | null
-  status: 'SENT' | 'FILLED' | 'FAILED' | 'SKIPPED'
-  condition_snapshot: string | null
-  message: string | null
-  created_at: string
+  ts: string
+  log_type: string
+  symbol: string | null
+  message: string
+  meta: Record<string, unknown>
 }
 
 export interface LogSummary {
-  total: number
-  filled: number
-  failed: number
+  date: string
+  signals: number
+  fills: number
+  orders: number
+  errors: number
+}
+
+interface LogsResponse {
+  success: boolean
+  data: { items: LogEntry[]; total: number; limit: number; offset: number }
+  count: number
+}
+
+interface SummaryResponse {
+  success: boolean
+  data: LogSummary
+  count: number
+}
+
+/** 타임라인 데이터 모델 */
+export interface TimelineStep {
+  state: string
+  ts: string
+  message: string
+  meta?: Record<string, unknown>
+}
+
+export interface TimelineEntry {
+  intent_id: string
+  rule_id: number
+  symbol: string
+  side: 'BUY' | 'SELL'
+  state: 'PROPOSED' | 'SUBMITTED' | 'FILLED' | 'BLOCKED' | 'FAILED' | 'CANCELLED'
+  steps: TimelineStep[]
+  started_at: string
+  ended_at: string | null
+  duration_ms: number | null
+}
+
+interface TimelineResponse {
+  success: boolean
+  data: { items: TimelineEntry[]; total: number }
+  count: number
 }
 
 export const logsApi = {
   getLogs: (params?: {
-    rule_id?: number
+    log_type?: string
+    symbol?: string
     date_from?: string
-    date_to?: string
     limit?: number
     offset?: number
   }) =>
-    local.get<{ success: boolean; data: ExecutionLog[]; count: number }>('/api/logs', { params })
+    client.get<LogsResponse>('/logs', { params })
       .then(r => r.data),
 
-  getSummary: () =>
-    local.get<{ success: boolean; data: LogSummary }>('/api/logs/summary')
+  getSummary: (date?: string) =>
+    client.get<SummaryResponse>('/logs/summary', { params: date ? { date } : undefined })
+      .then(r => r.data),
+
+  getTimeline: (params: {
+    date_from: string
+    limit?: number
+    symbol?: string
+    state?: string
+  }) =>
+    client.get<TimelineResponse>('/logs/timeline', { params })
       .then(r => r.data),
 }

@@ -1,6 +1,6 @@
 # 실행 엔진 구현 계획서 (execution-engine)
 
-> 작성일: 2026-03-04 | 상태: 초안 | 범위: 로컬 서버 규칙 평가 엔진 | 의존: kiwoom-integration
+> 작성일: 2026-03-04 | 상태: **v1 참고용 → Unit 3 (strategy-engine) plan으로 대체**
 
 ---
 

@@ -1,6 +1,9 @@
-import axios from 'axios'
-
-const local = axios.create({ baseURL: 'http://127.0.0.1:8765', timeout: 5000 })
+/**
+ * 규칙 유틸리티 (conditionsToDsl) + 폼 타입
+ *
+ * CRUD는 cloudRules (cloudClient.ts)로 통일 완료.
+ * 이 파일은 폼 변환 유틸과 ConditionRow용 타입만 유지.
+ */
 
 export interface Condition {
   variable: string
@@ -8,51 +11,19 @@ export interface Condition {
   value: number
 }
 
-export interface TradingRule {
-  id: number
-  name: string
-  stock_code: string
-  side: 'BUY' | 'SELL'
-  conditions: Condition[]
-  quantity: number
-  is_active: boolean
-}
-
-export type RuleBody = Omit<TradingRule, 'id'>
-
 export interface Variable {
   key: string
   label: string
   current: number | null
 }
 
-export interface VariablesResponse {
-  market: Variable[]
-  price: Variable[]
-  operators: string[]
-}
-
-export const rulesApi = {
-  list: () =>
-    local.get<{ success: boolean; data: TradingRule[]; count: number }>('/api/rules')
-      .then(r => r.data),
-
-  create: (body: RuleBody) =>
-    local.post<{ success: boolean; data: TradingRule }>('/api/rules', body)
-      .then(r => r.data),
-
-  update: (id: number, body: RuleBody) =>
-    local.put<{ success: boolean; data: TradingRule }>(`/api/rules/${id}`, body)
-      .then(r => r.data),
-
-  remove: (id: number) =>
-    local.delete(`/api/rules/${id}`).then(r => r.data),
-
-  toggle: (id: number) =>
-    local.patch<{ success: boolean; data: { is_active: boolean } }>(`/api/rules/${id}/toggle`)
-      .then(r => r.data),
-
-  variables: () =>
-    local.get<{ success: boolean; data: VariablesResponse }>('/api/variables')
-      .then(r => r.data),
+/** 폼 조건 → DSL script 문자열 변환 (v1 폼 → v2 DSL) */
+export function conditionsToDsl(
+  buyConditions: Condition[],
+  sellConditions: Condition[],
+): string {
+  const mapCond = (c: Condition) => `${c.variable} ${c.operator} ${c.value}`
+  const buy = buyConditions.map(mapCond).join(' AND ') || 'true'
+  const sell = sellConditions.map(mapCond).join(' AND ') || 'true'
+  return `매수: ${buy}\n매도: ${sell}`
 }

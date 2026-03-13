@@ -163,3 +163,31 @@ export interface AIInsight {
   timestamp: string
   tags: string[]
 }
+
+// ── 원격 제어 (C6-c) ──
+
+export interface RemoteState {
+  engine_state: 'running' | 'stopped' | 'halted' | 'armed'
+  broker_connected: boolean
+  kill_switch: boolean
+  loss_lock: boolean
+  local_online: boolean
+  last_sync_ts: string | null
+  // 이하 E2E 암호화 전송
+  account_summary?: {
+    balance: number
+    evaluation: number
+    daily_pnl: number
+  }
+  today_stats?: {
+    signals: number
+    fills: number
+    errors: number
+  }
+  recent_logs?: Array<{
+    time: string
+    action: string
+    symbol: string
+    result: string
+  }>
+}
