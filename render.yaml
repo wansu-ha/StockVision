@@ -20,7 +20,7 @@ services:
       - key: DART_API_KEY
         sync: false
       - key: CORS_ORIGINS
-        value: https://dev-stockvision.netlify.app
+        value: https://stock-vision-two.vercel.app
       - key: CLOUD_URL
         value: https://stockvision-api-1cy4.onrender.com
       - key: ENV
