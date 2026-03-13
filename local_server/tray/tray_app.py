@@ -170,7 +170,12 @@ def _on_quit(icon: Any, item: Any) -> None:
     """종료 핸들러."""
     logger.info("트레이 종료 메뉴 선택")
     icon.stop()
-    os.kill(os.getpid(), signal.SIGINT)
+    # noconsole 모드에서는 SIGINT(콘솔 시그널)가 작동하지 않으므로
+    # SIGTERM 또는 CTRL_BREAK_EVENT를 사용
+    try:
+        os.kill(os.getpid(), signal.SIGBREAK)
+    except (OSError, AttributeError):
+        os.kill(os.getpid(), signal.SIGTERM)
 
 
 def _engine_label(_item: Any) -> str:

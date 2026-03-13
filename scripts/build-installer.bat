@@ -9,10 +9,19 @@ cd /d "%~dp0\.."
 
 REM Read version
 for /f "usebackq tokens=2 delims='" %%v in (`findstr /C:"__version__" local_server\__version__.py`) do set "VERSION=%%v"
-echo [1/5] Version: %VERSION%
+echo [1/6] Version: %VERSION%
+if "%VERSION%"=="" (
+    echo Version parsing failed. Check local_server\__version__.py
+    exit /b 1
+)
+
+REM Clean old build
+echo [2/6] Cleaning old build...
+if exist dist\stockvision-local rd /s /q dist\stockvision-local
+if exist dist\installer rd /s /q dist\installer
 
 REM PyInstaller build
-echo [2/5] PyInstaller build...
+echo [3/6] PyInstaller build...
 pyinstaller local_server\pyinstaller.spec --noconfirm
 if errorlevel 1 (
     echo PyInstaller build failed
@@ -29,7 +38,7 @@ if "%ISCC%"=="" (
 )
 
 REM Inno Setup build
-echo [3/5] Inno Setup build...
+echo [4/6] Inno Setup build...
 "%ISCC%" local_server\installer.iss
 if errorlevel 1 (
     echo Inno Setup build failed
@@ -55,7 +64,7 @@ if errorlevel 1 (
 )
 
 REM Clean old releases
-echo [4/5] Cleaning old releases...
+echo [5/6] Cleaning old releases...
 "%GH%" release delete v0.1.0-dev --yes >nul 2>&1
 "%GH%" release delete v%VERSION% --yes >nul 2>&1
 git push origin :refs/tags/v0.1.0-dev >nul 2>&1
@@ -64,7 +73,7 @@ git tag -d v0.1.0-dev >nul 2>&1
 git tag -d v%VERSION% >nul 2>&1
 
 REM Create GitHub release + upload
-echo [5/5] Creating GitHub release... (v%VERSION%)
+echo [6/6] Creating GitHub release... (v%VERSION%)
 "%GH%" release create v%VERSION% "%INSTALLER%" --title "v%VERSION% - StockVision Bridge" --notes "StockVision Bridge v%VERSION% installer"
 if errorlevel 1 (
     echo GitHub upload failed. Manual upload: %INSTALLER%
