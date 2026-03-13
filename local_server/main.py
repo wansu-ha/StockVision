@@ -355,6 +355,13 @@ def _parse_deeplink_argv() -> None:
 
 if __name__ == "__main__":
     import sys
+    import os
+
+    # PyInstaller exe (--noconsole): sys.stdout/stderr가 None → 더미 스트림으로 대체
+    if sys.stdout is None:
+        sys.stdout = open(os.devnull, "w", encoding="utf-8")
+    if sys.stderr is None:
+        sys.stderr = open(os.devnull, "w", encoding="utf-8")
 
     configure_logging()
 
