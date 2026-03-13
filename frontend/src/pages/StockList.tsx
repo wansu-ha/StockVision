@@ -51,12 +51,12 @@ const StockList = () => {
   const detailMap = new Map(stockDetails.map(s => [s.symbol, s]))
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+    <div className="min-h-screen bg-gray-950">
       <div className="max-w-4xl mx-auto px-6 py-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">관심종목</h1>
-          <p className="text-gray-600">종목을 검색하여 관심목록에 추가하세요</p>
+          <h1 className="text-3xl font-bold text-gray-100 mb-2">관심종목</h1>
+          <p className="text-gray-400">종목을 검색하여 관심목록에 추가하세요</p>
         </div>
 
         {/* 종목 추가 검색 */}
@@ -92,7 +92,7 @@ const StockList = () => {
                 <p className="text-sm mt-1">위 검색창에서 종목을 검색하여 추가하세요</p>
               </div>
             ) : (
-              <div className="divide-y divide-gray-100">
+              <div className="divide-y divide-gray-800">
                 {watchlist.map((item) => {
                   const detail = detailMap.get(item.symbol)
                   return (
@@ -108,7 +108,7 @@ const StockList = () => {
                           {item.symbol[0]}
                         </div>
                         <div className="min-w-0">
-                          <div className="font-medium text-gray-900 group-hover:text-blue-600 transition-colors">
+                          <div className="font-medium text-gray-100 group-hover:text-indigo-400 transition-colors">
                             {item.symbol}
                           </div>
                           <div className="text-sm text-gray-500 truncate">
@@ -122,7 +122,7 @@ const StockList = () => {
                       <button
                         onClick={() => removeMut.mutate(item.symbol)}
                         disabled={removeMut.isPending}
-                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors shrink-0"
+                        className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-900/20 rounded-lg transition-colors shrink-0"
                         title="관심종목에서 제거"
                       >
                         <TrashIcon className="w-4 h-4" />

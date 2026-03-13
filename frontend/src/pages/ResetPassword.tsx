@@ -33,47 +33,47 @@ export default function ResetPassword() {
 
   if (!token) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center text-red-600">유효하지 않은 링크입니다.</div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-950">
+        <div className="text-center text-red-400">유효하지 않은 링크입니다.</div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="w-full max-w-md bg-white rounded-xl shadow p-8">
-        <h1 className="text-2xl font-bold mb-6 text-center">새 비밀번호 설정</h1>
+    <div className="min-h-screen flex items-center justify-center bg-gray-950">
+      <div className="w-full max-w-md bg-gray-900 border border-gray-800 rounded-xl shadow p-8">
+        <h1 className="text-2xl font-bold mb-6 text-center text-gray-100">새 비밀번호 설정</h1>
 
         {error && (
-          <div className="mb-4 p-3 rounded bg-red-50 text-red-700 text-sm">{error}</div>
+          <div className="mb-4 p-3 rounded bg-red-900/30 border border-red-800/50 text-red-400 text-sm">{error}</div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1">새 비밀번호</label>
+            <label className="block text-sm font-medium mb-1 text-gray-400">새 비밀번호</label>
             <input
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
-              className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-xl text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-indigo-500 transition"
               required
               minLength={8}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">비밀번호 확인</label>
+            <label className="block text-sm font-medium mb-1 text-gray-400">비밀번호 확인</label>
             <input
               type="password"
               value={confirm}
               onChange={e => setConfirm(e.target.value)}
-              className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-xl text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-indigo-500 transition"
               required
             />
           </div>
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+            className="w-full bg-indigo-600 text-white py-2 rounded-xl hover:bg-indigo-500 disabled:opacity-50 transition"
           >
             {loading ? '처리 중...' : '비밀번호 재설정'}
           </button>

@@ -137,8 +137,8 @@ export default function StrategyBuilder() {
       </div>
 
       {/* 규칙 목록 */}
-      <div className="bg-white rounded-xl shadow p-4 mb-6">
-        <h2 className="text-sm font-semibold text-gray-600 mb-2">저장된 전략</h2>
+      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-6">
+        <h2 className="text-sm font-semibold text-gray-400 mb-2">저장된 전략</h2>
         <RuleList
           rules={rules}
           onToggle={(rule: Rule) => toggleMut.mutate(rule)}
@@ -149,11 +149,11 @@ export default function StrategyBuilder() {
 
       {/* 폼 */}
       {showForm && (
-        <div className="bg-white rounded-xl shadow p-6">
-          <h2 className="text-lg font-semibold mb-4">{editId ? '전략 수정' : '새 전략 만들기'}</h2>
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+          <h2 className="text-lg font-semibold mb-4 text-gray-100">{editId ? '전략 수정' : '새 전략 만들기'}</h2>
 
           {error && (
-            <div className="bg-red-50 text-red-700 px-4 py-2 rounded mb-4 text-sm">{error}</div>
+            <div className="bg-red-900/30 border border-red-800/50 text-red-400 px-4 py-2 rounded mb-4 text-sm">{error}</div>
           )}
 
           <div className="space-y-4">
@@ -162,7 +162,7 @@ export default function StrategyBuilder() {
               <input
                 value={form.name}
                 onChange={e => setForm({ ...form, name: e.target.value })}
-                className="w-full border rounded px-3 py-2 text-sm"
+                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-indigo-500 transition"
                 placeholder="예: RSI 과매도 전략"
               />
             </div>
@@ -173,7 +173,7 @@ export default function StrategyBuilder() {
                 <input
                   value={form.symbol}
                   onChange={e => setForm({ ...form, symbol: e.target.value })}
-                  className="w-full border rounded px-3 py-2 text-sm"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-indigo-500 transition"
                   placeholder="005930"
                 />
               </div>
@@ -183,7 +183,7 @@ export default function StrategyBuilder() {
                   type="number"
                   value={form.qty}
                   onChange={e => setForm({ ...form, qty: Number(e.target.value) })}
-                  className="w-full border rounded px-3 py-2 text-sm"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-indigo-500 transition"
                   min={1}
                 />
               </div>
@@ -240,7 +240,7 @@ export default function StrategyBuilder() {
             </button>
             <button
               onClick={() => { setShowForm(false); setEditId(null); setError(null) }}
-              className="px-4 py-2 border rounded text-sm hover:bg-gray-50"
+              className="px-4 py-2 border border-gray-700 rounded-xl text-sm text-gray-300 hover:bg-gray-800 transition"
             >
               취소
             </button>
