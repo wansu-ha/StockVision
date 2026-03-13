@@ -117,11 +117,11 @@ export default function BridgeInstaller({ onConnected }: Props) {
             </button>
           )}
           <a
-            href="https://github.com/wansu-ha/StockVision/releases/latest/download/stockvision-local.zip"
+            href="https://github.com/wansu-ha/StockVision/releases/latest/download/StockVision-Bridge-Setup.exe"
             onClick={() => setPhase('run')}
             className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-500 transition"
           >
-            StockVision 다운로드 (.zip)
+            StockVision 설치파일 다운로드
           </a>
         </div>
       )}

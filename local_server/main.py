@@ -263,10 +263,13 @@ def create_app() -> FastAPI:
     from local_server.routers import devices as devices_router
     app.include_router(devices_router.router, tags=["디바이스"])
 
+    import time as _time
+    _start_time = _time.monotonic()
+
     @app.get("/health", tags=["헬스체크"])
     async def health_check() -> dict:
         """서버 헬스체크 엔드포인트."""
-        return {"status": "ok", "version": app.version, "app": "stockvision"}
+        return {"status": "ok", "version": app.version, "app": "stockvision", "uptime": int(_time.monotonic() - _start_time)}
 
     return app
 

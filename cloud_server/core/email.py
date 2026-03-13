@@ -1,13 +1,15 @@
 """이메일 발송 유틸리티 — Provider 패턴.
 
 EMAIL_PROVIDER 환경변수로 백엔드 선택:
-  smtp     → Gmail 등 SMTP 서버 (SMTP_USER, SMTP_PASSWORD 필요)
+  resend   → Resend HTTP API (RESEND_API_KEY 필요)
   sendgrid → SendGrid HTTP API (EMAIL_API_KEY 필요)
+  smtp     → Gmail 등 SMTP 서버 (SMTP_USER, SMTP_PASSWORD 필요) — 클라우드 호스팅에서 차단될 수 있음
   (빈값)   → 로그 출력만 (개발 환경)
 """
 from __future__ import annotations
 
 import logging
+import os
 import smtplib
 from email.mime.text import MIMEText
 from typing import Protocol
@@ -79,6 +81,40 @@ class SendGridProvider:
             logger.error("이메일 발송 오류 (SendGrid): %s", e)
 
 
+# ── Resend HTTP API ──────────────────────────────────────────
+class ResendProvider:
+    RESEND_API_URL = "https://api.resend.com/emails"
+
+    def send(self, to: str, subject: str, html: str) -> None:
+        api_key = os.environ.get("RESEND_API_KEY", "")
+        if not api_key:
+            logger.warning("RESEND_API_KEY 미설정, 이메일 건너뜀: to=%s", to)
+            return
+
+        payload = {
+            "from": settings.EMAIL_FROM,
+            "to": [to],
+            "subject": subject,
+            "html": html,
+        }
+
+        try:
+            resp = httpx.post(
+                self.RESEND_API_URL,
+                json=payload,
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+            )
+            if resp.status_code >= 400:
+                logger.error("이메일 발송 실패 (Resend): status=%d, body=%s", resp.status_code, resp.text)
+            else:
+                logger.info("이메일 발송 완료 (Resend): to=%s", to)
+        except Exception as e:
+            logger.error("이메일 발송 오류 (Resend): %s", e)
+
+
 # ── 로그 전용 (개발) ────────────────────────────────────────
 class LogProvider:
     def send(self, to: str, subject: str, html: str) -> None:
@@ -87,6 +123,7 @@ class LogProvider:
 
 # ── Provider 레지스트리 ──────────────────────────────────────
 _PROVIDERS: dict[str, type[EmailProvider]] = {
+    "resend": ResendProvider,
     "smtp": SmtpProvider,
     "sendgrid": SendGridProvider,
 }
@@ -119,7 +156,7 @@ def send_verification_email(to: str, token: str) -> None:
 
 def send_password_reset_email(to: str, token: str) -> None:
     """비밀번호 재설정 링크 발송."""
-    link = f"{settings.CLOUD_URL}/reset-password?token={token}"
+    link = f"{settings.FRONTEND_URL}/reset-password?token={token}"
     _provider.send(
         to=to,
         subject="[StockVision] 비밀번호 재설정",
