@@ -18,7 +18,8 @@ self.addEventListener('activate', (event) => {
 })
 
 self.addEventListener('fetch', (event) => {
-  // API 요청은 캐시하지 않음
+  // GET 이외, API, WS 요청은 캐시하지 않음
+  if (event.request.method !== 'GET') return
   if (event.request.url.includes('/api/') || event.request.url.includes('/ws/')) {
     return
   }
