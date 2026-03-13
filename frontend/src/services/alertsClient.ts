@@ -1,7 +1,5 @@
 /** 경고 설정 API 클라이언트 */
-import axios from 'axios'
-
-const LOCAL_URL = import.meta.env.VITE_LOCAL_API_URL || 'http://localhost:4020'
+import client from './localClient'
 
 export interface AlertRuleConfig {
   enabled: boolean
@@ -26,12 +24,12 @@ export interface AlertSettings {
 
 export const alertsClient = {
   async getSettings(): Promise<AlertSettings> {
-    const res = await axios.get(`${LOCAL_URL}/api/settings/alerts`)
+    const res = await client.get('/settings/alerts')
     return res.data.data as AlertSettings
   },
 
   async updateSettings(settings: Partial<AlertSettings>): Promise<AlertSettings> {
-    const res = await axios.put(`${LOCAL_URL}/api/settings/alerts`, settings)
+    const res = await client.put('/settings/alerts', settings)
     return res.data.data as AlertSettings
   },
 }

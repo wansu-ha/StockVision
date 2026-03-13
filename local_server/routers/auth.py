@@ -12,7 +12,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
-from local_server.core.local_auth import require_local_secret
+from local_server.core.local_auth import is_secret_issued, mark_secret_issued, require_local_secret
 
 from local_server.storage.credential import (
     clear_all_credentials,
@@ -50,6 +50,10 @@ async def register_cloud_token(body: CloudTokenRequest, request: Request) -> dic
     이후 클라우드 API 서버 통신 시 이 토큰을 Authorization 헤더에 사용한다.
     응답에 local_secret을 포함하여 프론트엔드가 이후 요청에 사용할 수 있게 한다.
     """
+    # AS-2: 이미 secret이 발급된 상태면 인증 필요 (재등록 방지)
+    if is_secret_issued(request):
+        await require_local_secret(request)
+
     try:
         # JWT payload에서 email 추출 → 활성 사용자 설정
         import base64, json as _json
@@ -69,6 +73,7 @@ async def register_cloud_token(body: CloudTokenRequest, request: Request) -> dic
         cc = get_cloud_client()
         if cc:
             cc.set_token(body.access_token)
+        mark_secret_issued(request)
         logger.info("클라우드 토큰 등록 완료")
         return {
             "success": True,
@@ -105,8 +110,11 @@ async def restore_session(request: Request) -> dict[str, Any]:
     """keyring에 저장된 토큰을 반환하여 프론트엔드 세션을 복원한다.
 
     access_token이 만료(60초 leeway)됐으면 refresh 후 새 토큰을 반환한다.
-    /auth/token과 동일 보안 수준 (인증 없이 호출 가능, local_secret 반환).
     """
+    # AS-2: 이미 secret이 발급된 상태면 인증 필요 (재등록 방지)
+    if is_secret_issued(request):
+        await require_local_secret(request)
+
     from local_server.cloud.token_utils import _refresh_lock, is_jwt_expired
 
     access_token, refresh_token = load_cloud_tokens()
@@ -141,6 +149,7 @@ async def restore_session(request: Request) -> dict[str, Any]:
                 except Exception:
                     raise HTTPException(status_code=401, detail="토큰 갱신 실패. 재로그인 필요.")
 
+    mark_secret_issued(request)
     email = get_active_user()
     return {
         "success": True,
@@ -157,7 +166,7 @@ async def restore_session(request: Request) -> dict[str, Any]:
     "/status",
     summary="인증 상태 확인",
 )
-async def auth_status() -> dict[str, Any]:
+async def auth_status(_: None = Depends(require_local_secret)) -> dict[str, Any]:
     """클라우드 토큰 저장 여부와 이메일을 반환한다. 토큰 자체는 노출하지 않는다."""
     access_token, refresh_token = load_cloud_tokens()
     email = get_active_user()

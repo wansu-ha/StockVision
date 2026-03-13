@@ -38,7 +38,12 @@ class RateLimiter:
 
 
 def _get_ip(request: Request) -> str:
-    """클라이언트 IP 추출 (X-Forwarded-For 우선)"""
+    """클라이언트 IP 추출 (X-Forwarded-For leftmost 우선).
+
+    Render 프록시는 X-Forwarded-For에 클라이언트 IP를 추가하므로
+    첫 번째(leftmost) IP가 실제 클라이언트. request.client.host는
+    프록시 IP일 수 있어 폴백으로만 사용한다.
+    """
     forwarded = request.headers.get("X-Forwarded-For")
     if forwarded:
         return forwarded.split(",")[0].strip()
