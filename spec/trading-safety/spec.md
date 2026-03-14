@@ -1,6 +1,6 @@
 # Trading Safety — 거래 안전 버그 수정
 
-> 작성일: 2026-03-13 | 상태: 초안
+> 작성일: 2026-03-13 | 상태: 구현 완료
 
 ---
 
@@ -98,15 +98,15 @@ Kill Switch, 주문 실행 안전장치, 손익 기록 정확성, 예산 제한 
 
 ## 수용 기준
 
-- [ ] 트레이 Kill Switch → 엔진 실제 중지 + safeguard 활성
-- [ ] alerts 엔드포인트 인증 필수
-- [ ] FILL 로그 타이밍 정의 명확 (Option A 또는 B 선택 후 일관 적용)
-- [ ] LimitChecker 재시작 후 당일 금액 복원
-- [ ] LimitChecker 자정 자동 리셋
-- [ ] Watchdog 엔진 하트비트 체크 동작
-- [ ] 수동 주문도 safeguard 체크 적용
-- [ ] KIS 모의투자 TR ID 올바르게 전환
-- [ ] KIS 매도 시장가 TR ID 정확
+- [x] 트레이 Kill Switch → 엔진 실제 중지 + safeguard 활성
+- [x] alerts 엔드포인트 인증 필수
+- [x] FILL 로그 타이밍 정의 명확 (Option B: 주문 제출 시점 기록)
+- [x] LimitChecker 재시작 후 당일 금액 복원
+- [x] LimitChecker 자정 자동 리셋
+- [x] Watchdog 엔진 하트비트 체크 동작
+- [x] 수동 주문도 safeguard 체크 적용
+- [x] KIS 모의투자 TR ID 올바르게 전환
+- [x] KIS 매도 시장가 TR ID 정확
 
 ---
 

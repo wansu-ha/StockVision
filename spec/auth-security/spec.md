@@ -1,6 +1,6 @@
 # Auth Security — 인증/보안 취약점 수정
 
-> 작성일: 2026-03-13 | 상태: 초안
+> 작성일: 2026-03-13 | 상태: 구현 완료
 
 ---
 
@@ -83,12 +83,12 @@
 
 ## 수용 기준
 
-- [ ] WS URL에 secret 미포함
-- [ ] /api/auth/token, /api/auth/restore 무단 호출 차단
-- [ ] /api/auth/status 이메일 노출 차단
-- [ ] Rate limiter IP 스푸핑 불가
-- [ ] 경고 설정 로드/저장 정상 (localClient 사용)
-- [ ] 디바이스 페어링 인증 적용 (프론트 + 서버)
+- [x] WS URL에 secret 미포함
+- [x] /api/auth/token, /api/auth/restore 무단 호출 차단
+- [x] /api/auth/status 이메일 노출 차단
+- [x] Rate limiter IP 스푸핑 불가
+- [x] 경고 설정 로드/저장 정상 (localClient 사용)
+- [x] 디바이스 페어링 인증 적용 (프론트 + 서버)
 
 ---
 

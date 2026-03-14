@@ -1,6 +1,6 @@
 # Stability — 안정성 개선
 
-> 작성일: 2026-03-13 | 상태: 초안
+> 작성일: 2026-03-13 | 상태: 구현 완료
 
 ---
 
@@ -94,14 +94,14 @@
 
 ## 수용 기준
 
-- [ ] 브로커 재연결 후 시세 수신 재개
-- [ ] WS 연결 끊김 → StateMachine ERROR → 자동 재연결 트리거
-- [ ] LogDB 비동기 래핑 완료
-- [ ] KIS WS 수집 시작 성공 (AttributeError 해소)
-- [ ] OAuth 동시 로그인 안전
-- [ ] password_hash 의미 명확화
-- [ ] Kakao 빈 이메일 충돌 방지
-- [ ] OAuth 콜백 → 로그인 성공
+- [x] 브로커 재연결 후 시세 수신 재개
+- [x] WS 연결 끊김 → StateMachine ERROR → 자동 재연결 트리거
+- [x] LogDB 비동기 래핑 완료
+- [x] KIS WS 수집 시작 성공 (AttributeError 해소)
+- [x] OAuth 동시 로그인 안전
+- [x] password_hash 의미 명확화
+- [x] Kakao 빈 이메일 충돌 방지
+- [x] OAuth 콜백 → 로그인 성공
 
 ---
 
