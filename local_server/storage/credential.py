@@ -173,8 +173,19 @@ def load_account_no(user_id: str | None = None) -> str | None:
     return load_credential(KEY_ACCOUNT_NO, user_id)
 
 
+def clear_session_credentials(user_id: str | None = None) -> None:
+    """세션 토큰만 삭제한다 (로그아웃 시 사용). 브로커 API 키는 보존."""
+    for name in (
+        KEY_CLOUD_ACCESS_TOKEN,
+        KEY_CLOUD_REFRESH_TOKEN,
+        KEY_ACCESS_TOKEN,  # KIS 액세스 토큰 (세션성)
+    ):
+        delete_credential(name, user_id)
+    logger.info("세션 자격증명 삭제 완료 (user=%s)", user_id)
+
+
 def clear_all_credentials(user_id: str | None = None) -> None:
-    """해당 사용자의 모든 자격증명을 삭제한다 (로그아웃 시 사용)."""
+    """해당 사용자의 모든 자격증명을 삭제한다 (계정 초기화 시 사용)."""
     for name in (
         KEY_APP_KEY,
         KEY_APP_SECRET,

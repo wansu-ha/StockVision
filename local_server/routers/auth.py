@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 from local_server.core.local_auth import is_secret_issued, mark_secret_issued, require_local_secret
 
 from local_server.storage.credential import (
-    clear_all_credentials,
+    clear_session_credentials,
     get_active_user,
     has_credential,
     load_cloud_tokens,
@@ -97,7 +97,7 @@ async def register_cloud_token(body: CloudTokenRequest, request: Request) -> dic
 )
 async def logout(_: None = Depends(require_local_secret)) -> dict[str, Any]:
     """keyring에 저장된 모든 자격증명을 삭제한다."""
-    clear_all_credentials()
+    clear_session_credentials()
     logger.info("로그아웃: 자격증명 전체 삭제")
     return {"success": True, "data": {"message": "로그아웃 완료"}, "count": 0}
 
