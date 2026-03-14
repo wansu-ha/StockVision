@@ -8,7 +8,7 @@ setlocal
 cd /d "%~dp0\.."
 
 REM Read version
-for /f "usebackq tokens=2 delims='" %%v in (`findstr /C:"__version__" local_server\__version__.py`) do set "VERSION=%%v"
+for /f "usebackq" %%v in (`python -c "from local_server.__version__ import __version__; print(__version__)"`) do set "VERSION=%%v"
 echo [1/6] Version: %VERSION%
 if "%VERSION%"=="" (
     echo Version parsing failed. Check local_server\__version__.py
