@@ -81,7 +81,7 @@ class ExternalOrderPolicy(str, Enum):
 | 파일 | 변경 |
 |------|------|
 | `local_server/engine/trader_models.py` | ExternalOrderEvent 추가 |
-| `local_server/engine/reconciler.py` | 외부 주문 감지 로직 |
+| `local_server/broker/kis/reconciler.py` | 외부 주문 감지 로직 (기존 GHOST 확장) |
 | `local_server/engine/trader_policy.py` | ExternalOrderPolicy enum |
 | `local_server/engine/system_trader.py` | 정책 적용 |
 | `local_server/routers/trading.py` | 경고 해제 API |
