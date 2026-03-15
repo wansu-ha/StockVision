@@ -110,19 +110,32 @@ interface FillLog {
 }
 
 function buildMarkers(logs: FillLog[], startDate: string) {
-  return logs
-    .filter(l => l.ts && l.meta && l.ts.slice(0, 10) >= startDate)
-    .map(l => {
-      const filled = l.meta.status === 'FILLED'
-      const buy = l.meta.side === 'BUY'
-      return {
-        time: l.ts.slice(0, 10),
-        position: buy ? 'belowBar' as const : 'aboveBar' as const,
-        shape: filled ? (buy ? 'arrowUp' as const : 'arrowDown' as const) : 'circle' as const,
-        color: !filled ? '#f59e0b' : buy ? '#3b82f6' : '#ef4444',
-        text: !filled ? '실패' : buy ? '매수' : '매도',
-      }
-    })
+  // 체결 건만 표시 (실패는 로그 화면에서 확인)
+  const filled = logs.filter(l => l.ts && l.meta && l.meta.status === 'FILLED' && l.ts.slice(0, 10) >= startDate)
+
+  // 같은 날짜+방향 중복 합치기
+  const grouped = new Map<string, { count: number; buy: boolean }>()
+  for (const l of filled) {
+    const day = l.ts.slice(0, 10)
+    const buy = l.meta.side === 'BUY'
+    const key = `${day}-${buy ? 'B' : 'S'}`
+    const prev = grouped.get(key)
+    if (prev) {
+      prev.count++
+    } else {
+      grouped.set(key, { count: 1, buy })
+    }
+  }
+
+  return Array.from(grouped.entries())
+    .map(([key, { count, buy }]) => ({
+      time: key.slice(0, 10),
+      position: buy ? 'belowBar' as const : 'aboveBar' as const,
+      shape: buy ? 'arrowUp' as const : 'arrowDown' as const,
+      color: buy ? '#3b82f6' : '#ef4444',
+      size: 0.5 as const,
+      text: count > 1 ? `${buy ? '매수' : '매도'}×${count}` : (buy ? '매수' : '매도'),
+    }))
     .sort((a, b) => a.time < b.time ? -1 : a.time > b.time ? 1 : 0)
 }
 

@@ -128,16 +128,23 @@ class CollectorScheduler:
         logger.info("수집 스케줄러 시작됨")
 
     async def _bootstrap_stock_master(self) -> None:
-        """stock_master가 비어있으면 즉시 수집"""
+        """stock_master가 비어있거나 오래됐으면 즉시 수집"""
         db = get_db_session()
         try:
+            from sqlalchemy import func
             from cloud_server.models.market import StockMaster
             count = db.query(StockMaster).count()
             if count == 0:
                 logger.info("stock_master 비어있음 — 초기 수집 시작")
                 await self.update_stock_master()
             else:
-                logger.info("stock_master %d건 존재 — 초기 수집 생략", count)
+                latest = db.query(func.max(StockMaster.updated_at)).scalar()
+                age_hours = (datetime.now() - latest).total_seconds() / 3600 if latest else float('inf')
+                if age_hours > 20:
+                    logger.info("stock_master %d건, %.0f시간 경과 — 갱신 시작", count, age_hours)
+                    await self.update_stock_master()
+                else:
+                    logger.info("stock_master %d건, %.0f시간 경과 — 갱신 불필요", count, age_hours)
         finally:
             db.close()
 

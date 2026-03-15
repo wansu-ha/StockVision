@@ -37,7 +37,7 @@ async def get_bars(
     if end is None:
         end = date.today()
 
-    # DB 캐시 확인
+    # DB 캐시 확인 — 기간 대비 충분한 데이터가 있을 때만 캐시 사용
     from cloud_server.models.market import DailyBar
     cached = db.query(DailyBar).filter(
         DailyBar.symbol == symbol,
@@ -45,7 +45,10 @@ async def get_bars(
         DailyBar.date <= end,
     ).order_by(DailyBar.date).all()
 
-    if cached:
+    total_days = (end - start).days
+    expected_min = max(total_days * 0.5, 3)  # 영업일 비율 + 최소 3건
+
+    if cached and len(cached) >= expected_min:
         data = [
             {
                 "date": str(b.date),
