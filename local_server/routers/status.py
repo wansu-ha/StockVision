@@ -84,6 +84,7 @@ async def get_status(request: Request) -> dict[str, Any]:
         "data": {
             "server": "running",
             "broker": {
+                "type": _broker_type,
                 "connected": broker_connected,
                 "reason": broker_reason,
                 "has_credentials": _has_creds,
