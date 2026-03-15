@@ -9,8 +9,9 @@ function SeverityIcon({ severity }: { severity?: string }) {
   return (
     <span className={`${color} shrink-0`}>
       <svg className={`w-3.5 h-3.5 ${pulse}`} viewBox="0 0 24 24" fill="currentColor">
-        <circle cx="12" cy="12" r="10" opacity="0.2" />
-        <circle cx="12" cy="12" r="6" />
+        <rect x="6" y="14" width="12" height="4" rx="1" />
+        <path d="M8 14 A4 4 0 0 1 16 14" />
+        <circle cx="12" cy="11" r="2.5" opacity="0.6" />
       </svg>
     </span>
   )
@@ -39,8 +40,9 @@ export default function AlertsDropdown() {
       >
         <svg className={`w-4 h-4 ${hasCritical ? 'text-red-500 animate-pulse' : unreadAlerts > 0 ? 'text-red-400' : 'text-gray-500'}`}
           viewBox="0 0 24 24" fill="currentColor">
-          <circle cx="12" cy="12" r="10" opacity="0.2" />
-          <circle cx="12" cy="12" r="6" />
+          <rect x="6" y="14" width="12" height="4" rx="1" />
+          <path d="M8 14 A4 4 0 0 1 16 14" />
+          <circle cx="12" cy="11" r="2.5" opacity="0.6" />
         </svg>
         {unreadAlerts > 0 && (
           <span className={`absolute -top-1 -right-1 text-[10px] font-bold px-1 rounded-full leading-tight
