@@ -12,8 +12,9 @@
 ```
 K1 (매도 TR ID)     ─── 독립
 K2 (Approval Key)   ─── 독립
+K3 (App Secret)     ─── K2 완료 후 (같은 auth.py 수정)
 
-→ 병렬 작업 가능
+→ K1, K2 병렬. K3은 K2 후.
 ```
 
 ## Step 1: 매도 TR ID 검증
@@ -113,10 +114,50 @@ async def _get_approval_key(self) -> str:
 - [ ] WS 구독 메시지에 올바른 key 포함
 - [ ] 모의서버 approval_key 엔드포인트 동작 확인
 
+## Step 3: App Secret 불필요 전송 제거 (K3)
+
+**파일**: `local_server/broker/kis/auth.py` (수정)
+
+### 3.1 헤더 분리
+
+현재 `_get_common_headers()` (또는 동등 함수)가 모든 요청에 `appsecret`을 포함한다.
+OAuth 전용 헤더와 일반 API 헤더를 분리.
+
+```python
+# auth.py
+def get_auth_headers(self) -> dict:
+    """일반 API 요청용 헤더 (appsecret 미포함)."""
+    return {
+        "authorization": f"Bearer {self._access_token}",
+        "appkey": self._app_key,
+        "content-type": "application/json; charset=utf-8",
+    }
+
+def _get_oauth_headers(self) -> dict:
+    """OAuth 토큰 발급용 헤더 (appsecret 포함)."""
+    return {
+        "appkey": self._app_key,
+        "appsecret": self._app_secret,
+        "content-type": "application/json; charset=utf-8",
+    }
+```
+
+### 3.2 기존 호출 지점 수정
+
+- `get_access_token()` → `_get_oauth_headers()` 사용
+- `get_approval_key()` → `_get_oauth_headers()` 사용
+- 주문/시세 등 일반 REST → `get_auth_headers()` 사용
+
+**검증**:
+- [ ] `/oauth2/token` 요청에 `appsecret` 포함
+- [ ] `/oauth2/Approval` 요청에 `appsecret` 포함
+- [ ] 일반 REST (주문, 시세) 요청에 `appsecret` 미포함
+- [ ] 기존 단위 테스트 통과
+
 ## 변경 파일 요약
 
 | 파일 | Step | 변경 |
 |------|------|------|
 | `local_server/broker/kis/order.py` | K1 | TR ID 검증 + 수정/주석 보강 |
-| `local_server/broker/kis/auth.py` | K2 | `get_approval_key()` 추가 |
+| `local_server/broker/kis/auth.py` | K2, K3 | `get_approval_key()` 추가 + 헤더 분리 |
 | `local_server/broker/kis/ws.py` | K2 | `_get_approval_key()` → auth 호출 |

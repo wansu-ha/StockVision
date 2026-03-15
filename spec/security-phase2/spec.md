@@ -19,9 +19,13 @@
 | S3 | Refresh Token localStorage → 보안 강화 | C4 |
 | S4 | 사용자 삭제 시 soft-delete 보장 | 신규 |
 
+| S5 | 이메일/리셋 토큰 해싱 | C3 |
+| S6 | WebSocket Origin 헤더 검증 | H3 |
+| S7 | 비밀번호 강도 검증 | H5 |
+| S8 | 비밀번호 리셋 토큰 URL 노출 방지 | H6 |
+
 ### 2.2 제외
 
-- 이메일/리셋 토큰 해싱 (C3 — DB 마이그레이션 별도)
 - rules injection 차단 (H2 — DSL 파서 강화와 묶음)
 - 프로덕션 하드닝 M1~M6 (배포 직전 체크리스트)
 
@@ -93,6 +97,45 @@ XSS 공격 시 RT가 탈취되어 장기 세션 하이재킹이 가능하다.
 - 관련 데이터(rules, tokens)는 cascade 삭제하지 않음
 - Admin에서 비활성 사용자 조회 가능
 
+### S5: 이메일/리셋 토큰 해싱
+
+**문제**: `EmailVerificationToken.token`, `PasswordResetToken.token`이 DB에 평문 저장된다.
+`RefreshToken`은 `hash_token()`으로 해싱하지만, 이 두 모델은 누락되어 있다.
+DB 유출 시 임의 계정의 비밀번호 리셋이 가능하다.
+
+**요구사항**:
+- `RefreshToken`과 동일한 `hash_token()` 패턴을 적용
+- 토큰 생성 시 해시값만 DB에 저장, 원문은 사용자에게만 전달
+- 검증 시 입력 토큰을 해싱하여 DB와 비교
+
+### S6: WebSocket Origin 검증
+
+**문제**: `local_server/routers/ws.py`의 WebSocket이 Origin 헤더를 검증하지 않는다.
+악성 웹페이지가 `ws://localhost:4020/ws`에 접속하여 포지션 데이터를 수신할 수 있다.
+
+**요구사항**:
+- WS 연결 시 Origin 헤더 확인
+- `localhost`, `127.0.0.1` 외 Origin은 거부
+- Origin 없는 요청은 허용 (로컬 앱)
+
+### S7: 비밀번호 강도 검증
+
+**문제**: 회원가입 시 빈 문자열 `""` 비밀번호가 허용된다.
+
+**요구사항**:
+- 최소 8자, 영문+숫자 포함 필수
+- Pydantic `field_validator`로 서버 측 검증
+- 프론트엔드에서도 동일 규칙 표시
+
+### S8: 비밀번호 리셋 토큰 URL 노출 방지
+
+**문제**: `/reset-password?token=xxx` 형태로 토큰이 URL에 노출된다.
+브라우저 히스토리, Referer 헤더, 서버 로그에 토큰이 기록된다.
+
+**요구사항**:
+- URL fragment (`#token=xxx`) 또는 POST body로 토큰 전달
+- 프론트에서 fragment에서 토큰 추출 후 API에 POST로 전송
+
 ## 4. 변경 파일 (예상)
 
 | 파일 | 변경 |
@@ -103,6 +146,11 @@ XSS 공격 시 RT가 탈취되어 장기 세션 하이재킹이 가능하다.
 | `cloud_server/api/auth.py` | S4: 삭제 로직 soft-delete 보장 |
 | `frontend/src/context/AuthContext.tsx` | S3: RT 저장 위치 변경, "로그인 유지" 로직 |
 | `frontend/src/pages/Login.tsx` | S3: "로그인 유지" 체크박스 UI |
+| `cloud_server/models/user.py` | S5: 토큰 모델 해싱 적용 |
+| `cloud_server/api/auth.py` | S5: 토큰 생성/검증 로직 수정, S7: 비밀번호 검증, S8: 리셋 URL |
+| `local_server/routers/ws.py` | S6: Origin 검증 |
+| `frontend/src/pages/Register.tsx` | S7: 비밀번호 강도 표시 |
+| `frontend/src/pages/ResetPassword.tsx` | S8: fragment 토큰 추출 |
 
 ## 5. 수용 기준
 
@@ -113,6 +161,11 @@ XSS 공격 시 RT가 탈취되어 장기 세션 하이재킹이 가능하다.
 - [ ] "로그인 유지" 체크 시에만 RT가 `localStorage`에 저장된다
 - [ ] 사용자 삭제 시 `deleted_at`이 설정되고 DB row는 유지된다
 - [ ] 비활성 사용자는 로그인할 수 없다
+- [ ] 이메일 인증 토큰이 DB에 해싱되어 저장된다
+- [ ] 비밀번호 리셋 토큰이 DB에 해싱되어 저장된다
+- [ ] WebSocket 연결 시 localhost 외 Origin이 거부된다
+- [ ] 8자 미만 또는 영문/숫자 미포함 비밀번호가 거부된다
+- [ ] 비밀번호 리셋 토큰이 URL 쿼리스트링에 노출되지 않는다
 
 ## 6. 참고
 

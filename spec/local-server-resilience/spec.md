@@ -16,7 +16,8 @@
 | R1 | Config 파일 atomic write (race condition 방지) | 안정성 |
 | R2 | 브로커 mock/실전 자동 감지 | 편의성 |
 | R3 | SyncQueue 오프라인 큐 연동 | 동기화 |
-| R4 | Heartbeat WS ack 버전 파싱 | 동기화 |
+| R4 | Heartbeat WS ack 버전 파싱 (**relay-infra 의존 → Phase C 이동**) | 동기화 |
+| R5 | LimitChecker 재시작 시 today_executed 복원 | 안정성 |
 
 ### 2.2 제외
 
@@ -101,6 +102,26 @@ is_mock = kwargs.get("is_mock") or (os.getenv("KIS_IS_MOCK", "false").lower() ==
 - HTTP heartbeat과 동일한 버전 변경 감지 + fetch 트리거
 - WS 모드에서도 규칙/컨텍스트 변경이 즉시 반영됨
 
+### R4: 비고 — relay-infra 의존성
+
+> **⚠️ Phase C로 이동**: `relay-infra` spec이 `ws_relay_client.py`를 전면 재작성할 예정이므로,
+> 현재 파일 기반으로 버전 파싱을 구현하면 relay-infra에서 전부 다시 작성해야 한다.
+> R4는 relay-infra 구현 이후 Phase C에서 처리한다.
+
+### R5: LimitChecker 재시작 시 today_executed 복원
+
+**문제**: `local_server/engine/limit_checker.py`의 `today_executed` 카운터가
+서버 재시작 시 0으로 초기화된다. 장중 재시작하면 동일 규칙으로 중복 매매가 발생할 수 있다.
+
+**현재 상태**: `today_executed`는 메모리 dict로 관리되며, 재시작 시 소멸.
+
+**요구사항**:
+- 서버 시작 시 `LogDB`에서 오늘 날짜의 체결 로그를 조회하여 `today_executed` 복원
+- `LogDB`의 기존 `get_execution_logs(date=today)` 활용
+- 규칙 ID별 체결 횟수를 카운트하여 `today_executed[rule_id] = count` 설정
+- 복원 완료 후 로그 출력 ("LimitChecker 복원: {n}건 규칙의 실행 횟수 로드")
+- 장 종료 후에는 초기화 (기존 동작 유지)
+
 ## 4. 변경 파일 (예상)
 
 | 파일 | 변경 |
@@ -110,8 +131,9 @@ is_mock = kwargs.get("is_mock") or (os.getenv("KIS_IS_MOCK", "false").lower() ==
 | `local_server/broker/kis/auth.py` | R2: 계좌번호 패턴 판별 헬퍼 |
 | `local_server/routers/rules.py` | R3: 클라우드 실패 시 enqueue |
 | `local_server/cloud/heartbeat.py` | R3: 복구 시 flush, R4: 버전 파싱 공통화 |
-| `local_server/cloud/ws_relay_client.py` | R4: ack에서 버전 필드 추출 |
+| `local_server/cloud/ws_relay_client.py` | R4: ack에서 버전 필드 추출 (**Phase C**) |
 | `local_server/storage/sync_queue.py` | R3: 크기 제한 추가 |
+| `local_server/engine/limit_checker.py` | R5: 시작 시 LogDB 조회 → today_executed 복원 |
 
 ## 5. 수용 기준
 
@@ -121,7 +143,9 @@ is_mock = kwargs.get("is_mock") or (os.getenv("KIS_IS_MOCK", "false").lower() ==
 - [ ] 클라우드 연결 끊김 시 규칙 변경이 SyncQueue에 저장된다
 - [ ] 클라우드 재연결 시 큐가 자동 플러시된다
 - [ ] WS 모드에서 규칙 버전 변경 시 자동 fetch가 실행된다
-- [ ] HTTP/WS 모드 모두 동일한 버전 변경 감지가 동작한다
+- [ ] HTTP/WS 모드 모두 동일한 버전 변경 감지가 동작한다 (**Phase C**)
+- [ ] 서버 재시작 후 today_executed가 LogDB 기반으로 복원된다
+- [ ] 장중 재시작 시 동일 규칙 중복 매매가 방지된다
 
 ## 6. 참고
 

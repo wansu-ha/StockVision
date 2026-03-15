@@ -7,10 +7,11 @@
 ```
 R1 (Config Atomic Write)  ─── 독립
 R2 (Mock 자동감지)         ─── 독립
-R3 (SyncQueue 연동)        ─── R4 완료 후 (heartbeat 복구 감지에서 flush)
-R4 (Heartbeat 버전 파싱)   ─── 독립
+R3 (SyncQueue 연동)        ─── 독립 (heartbeat 복구 감지에서 flush)
+R4 (Heartbeat 버전 파싱)   ─── ⚠️ relay-infra 의존 → Phase C로 이동
+R5 (LimitChecker 복원)     ─── 독립
 
-→ R1, R2, R4 병렬 → R3은 R4 후
+→ R1, R2, R3, R5 병렬 가능. R4는 Phase C.
 ```
 
 ## Step 1: Config Atomic Write (R1)
@@ -91,7 +92,10 @@ else:
 - [ ] 수동 설정과 불일치 시 경고 로그 출력
 - [ ] 자동감지 실패 시 수동 설정 폴백
 
-## Step 3: Heartbeat WS Ack 버전 파싱 (R4)
+## Step 3: Heartbeat WS Ack 버전 파싱 (R4) — ⚠️ Phase C로 이동
+
+> **relay-infra가 ws_relay_client.py를 전면 재작성하므로, 이 Step은 relay-infra 완료 후 Phase C에서 구현한다.**
+> 아래 설계는 참고용으로 유지한다.
 
 **파일**: `local_server/cloud/ws_relay_client.py` (수정), `local_server/cloud/heartbeat.py` (수정)
 
@@ -177,13 +181,53 @@ async def _flush_sync_queue() -> None:
 - [ ] 큐 크기 100건 초과 시 오래된 항목 제거
 - [ ] 플러시 실패 시 항목 잔류
 
+## Step 5: LimitChecker 재시작 복원 (R5)
+
+**파일**: `local_server/engine/limit_checker.py` (수정)
+
+### 5.1 시작 시 LogDB 조회
+
+```python
+# limit_checker.py
+from local_server.storage.log_db import get_log_db
+from datetime import date
+
+class LimitChecker:
+    def __init__(self, ...):
+        self.today_executed: dict[int, int] = {}
+        self._restore_from_log_db()
+
+    def _restore_from_log_db(self) -> None:
+        """서버 재시작 시 오늘 체결 로그에서 today_executed 복원."""
+        try:
+            log_db = get_log_db()
+            today_logs = log_db.get_execution_logs(date=date.today())
+            for log in today_logs:
+                rule_id = log.get("rule_id")
+                if rule_id is not None:
+                    self.today_executed[rule_id] = self.today_executed.get(rule_id, 0) + 1
+            if self.today_executed:
+                logger.info(
+                    "LimitChecker 복원: %d건 규칙의 실행 횟수 로드",
+                    len(self.today_executed),
+                )
+        except Exception as e:
+            logger.warning("LimitChecker 복원 실패 (0에서 시작): %s", e)
+```
+
+**검증**:
+- [ ] 서버 재시작 후 `today_executed`가 LogDB 기반으로 복원
+- [ ] LogDB 접근 실패 시 0에서 시작 (기존 동작 폴백)
+- [ ] 장 종료 후 초기화 동작 유지
+
 ## 변경 파일 요약
 
 | 파일 | Step | 변경 |
 |------|------|------|
 | `local_server/config.py` | R1 | atomic write |
 | `local_server/broker/factory.py` | R2 | mock 자동감지 |
-| `local_server/cloud/heartbeat.py` | R4, R3 | 버전 체크 공개 + flush |
-| `local_server/cloud/ws_relay_client.py` | R4 | ack 버전 파싱 |
+| `local_server/cloud/heartbeat.py` | R3 | 복구 시 flush |
+| `local_server/cloud/ws_relay_client.py` | R4 | ack 버전 파싱 (**Phase C**) |
 | `local_server/routers/rules.py` | R3 | 실패 시 enqueue |
 | `local_server/storage/sync_queue.py` | R3 | 크기 제한 |
+| `local_server/engine/limit_checker.py` | R5 | today_executed 복원 |
