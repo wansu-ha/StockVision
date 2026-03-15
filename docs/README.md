@@ -64,8 +64,7 @@
 - [research/cross-review-sv-core.md](./research/cross-review-sv-core.md) - `sv_core` 정합성 리뷰
 - [research/cross-review-security-quality.md](./research/cross-review-security-quality.md) - 보안/품질 교차 리뷰
 - [research/cross-review-legal.md](./research/cross-review-legal.md) - 법률 문서와 아키텍처 일치성 검토
-- [research/spec-review-result.md](./research/spec-review-result.md) - 전체 스펙 검토 결과
-- [research/code-analysis-result.md](./research/code-analysis-result.md) - 코드 분석 결과
+- [research/review-summary-2026-03-13.md](./research/review-summary-2026-03-13.md) - 전체 리뷰 종합 보고서
 - [research/security-audit-report.md](./research/security-audit-report.md) - 보안 점검 보고서
 - [research/p0-re-review.md](./research/p0-re-review.md) - P0 재검토 메모
 

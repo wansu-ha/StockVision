@@ -132,10 +132,15 @@ async def start_strategy(request: Request, _: None = Depends(require_local_secre
 
     await engine.start()
 
+    # Watchdog에 엔진 참조 주입 (TS-6: 하트비트 체크 활성화)
+    watchdog = getattr(request.app.state, "watchdog", None)
+    if watchdog:
+        watchdog.set_engine(engine)
+
     from local_server.cloud.heartbeat import set_engine_running
     set_engine_running(True)
 
-    get_log_db().write(LOG_TYPE_STRATEGY, "전략 엔진 시작")
+    await get_log_db().async_write(LOG_TYPE_STRATEGY, "전략 엔진 시작")
     logger.info("전략 엔진 시작")
     return {"success": True, "data": {"strategy_engine": "running"}, "count": 1}
 
@@ -161,7 +166,7 @@ async def stop_strategy(request: Request, _: None = Depends(require_local_secret
     from local_server.cloud.heartbeat import set_engine_running
     set_engine_running(False)
 
-    get_log_db().write(LOG_TYPE_STRATEGY, "전략 엔진 중지")
+    await get_log_db().async_write(LOG_TYPE_STRATEGY, "전략 엔진 중지")
     logger.info("전략 엔진 중지")
     return {"success": True, "data": {"strategy_engine": "stopped"}, "count": 1}
 
@@ -194,7 +199,7 @@ async def kill_strategy(
     if engine:
         engine.safeguard.set_kill_switch(level)
 
-    log_db.write(LOG_TYPE_STRATEGY, f"Kill Switch: {body.mode}")
+    await log_db.async_write(LOG_TYPE_STRATEGY, f"Kill Switch: {body.mode}")
     logger.warning("Kill Switch: %s", body.mode)
 
     result_data: dict[str, Any] = {"mode": body.mode, "open_orders": "retained"}
@@ -230,7 +235,7 @@ async def unlock_strategy(request: Request, _: None = Depends(require_local_secr
         engine.safeguard.unlock_loss_lock()
 
     log_db = get_log_db()
-    log_db.write(LOG_TYPE_STRATEGY, "손실 락 해제")
+    await log_db.async_write(LOG_TYPE_STRATEGY, "손실 락 해제")
     logger.info("손실 락 해제 완료")
     return {
         "success": True,
@@ -252,6 +257,14 @@ async def place_order(
     _: None = Depends(require_local_secret),
 ) -> dict[str, Any]:
     """수동으로 주문을 발행한다."""
+    # TS-7: Kill Switch 활성 시 수동 주문도 차단
+    engine = _get_engine(request)
+    if engine and not engine.safeguard.is_trading_enabled():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Kill Switch 활성 — 주문 불가",
+        )
+
     if body.order_type == "LIMIT" and body.limit_price is None:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -286,7 +299,7 @@ async def place_order(
         ) from e
 
     log_db = get_log_db()
-    log_db.write(
+    await log_db.async_write(
         LOG_TYPE_ORDER,
         f"수동 주문: {body.side} {body.qty}주 {body.symbol} ({body.order_type})",
         symbol=body.symbol,

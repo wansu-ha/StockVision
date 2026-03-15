@@ -11,6 +11,9 @@ const LOCAL_URL = import.meta.env.VITE_LOCAL_API_URL || 'http://localhost:4020'
 
 let localSecret: string | null = null
 
+/** WS 첫 프레임 인증 등에서 secret 값 참조용 */
+export function getLocalSecret(): string { return localSecret ?? '' }
+
 const client: AxiosInstance = axios.create({
   baseURL: `${LOCAL_URL}/api`,
   timeout: 5000,

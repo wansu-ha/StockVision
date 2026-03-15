@@ -13,6 +13,16 @@ def generate_secret() -> str:
     return secrets.token_hex(32)
 
 
+def is_secret_issued(request: Request) -> bool:
+    """local_secret이 이미 클라이언트에 발급되었는지 확인."""
+    return getattr(request.app.state, "_secret_issued", False)
+
+
+def mark_secret_issued(request: Request) -> None:
+    """local_secret이 클라이언트에 발급되었음을 표시."""
+    request.app.state._secret_issued = True
+
+
 async def require_local_secret(
     request: Request,
     x_local_secret: str = Header(None),

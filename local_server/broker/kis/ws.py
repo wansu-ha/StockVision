@@ -35,13 +35,15 @@ class KisWS:
     연결/재연결은 ReconnectManager에서 관리한다.
     """
 
-    def __init__(self, auth: "KisAuth") -> None:
+    def __init__(self, auth: "KisAuth", on_disconnect: Callable | None = None) -> None:
         """초기화.
 
         Args:
             auth: KisAuth 인스턴스 (접속키 발급에 사용)
+            on_disconnect: 연결 끊김 시 호출할 동기 콜백 (선택)
         """
         self._auth = auth
+        self._on_disconnect = on_disconnect
         self._ws: Optional[websockets.WebSocketClientProtocol] = None
         self._subscribed: set[str] = set()
         self._callbacks: list[Callable[[QuoteEvent], None]] = []
@@ -190,9 +192,13 @@ class KisWS:
         except ConnectionClosed as exc:
             logger.warning("WebSocket 연결 끊김: %s", exc)
             self._connected = False
+            if self._on_disconnect:
+                self._on_disconnect()
         except Exception as exc:
             logger.error("WebSocket 수신 루프 오류: %s", exc, exc_info=True)
             self._connected = False
+            if self._on_disconnect:
+                self._on_disconnect()
 
     def _handle_message(self, raw_msg: str) -> None:
         """수신 메시지를 파싱하여 QuoteEvent로 변환 후 콜백을 호출한다.

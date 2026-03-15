@@ -1,6 +1,6 @@
 # Docs Cleanup — 문서 정비
 
-> 작성일: 2026-03-13 | 상태: 초안
+> 작성일: 2026-03-13 | 상태: 구현 완료
 
 ---
 
@@ -91,12 +91,12 @@ python -m uvicorn local_server.main:app --port 4020 --reload
 
 ## 수용 기준
 
-- [ ] CLAUDE.md 기동 명령어로 서버 기동 성공
-- [ ] spec 상태 헤더 2건 갱신
-- [ ] README 깨진 링크 해소
-- [ ] SUPERSEDED 헤더 2건 추가
-- [ ] architecture.md Phase C/D 반영
-- [ ] CLAUDE.md 프로젝트 구조 정확
+- [x] CLAUDE.md 기동 명령어로 서버 기동 성공
+- [x] spec 상태 헤더 2건 갱신
+- [x] README 깨진 링크 해소
+- [x] SUPERSEDED 헤더 2건 추가
+- [x] architecture.md Phase C/D 반영
+- [x] CLAUDE.md 프로젝트 구조 정확
 
 ---
 

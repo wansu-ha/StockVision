@@ -8,9 +8,10 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from local_server.config import get_config
+from local_server.core.local_auth import require_local_secret
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,7 @@ _PROTECTED_RULES = frozenset({"kill_switch", "loss_lock"})
 
 
 @router.get("/settings/alerts")
-async def get_alert_settings() -> dict[str, Any]:
+async def get_alert_settings(_: None = Depends(require_local_secret)) -> dict[str, Any]:
     """현재 경고 설정을 반환한다."""
     cfg = get_config()
     alerts = cfg.get("alerts") or {}
@@ -29,7 +30,7 @@ async def get_alert_settings() -> dict[str, Any]:
 
 
 @router.put("/settings/alerts")
-async def update_alert_settings(body: dict[str, Any]) -> dict[str, Any]:
+async def update_alert_settings(body: dict[str, Any], _: None = Depends(require_local_secret)) -> dict[str, Any]:
     """경고 설정을 변경한다.
 
     Kill Switch / 손실 락 규칙은 enabled=false로 변경할 수 없다.
