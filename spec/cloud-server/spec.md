@@ -1,6 +1,6 @@
 # 클라우드 서버 명세서 (cloud-server)
 
-> 작성일: 2026-03-05 | 상태: **진행 중** | Unit 4 (Phase 3)
+> 작성일: 2026-03-05 | 상태: 구현 완료 | Unit 4 (Phase 3)
 >
 > **병합**: `spec/api-server/` + `spec/data-server/` → 본 spec으로 통합.
 > 기존 `spec/auth/`, `spec/context-cloud/` 내용도 포함.

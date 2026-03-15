@@ -1,6 +1,6 @@
 # 전략 엔진 명세서 (strategy-engine)
 
-> 작성일: 2026-03-04 | 상태: 초안 | Unit 3 (Phase 3-A)
+> 작성일: 2026-03-04 | 상태: 구현 완료 | Unit 3 (Phase 3-A)
 >
 > **이전 spec**: `spec/execution-engine/` → 본 spec으로 대체.
 > 클라우드 WS 신호 전송 구조에서 **로컬 서버 직접 실행** 구조로 전환.
