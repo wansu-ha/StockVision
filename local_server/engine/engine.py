@@ -92,6 +92,9 @@ class StrategyEngine:
     async def start(self) -> None:
         """엔진 시작."""
         self._running = True
+        # LimitChecker 당일 금액 복원 (재시작 시)
+        from local_server.storage.log_db import get_log_db
+        self._limit_checker.restore_from_db(get_log_db())
         # 활성 규칙 종목들
         symbols = list({r.get("symbol", "") for r in self._rules if r.get("is_active")})
         # 일봉 지표 계산 (yfinance)
@@ -169,6 +172,9 @@ class StrategyEngine:
 
         try:
             now = datetime.now()
+
+            # TS-5: 날짜 경계 감지 → 일일 누적 자동 리셋
+            self._limit_checker.check_date_boundary()
 
             # 장 시작 직후 SYNCING (09:00~09:02)
             if now.hour == 9 and now.minute < 2:

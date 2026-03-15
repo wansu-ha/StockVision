@@ -28,7 +28,7 @@ from typing import Any
 
 import hmac
 
-from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 logger = logging.getLogger(__name__)
 
@@ -98,18 +98,34 @@ def get_connection_manager() -> ConnectionManager:
 
 
 @router.websocket("/ws")
-async def websocket_endpoint(ws: WebSocket, sec: str = Query("")) -> None:
+async def websocket_endpoint(ws: WebSocket) -> None:
     """WebSocket 엔드포인트.
 
-    연결 시 sec query param으로 local_secret을 검증한다.
-    연결 즉시 welcome 메시지를 전송하고,
-    클라이언트 메시지를 수신하여 에코/처리한다.
+    AS-1: 연결 후 5초 내 첫 프레임으로 auth 메시지를 받아 인증한다.
+    query param 대신 메시지 기반 인증 (로그/히스토리 노출 방지).
     """
+    await ws.accept()
+
+    # 첫 프레임 인증 (5초 타임아웃)
     expected = ws.app.state.local_secret
-    if not sec or not hmac.compare_digest(sec, expected):
-        await ws.close(code=4003, reason="Invalid local secret")
+    try:
+        raw = await asyncio.wait_for(ws.receive_text(), timeout=5.0)
+        auth_msg = json.loads(raw)
+        if auth_msg.get("type") != "auth" or not hmac.compare_digest(
+            auth_msg.get("secret", ""), expected
+        ):
+            await ws.close(code=4003, reason="Unauthorized")
+            return
+    except asyncio.TimeoutError:
+        await ws.close(code=4003, reason="Auth timeout")
         return
-    await manager.connect(ws)
+    except Exception:
+        await ws.close(code=4003, reason="Auth failed")
+        return
+
+    # 인증 성공 → ConnectionManager에 등록
+    manager._connections.append(ws)
+    logger.info("WebSocket 클라이언트 연결: %s (총 %d개)", id(ws), len(manager._connections))
     try:
         # 연결 확인 메시지
         await ws.send_json(

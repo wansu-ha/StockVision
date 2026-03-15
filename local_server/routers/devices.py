@@ -7,8 +7,10 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+
+from local_server.core.local_auth import require_local_secret
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +24,7 @@ class PairCompleteBody(BaseModel):
 
 
 @router.post("/pair/init")
-def pair_init():
+def pair_init(_: None = Depends(require_local_secret)):
     """E2E 키 생성 + QR 데이터 반환."""
     from local_server.cloud.e2e_crypto import E2ECrypto
     crypto = E2ECrypto()
@@ -43,7 +45,7 @@ def pair_init():
 
 
 @router.post("/pair/complete")
-async def pair_complete(body: PairCompleteBody):
+async def pair_complete(body: PairCompleteBody, _: None = Depends(require_local_secret)):
     """페어링 완료 → 클라우드에 디바이스 등록."""
     from local_server.cloud.client import CloudClient, CloudClientError
     from local_server.cloud.heartbeat import get_cloud_client

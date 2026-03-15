@@ -103,8 +103,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             ws_client.set_command_handler(_handle_remote_command)
 
             set_ws_relay_client(ws_client)
-            await ws_client.start(ws_url, access_token)
-            logger.info("클라우드 WS 릴레이 시작: %s", ws_url)
+            try:
+                await asyncio.wait_for(ws_client.start(ws_url, access_token), timeout=10)
+                logger.info("클라우드 WS 릴레이 시작: %s", ws_url)
+            except (asyncio.TimeoutError, Exception) as e:
+                logger.warning("클라우드 WS 릴레이 연결 실패 (서버 시작은 계속): %s", e)
 
     # 클라우드 하트비트 시작 (WS 연결 여부와 관계없이 — HTTP 폴백용)
     heartbeat_task: asyncio.Task | None = None
@@ -119,7 +122,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         from local_server.broker.factory import create_broker_from_config
         broker = create_broker_from_config()
-        await broker.connect()
+        await asyncio.wait_for(broker.connect(), timeout=15)
         app.state.broker = broker
         app.state.broker_reason = "connected"
         logger.info("브로커 자동 연결 완료")
@@ -234,11 +237,7 @@ def create_app() -> FastAPI:
     )
 
     # CORS 미들웨어 (Step 8)
-    origins: list[str] = cfg.get("cors.origins") or [
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "https://stock-vision-two.vercel.app",
-    ]
+    origins: list[str] = cfg.get("cors.origins")
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins,
@@ -316,17 +315,6 @@ def configure_logging() -> None:
 app = create_app()
 
 
-def _check_port(port: int) -> bool:
-    """포트가 사용 가능한지 확인한다. 사용 중이면 False."""
-    import socket
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.bind(("127.0.0.1", port))
-        return True
-    except OSError:
-        logger.error("포트 %d이(가) 이미 사용 중입니다.", port)
-        return False
-
 
 def _ensure_deeplink() -> None:
     """딥링크 프로토콜이 현재 exe를 가리키는지 확인하고, 아니면 재등록."""
@@ -375,20 +363,28 @@ if __name__ == "__main__":
     cfg = get_config()
     port = cfg.get("server.port", 4020)
 
-    # 포트 점유 감지
-    if not _check_port(port):
-        sys.exit(1)
-
     # 딥링크 프로토콜 등록/검증
     _ensure_deeplink()
 
     # sys.argv 화이트리스트 검증
     _parse_deeplink_argv()
 
+    # 소켓 직접 생성 — SO_REUSEADDR로 TIME_WAIT/ghost 바인딩 회피
+    import socket as _socket
+    host = cfg.get("server.host", "127.0.0.1")
+    sock = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+    sock.setsockopt(_socket.SOL_SOCKET, _socket.SO_REUSEADDR, 1)
+    try:
+        sock.bind((host, port))
+    except OSError:
+        logger.error("포트 %d이(가) 이미 사용 중입니다.", port)
+        sys.exit(1)
+    sock.listen(128)
+    sock.setblocking(False)
+
     # PyInstaller exe에서는 모듈 문자열 import가 실패하므로 앱 객체 직접 전달
-    uvicorn.run(
-        app,
-        host=cfg.get("server.host", "127.0.0.1"),
-        port=port,
-        log_level="info",
-    )
+    config = uvicorn.Config(app, host=host, port=port, log_level="info")
+    server = uvicorn.Server(config)
+
+    import asyncio
+    asyncio.run(server.serve(sockets=[sock]))

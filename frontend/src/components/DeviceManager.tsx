@@ -6,6 +6,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { cloudDevices, type DeviceInfo } from '../services/cloudClient'
+import client from '../services/localClient'
 
 export default function DeviceManager() {
   const queryClient = useQueryClient()
@@ -24,11 +25,9 @@ export default function DeviceManager() {
 
   const handlePairInit = async () => {
     try {
-      const LOCAL_URL = import.meta.env.VITE_LOCAL_API_URL || 'http://localhost:4020'
-      const resp = await fetch(`${LOCAL_URL}/api/devices/pair/init`, { method: 'POST' })
-      const result = await resp.json()
-      if (result.success) {
-        setPairingData(result.data)
+      const res = await client.post('/devices/pair/init')
+      if (res.data.success) {
+        setPairingData(res.data.data)
         setShowPairing(true)
       }
     } catch {
@@ -39,15 +38,10 @@ export default function DeviceManager() {
   const handlePairComplete = async () => {
     if (!pairingData) return
     try {
-      const LOCAL_URL = import.meta.env.VITE_LOCAL_API_URL || 'http://localhost:4020'
-      await fetch(`${LOCAL_URL}/api/devices/pair/complete`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          device_id: pairingData.device_id,
-          name: navigator.userAgent.slice(0, 50),
-          platform: 'web',
-        }),
+      await client.post('/devices/pair/complete', {
+        device_id: pairingData.device_id,
+        name: navigator.userAgent.slice(0, 50),
+        platform: 'web',
       })
       setShowPairing(false)
       setPairingData(null)

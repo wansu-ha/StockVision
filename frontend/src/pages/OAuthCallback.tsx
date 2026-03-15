@@ -6,11 +6,13 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { cloudOAuth } from '../services/cloudClient'
+import { useAuth } from '../context/AuthContext'
 
 export default function OAuthCallback() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const [error, setError] = useState('')
+  const { loginWithTokens } = useAuth()
 
   useEffect(() => {
     const code = searchParams.get('code')
@@ -28,15 +30,14 @@ export default function OAuthCallback() {
       : cloudOAuth.googleCallback(code, redirectUri)
 
     exchange
-      .then((tokens) => {
-        sessionStorage.setItem('sv_jwt', tokens.access_token)
-        localStorage.setItem('sv_rt', tokens.refresh_token)
+      .then(async (tokens) => {
+        await loginWithTokens(tokens.access_token, tokens.refresh_token)
         navigate('/', { replace: true })
       })
       .catch(() => {
         setError('로그인에 실패했습니다. 다시 시도해주세요.')
       })
-  }, [searchParams, navigate])
+  }, [searchParams, navigate, loginWithTokens])
 
   if (error) {
     return (

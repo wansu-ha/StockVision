@@ -40,7 +40,7 @@ async def get_status(request: Request) -> dict[str, Any]:
     if engine:
         sg = engine.safeguard.state
         safeguard_data = {
-            "kill_switch": sg.kill_switch.name,
+            "kill_switch": sg.kill_switch != KillSwitchLevel.OFF,
             "loss_lock": sg.loss_lock,
             "trading_enabled": engine.safeguard.is_trading_enabled(),
         }

@@ -26,9 +26,9 @@ const Layout = ({ children }: LayoutProps) => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-950">
       {/* Navigation */}
-      <nav className="bg-white shadow-lg border-b border-gray-100">
+      <nav className="bg-gray-900 shadow-lg border-b border-gray-800">
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex justify-between h-20">
             <div className="flex items-center">
@@ -55,7 +55,7 @@ const Layout = ({ children }: LayoutProps) => {
                   className={`px-5 py-2.5 rounded-2xl text-sm font-semibold transition-all duration-200 ${
                     isActive(item.path)
                       ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                      : 'text-gray-400 hover:text-white hover:bg-gray-800'
                   }`}
                 >
                   {item.label}

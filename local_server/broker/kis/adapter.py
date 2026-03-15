@@ -3,6 +3,7 @@
 모든 kis 모듈을 조합하여 BrokerAdapter ABC를 구현한다.
 """
 
+import asyncio
 import logging
 from decimal import Decimal
 from typing import Callable, Optional
@@ -64,7 +65,8 @@ class KisAdapter(BrokerAdapter):
         self._auth = KisAuth(app_key, app_secret)
         self._quote_client = KisQuote(self._auth, account_no, is_mock)
         self._order_client = KisOrder(self._auth, account_no, is_mock)
-        self._ws = KisWS(self._auth)
+        self._ws = KisWS(self._auth, on_disconnect=self._on_ws_disconnect)
+        self._subscribed_symbols: set[str] = set()  # 재연결 후 재구독용
         self._rate_limiter = MultiEndpointRateLimiter(rate_limit_cps)
         self._state = StateMachine()
         self._idempotency = IdempotencyGuard()
@@ -106,6 +108,11 @@ class KisAdapter(BrokerAdapter):
             await self._state.transition(ConnectionState.SUBSCRIBED)
             logger.info("KIS WebSocket 연결 완료")
 
+            # 재연결 시 이전 구독 종목 재구독
+            if self._subscribed_symbols:
+                await self._ws.subscribe(list(self._subscribed_symbols))
+                logger.info("재구독 완료: %d개 종목", len(self._subscribed_symbols))
+
             # 대사 태스크 시작
             await self._reconciler.start()
 
@@ -124,6 +131,13 @@ class KisAdapter(BrokerAdapter):
         await self._ws.disconnect()
         self._state.reset()
         logger.info("KisAdapter 연결 종료")
+
+    def _on_ws_disconnect(self) -> None:
+        """WS 연결 끊김 콜백 — StateMachine을 ERROR로 전환한다.
+
+        _recv_loop는 asyncio Task 안에서 실행되므로 running loop가 존재함.
+        """
+        asyncio.create_task(self._state.transition(ConnectionState.ERROR))
 
     @property
     def is_connected(self) -> bool:
@@ -157,6 +171,7 @@ class KisAdapter(BrokerAdapter):
     ) -> None:
         """실시간 시세 구독을 시작한다."""
         self._assert_connected()
+        self._subscribed_symbols.update(symbols)  # 재연결 후 재구독용 보관
         self._ws.add_callback(callback)
         await self._ws.subscribe(symbols)
 

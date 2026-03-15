@@ -47,6 +47,7 @@ export default function StrategyBuilder() {
   const [editId, setEditId]   = useState<number | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [error, setError]     = useState<string | null>(null)
+  const [readOnlyScript, setReadOnlyScript] = useState<string | null>(null)
 
   const { data: rulesData } = useQuery({
     queryKey: ['rules'],
@@ -60,7 +61,7 @@ export default function StrategyBuilder() {
       return editId ? cloudRules.update(editId, payload) : cloudRules.create(payload)
     },
     onSuccess: () => {
-      invalidate(); setShowForm(false); setEditId(null); setForm(EMPTY_FORM); setError(null)
+      invalidate(); setShowForm(false); setEditId(null); setForm(EMPTY_FORM); setError(null); setReadOnlyScript(null)
       cloudRules.list().then((rules) => localRules.sync(rules)).catch(() => {})
     },
     onError: (err: unknown) => {
@@ -119,6 +120,7 @@ export default function StrategyBuilder() {
       qty: rule.execution?.qty_value ?? rule.qty ?? 10,
       is_active: rule.is_active,
     })
+    setReadOnlyScript(rule.script ?? null)
     setShowForm(true)
   }
 
@@ -128,7 +130,7 @@ export default function StrategyBuilder() {
         <h1 className="text-2xl font-bold">전략 빌더</h1>
         {!showForm && (
           <button
-            onClick={() => { setShowForm(true); setEditId(null); setForm(EMPTY_FORM); setError(null) }}
+            onClick={() => { setShowForm(true); setEditId(null); setForm(EMPTY_FORM); setError(null); setReadOnlyScript(null) }}
             className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 text-sm"
           >
             + 새 전략
@@ -189,45 +191,55 @@ export default function StrategyBuilder() {
               </div>
             </div>
 
-            {/* 매수 조건 */}
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <label className="text-sm font-medium text-blue-600">매수 조건 (모두 충족 시)</label>
-                <button onClick={addBuyCond} className="text-xs text-blue-600 hover:underline">+ 조건 추가</button>
+            {editId && readOnlyScript ? (
+              <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4">
+                <p className="text-sm text-gray-400 mb-2">기존 전략 조건 (읽기 전용)</p>
+                <pre className="bg-gray-800 p-3 rounded text-sm text-gray-300 whitespace-pre-wrap">{readOnlyScript}</pre>
+                <p className="text-xs text-gray-500 mt-2">조건 수정은 DSL 역파싱 지원 후 가능합니다.</p>
               </div>
-              <div className="space-y-2">
-                {form.buyConditions.map((c, i) => (
-                  <ConditionRow
-                    key={`buy-${i}`}
-                    condition={c}
-                    variables={allVars}
-                    operators={ops}
-                    onChange={nc => updateBuyCond(i, nc)}
-                    onDelete={() => removeBuyCond(i)}
-                  />
-                ))}
-              </div>
-            </div>
+            ) : (
+              <>
+                {/* 매수 조건 */}
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="text-sm font-medium text-blue-600">매수 조건 (모두 충족 시)</label>
+                    <button onClick={addBuyCond} className="text-xs text-blue-600 hover:underline">+ 조건 추가</button>
+                  </div>
+                  <div className="space-y-2">
+                    {form.buyConditions.map((c, i) => (
+                      <ConditionRow
+                        key={`buy-${i}`}
+                        condition={c}
+                        variables={allVars}
+                        operators={ops}
+                        onChange={nc => updateBuyCond(i, nc)}
+                        onDelete={() => removeBuyCond(i)}
+                      />
+                    ))}
+                  </div>
+                </div>
 
-            {/* 매도 조건 */}
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <label className="text-sm font-medium text-red-600">매도 조건 (하나라도 충족 시)</label>
-                <button onClick={addSellCond} className="text-xs text-red-600 hover:underline">+ 조건 추가</button>
-              </div>
-              <div className="space-y-2">
-                {form.sellConditions.map((c, i) => (
-                  <ConditionRow
-                    key={`sell-${i}`}
-                    condition={c}
-                    variables={allVars}
-                    operators={ops}
-                    onChange={nc => updateSellCond(i, nc)}
-                    onDelete={() => removeSellCond(i)}
-                  />
-                ))}
-              </div>
-            </div>
+                {/* 매도 조건 */}
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="text-sm font-medium text-red-600">매도 조건 (하나라도 충족 시)</label>
+                    <button onClick={addSellCond} className="text-xs text-red-600 hover:underline">+ 조건 추가</button>
+                  </div>
+                  <div className="space-y-2">
+                    {form.sellConditions.map((c, i) => (
+                      <ConditionRow
+                        key={`sell-${i}`}
+                        condition={c}
+                        variables={allVars}
+                        operators={ops}
+                        onChange={nc => updateSellCond(i, nc)}
+                        onDelete={() => removeSellCond(i)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
           <div className="flex gap-3 mt-6">
@@ -239,7 +251,7 @@ export default function StrategyBuilder() {
               {saveMut.isPending ? '저장 중...' : '저장'}
             </button>
             <button
-              onClick={() => { setShowForm(false); setEditId(null); setError(null) }}
+              onClick={() => { setShowForm(false); setEditId(null); setError(null); setReadOnlyScript(null) }}
               className="px-4 py-2 border border-gray-700 rounded-xl text-sm text-gray-300 hover:bg-gray-800 transition"
             >
               취소

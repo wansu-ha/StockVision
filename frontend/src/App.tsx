@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import StockList from './pages/StockList'
@@ -18,9 +19,9 @@ import Login from './pages/Login'
 import Register from './pages/Register'
 import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
-import ProtoA from './pages/ProtoA'
-import ProtoB from './pages/ProtoB'
-import ProtoC from './pages/ProtoC'
+const ProtoA = lazy(() => import('./pages/ProtoA'))
+const ProtoB = lazy(() => import('./pages/ProtoB'))
+const ProtoC = lazy(() => import('./pages/ProtoC'))
 import MainDashboard from './pages/MainDashboard'
 import OnboardingWizard from './pages/OnboardingWizard'
 import Layout from './components/Layout'
@@ -58,9 +59,13 @@ function AppRoutes() {
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/oauth/callback" element={<OAuthCallback />} />
-      <Route path="/proto-a" element={<ProtoA />} />
-      <Route path="/proto-b" element={<ProtoB />} />
-      <Route path="/proto-c" element={<ProtoC />} />
+      {import.meta.env.DEV && (
+        <>
+          <Route path="/proto-a" element={<Suspense fallback={null}><ProtoA /></Suspense>} />
+          <Route path="/proto-b" element={<Suspense fallback={null}><ProtoB /></Suspense>} />
+          <Route path="/proto-c" element={<Suspense fallback={null}><ProtoC /></Suspense>} />
+        </>
+      )}
 
       {/* 메인 대시보드 (Layout 없음 — 자체 헤더 사용) */}
       <Route path="/" element={

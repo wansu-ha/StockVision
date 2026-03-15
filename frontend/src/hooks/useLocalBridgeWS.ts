@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { create } from 'zustand'
 import { useToastStore } from '../stores/toastStore'
+import { getLocalSecret } from '../services/localClient'
 
 const LOCAL_URL = import.meta.env.VITE_LOCAL_API_URL || 'http://localhost:4020'
 const WS_URL = LOCAL_URL.replace(/^http/, 'ws') + '/ws'
@@ -77,13 +78,16 @@ export function useLocalBridgeWS() {
       }
 
       ws.onclose = () => {
-        if (retries.current < 3) {
-          retries.current++
-          timeout = setTimeout(connect, 3000 * retries.current)
-        }
+        const delay = Math.min(1000 * Math.pow(2, retries.current), 30000)
+        retries.current += 1
+        timeout = setTimeout(connect, delay)
       }
 
-      ws.onopen = () => { retries.current = 0 }
+      ws.onopen = () => {
+        // AS-1: 첫 프레임으로 인증 전송 (query param 대체)
+        ws.send(JSON.stringify({ type: 'auth', secret: getLocalSecret() }))
+        retries.current = 0
+      }
     }
 
     connect()

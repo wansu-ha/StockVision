@@ -91,7 +91,6 @@ class TestLocalAuthContract:
         exempt = [
             ("GET", "/health"),
             ("GET", "/api/status"),
-            ("GET", "/api/auth/status"),
         ]
         for method, path in exempt:
             resp = getattr(client, method.lower())(path)
@@ -108,19 +107,22 @@ class TestLocalAuthContract:
             })
         assert resp.status_code == 200
 
-    def test_ct4d_ws_no_secret_close_4003(self, client: TestClient):
-        """CT-4d: WS /ws — sec 없이 연결 → close code 4003."""
+    def test_ct4d_ws_no_auth_close_4003(self, client: TestClient):
+        """CT-4d: WS /ws — 인증 프레임 없이 연결 → close code 4003."""
         try:
-            with client.websocket_connect("/ws"):
-                pass
+            with client.websocket_connect("/ws") as ws:
+                # auth 프레임 보내지 않음 → 타임아웃 또는 잘못된 메시지
+                ws.send_json({"type": "ping"})
+                ws.receive_json()
             assert False, "WebSocketDisconnect가 발생해야 한다"
         except WebSocketDisconnect as e:
             assert e.code == 4003
 
-    def test_ct4e_ws_valid_secret_connects(self, client: TestClient):
-        """CT-4e: WS /ws — 올바른 sec → 연결 성공 + welcome 메시지."""
+    def test_ct4e_ws_valid_auth_connects(self, client: TestClient):
+        """CT-4e: WS /ws — 첫 프레임 auth → 연결 성공 + welcome 메시지."""
         secret = client._local_secret
-        with client.websocket_connect(f"/ws?sec={secret}") as ws:
+        with client.websocket_connect("/ws") as ws:
+            ws.send_json({"type": "auth", "secret": secret})
             msg = ws.receive_json()
             assert msg["type"] == "system"
             assert "message" in msg["data"]

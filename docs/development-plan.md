@@ -1,3 +1,5 @@
+> SUPERSEDED — 최신 문서: `docs/development-plan-v2.md`
+
 # 🚀 StockVision 개발 계획서
 
 ## 📋 프로젝트 개요

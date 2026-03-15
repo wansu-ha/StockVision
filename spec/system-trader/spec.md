@@ -1,7 +1,6 @@
 # System Trader 설계 명세서
 
-> 작성일: 2026-03-10
-> 상태: 초안
+> 작성일: 2026-03-10 | 상태: 구현 완료
 > 관련 문서:
 > - `docs/product/system-trader-definition.md`
 > - `docs/product/system-trader-benchmark.md`

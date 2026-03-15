@@ -22,7 +22,7 @@ cloud_server/      # 클라우드 서버 (:4010)
 local_server/      # 로컬 서버 (:4020)
   broker/          # 증권사 어댑터 (KIS, 키움)
   engine/          # 전략 엔진
-  api/             # FastAPI 라우터
+  routers/         # FastAPI 라우터
 sv_core/           # 공유 코어 모듈
 frontend/
   src/
@@ -40,15 +40,13 @@ spec/              # 기능별 spec/plan/reports
 ### Cloud Server
 ```bash
 source .venv/Scripts/activate  # Windows
-cd cloud_server
-python -m uvicorn main:app --port 4010 --reload
+python -m uvicorn cloud_server.main:app --port 4010 --reload
 ```
 
 ### Local Server
 ```bash
 source .venv/Scripts/activate
-cd local_server
-python -m uvicorn api.main:app --port 4020 --reload
+python -m uvicorn local_server.main:app --port 4020 --reload
 ```
 
 ### Frontend

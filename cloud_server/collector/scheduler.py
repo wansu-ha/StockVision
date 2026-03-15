@@ -154,7 +154,7 @@ class CollectorScheduler:
                 "api_key": service_key_row.api_key,
                 "api_secret": decrypt_value(service_key_row.api_secret),
             })
-            await broker.authenticate()
+            await broker.connect()
 
             self.kis_collector = KisCollector(broker)
             symbols = get_major_symbols()

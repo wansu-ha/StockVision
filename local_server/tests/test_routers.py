@@ -52,8 +52,8 @@ class TestAuthRouter:
         body = resp.json()
         assert body["success"] is True
 
-    def test_auth_status(self, client: TestClient) -> None:
-        resp = client.get("/api/auth/status")
+    def test_auth_status(self, client: TestClient, sh: dict) -> None:
+        resp = client.get("/api/auth/status", headers=sh)
         assert resp.status_code == 200
         body = resp.json()
         assert "has_cloud_token" in body["data"]
