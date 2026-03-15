@@ -4,19 +4,13 @@ import { useNavigate } from 'react-router-dom'
 import { useNotifStore } from '../hooks/useLocalBridgeWS'
 
 function SeverityIcon({ severity }: { severity?: string }) {
-  if (severity === 'critical') {
-    return (
-      <span className="text-red-400 shrink-0">
-        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-        </svg>
-      </span>
-    )
-  }
+  const color = severity === 'critical' ? 'text-red-400' : 'text-yellow-400'
+  const pulse = severity === 'critical' ? 'animate-pulse' : ''
   return (
-    <span className="text-yellow-400 shrink-0">
-      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+    <span className={`${color} shrink-0`}>
+      <svg className={`w-3.5 h-3.5 ${pulse}`} viewBox="0 0 24 24" fill="currentColor">
+        <circle cx="12" cy="12" r="10" opacity="0.2" />
+        <circle cx="12" cy="12" r="6" />
       </svg>
     </span>
   )
@@ -44,9 +38,9 @@ export default function AlertsDropdown() {
         aria-label="경고 알림"
       >
         <svg className={`w-4 h-4 ${hasCritical ? 'text-red-500 animate-pulse' : unreadAlerts > 0 ? 'text-red-400' : 'text-gray-500'}`}
-          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round"
-            d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+          viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="12" cy="12" r="10" opacity="0.2" />
+          <circle cx="12" cy="12" r="6" />
         </svg>
         {unreadAlerts > 0 && (
           <span className={`absolute -top-1 -right-1 text-[10px] font-bold px-1 rounded-full leading-tight
