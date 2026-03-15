@@ -130,7 +130,7 @@ indicators_used: [current_price, rsi_14, rsi_21, macd, macd_signal, bollinger_up
 
 #### 2.6 공공데이터포탈 → StockMaster 갱신
 
-- **PASS** — DATA_PORTAL_API_KEY로 KRX 상장종목 수집
+- **PASS** — KRX_LISTING_API_KEY로 KRX 상장종목 수집
 
 ```
 수집: 2,769건 (최근 7일 데이터)

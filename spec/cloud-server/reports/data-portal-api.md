@@ -64,4 +64,4 @@
 
 - 수집 로직: `cloud_server/services/stock_service.py` → `fetch_krx_listed()`
 - 스케줄: `cloud_server/collector/scheduler.py` → 매일 08:00 KST
-- 환경변수: `DATA_PORTAL_API_KEY` (`.env`)
+- 환경변수: `KRX_LISTING_API_KEY` (`.env`)

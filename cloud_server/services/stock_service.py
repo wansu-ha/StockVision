@@ -70,9 +70,9 @@ async def fetch_krx_listed(db: Session) -> int:
     Returns:
         처리된 종목 수
     """
-    api_key = os.environ.get("DATA_PORTAL_API_KEY", "")
+    api_key = os.environ.get("KRX_LISTING_API_KEY", "")
     if not api_key:
-        logger.warning("DATA_PORTAL_API_KEY 미설정 — 종목 마스터 수집 건너뜀")
+        logger.warning("KRX_LISTING_API_KEY 미설정 — 종목 마스터 수집 건너뜀")
         return 0
 
     # 최근 7일 이내 데이터만 요청 (주말/공휴일 대비 여유)
