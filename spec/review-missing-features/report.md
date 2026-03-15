@@ -1,4 +1,4 @@
-> 작성일: 2026-03-15 | 상태: 초안 | 미개발 사항 교차검증 리뷰 v4
+> 작성일: 2026-03-15 | 상태: 초안 | 미개발 사항 교차검증 리뷰 v5 (최종)
 
 # StockVision 교차검증 리뷰 — Spec · Plan · 아키텍처 · 제품문서 · 리서치
 
@@ -291,11 +291,98 @@ Phase C (Week 7-13) ════════════════════
 
 ---
 
-## Part 6: Plan 수정 필요 목록
+## Part 6: 리서치 문서 교차검증 — 보안 감사 · API 리뷰 · 코드 분석
+
+`docs/research/` 52개 파일을 검증한 결과, 대부분의 Critical/High 이슈는 **이미 수정됨**.
+아래는 **현재 코드에서 미해결 상태인 항목만** 정리.
+
+### 6.1 보안 — 미해결 1건
+
+| 이슈 | 소스 | 상세 | 심각도 |
+|------|------|------|--------|
+| 이메일/비밀번호 리셋 토큰 평문 저장 | security-audit C3 | `EmailVerificationToken.token`, `PasswordResetToken.token`이 DB에 해싱 없이 저장됨. `RefreshToken`은 `hash_token()` 적용되어 있으나 이 두 모델은 누락. DB 유출 시 임의 계정 비밀번호 리셋 가능 | 🔴 P1 |
+
+**수정 방법**: `RefreshToken`과 동일한 `hash_token()` 패턴을 `EmailVerificationToken`, `PasswordResetToken`에 적용
+
+### 6.2 보안 — 이미 수정 확인된 항목 (참고)
+
+| 이슈 | 소스 | 현재 상태 |
+|------|------|----------|
+| Kill Switch 상태 플래그만 (LS-C1) | review-local-server | ✅ `safeguard.py` — evaluate_all() 차단 + 미체결 취소 |
+| 뮤테이션 엔드포인트 인증 없음 (LS-C2) | review-local-server | ✅ `require_local_secret()` 전 엔드포인트 적용 |
+| OAuth 콜백 login() 미호출 (FE-C1) | review-frontend | ✅ `loginWithTokens()` 정상 호출 |
+| WS 메시지 타입 불일치 (W1) | cross-review-api | ✅ `price_update`, `execution`, `status_change` 일치 |
+| 토큰 필드명 `jwt` → `access_token` (A7) | cross-review-api | ✅ `access_token` 반환 |
+| 응답 `count` 필드 누락 (A8) | cross-review-api | ✅ 전 엔드포인트 `{ success, data, count }` |
+| WS sec 쿼리 파라미터 노출 (LS-C5) | review-local-server | ✅ 메시지 기반 인증, 쿼리 파라미터 미사용 |
+| SECRET_KEY 기본값 취약 (SEC-C2) | cross-review-security | ✅ 기본값 빈 문자열 + `validate_settings()` 강제 |
+| LogDB asyncio 차단 (LS-C4) | review-local-server | ✅ `async_write()` → `asyncio.to_thread()` |
+| alertsClient 인증 미적용 (FE-C2) | review-frontend | ⚠️ axios 인터셉터 경유로 적용됨 (초기화 순서 의존) |
+
+### 6.3 리서치 문서의 미반영 권장사항
+
+| 권장 사항 | 소스 | 현재 상태 | 관련 Spec |
+|----------|------|----------|----------|
+| WS Origin 헤더 검증 | security-audit H3 | ❌ 미구현 — localhost 외부 접근 가능 | security-phase2에 미포함 |
+| reset-password 토큰 URL 노출 | security-audit H6 | ❌ 미구현 — 브라우저 히스토리/Referer 노출 | security-phase2에 미포함 |
+| 비밀번호 강도 검증 | security-audit H5 | ❌ 미구현 — 빈 문자열 허용 | security-phase2에 미포함 |
+| KIS App Secret 모든 요청에 포함 | cross-review-security SEC-C1 | ❌ 미구현 — 토큰 발급 시에만 필요 | kis-adapter-completion에 미포함 |
+| Daily budget 재시작 시 리셋 | review-local-server LS-H4 | ❌ 미구현 — 인메모리 카운터 | local-server-resilience에 미포함 |
+| StrategyBuilder 편집 시 데이터 유실 | review-frontend FE-I5 | ❌ 미구현 — 폼 초기화됨 | dsl-client-parser에서 해결 예정 |
+| Workbench UI (전문가 모드) | dual-audience-strategy | ❌ spec 없음 | 향후 검토 |
+| Windows Credential Manager LLM 키 저장 | key-storage-trust | ❌ 미구현 — 브로커 키만 적용 | spec 없음 |
+
+### 6.4 문서 갱신 필요
+
+| 문서 | 이슈 | 상태 |
+|------|------|------|
+| Phase 1/2 문서 5건 | SUPERSEDED 헤더 미표기 | 🟡 혼란 가능 |
+| architecture.md | Phase C 기능 8건 미기재 (E2E 암호화, WS Relay 등) | 🟡 |
+| 6개 spec 상태 헤더 | "초안/진행 중"이나 실제 "구현 완료" | 🟡 |
+
+---
+
+## Part 7: 최종 미해결 항목 통합 (갱신)
+
+### 카테고리별 미해결 항목 수
+
+| 카테고리 | 항목 수 | 우선순위 | v4 대비 |
+|---------|--------|---------|---------|
+| Phase A 졸업 블로커 (버그 + UI) | 18건 | 🔴 즉시 | 유지 |
+| 보안 미해결 (토큰 해싱) | 1건 | 🔴 운영 전 | **신규** |
+| 보안 권장사항 미반영 | 5건 | 🟡 운영 전 | **신규** |
+| 초안 Spec 미충족 기준 | ~100건 | 🔴-🟡 | 유지 |
+| Legal UI/API (L1-L3) | 15건 | 🔴 운영 전 | 유지 |
+| Alembic 마이그레이션 | 4건 | 🔴 구현 시 | 유지 |
+| npm 의존성 추가 | 2건 | 🟡 구현 시 | 유지 |
+| 코드 품질 권장사항 | 3건 | 🟡 | **신규** |
+| 문서 갱신 | 3건 | 🟡 | **신규** |
+| 제품 전략 미결정 | 6건 | 🟡 런칭 전 | 유지 |
+| v2 기능 | 7건 | 🟢 v2 | 유지 |
+| **총계** | **~164건** | | +12건 |
+
+### security-phase2 spec에 추가해야 할 항목
+
+현재 spec에 포함되지 않은 보안 이슈가 있으며, spec 갱신 또는 별도 spec이 필요:
+
+| 항목 | 현재 위치 | 제안 |
+|------|----------|------|
+| 토큰 해싱 (C3) | 미반영 | security-phase2에 S5로 추가 |
+| WS Origin 검증 (H3) | 미반영 | security-phase2에 S6로 추가 |
+| 비밀번호 강도 (H5) | 미반영 | security-phase2에 S7로 추가 |
+| reset-password URL 토큰 (H6) | 미반영 | security-phase2에 S8로 추가 |
+| KIS App Secret 불필요 전송 (SEC-C1) | 미반영 | kis-adapter-completion에 K3로 추가 |
+| LimitChecker 재시작 리셋 (LS-H4) | 미반영 | local-server-resilience에 R5로 추가 |
+
+---
+
+## Part 8: Plan 수정 필요 목록 (최종)
 
 | Plan 파일 | 수정 내용 |
 |----------|----------|
-| `spec/local-server-resilience/plan.md` | R4를 relay-infra 의존으로 표기, Phase C로 이동 |
+| `spec/local-server-resilience/plan.md` | R4를 relay-infra 의존으로 표기 + R5 (LimitChecker 영속화) 추가 |
 | `spec/frontend-quality/plan.md` | F3에 legal 선행 의존 명시 |
-| `spec/security-phase2/plan.md` | S4에 Alembic 마이그레이션 step 추가 |
+| `spec/security-phase2/plan.md` | S4에 Alembic 마이그레이션 step 추가 + S5~S8 (토큰 해싱, WS Origin, 비밀번호 강도, URL 토큰) 추가 |
+| `spec/security-phase2/spec.md` | 수용 기준에 S5~S8 추가 |
+| `spec/kis-adapter-completion/plan.md` | K3 (App Secret 불필요 전송 제거) 추가 |
 | `spec/legal/plan-v2.md` | Q1-Q5 결정 반영 필요 |
