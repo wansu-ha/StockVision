@@ -116,8 +116,30 @@ class CollectorScheduler:
             replace_existing=True,
         )
 
+        # stock_master가 비어있으면 서버 시작 직후 1회 수집
+        self.scheduler.add_job(
+            self._bootstrap_stock_master,
+            trigger="date",  # 즉시 1회 실행
+            id="stock_master_bootstrap",
+            replace_existing=True,
+        )
+
         self.scheduler.start()
         logger.info("수집 스케줄러 시작됨")
+
+    async def _bootstrap_stock_master(self) -> None:
+        """stock_master가 비어있으면 즉시 수집"""
+        db = get_db_session()
+        try:
+            from cloud_server.models.market import StockMaster
+            count = db.query(StockMaster).count()
+            if count == 0:
+                logger.info("stock_master 비어있음 — 초기 수집 시작")
+                await self.update_stock_master()
+            else:
+                logger.info("stock_master %d건 존재 — 초기 수집 생략", count)
+        finally:
+            db.close()
 
     def stop(self) -> None:
         """스케줄러 중지 (FastAPI shutdown에서 호출)"""

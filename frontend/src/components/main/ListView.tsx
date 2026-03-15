@@ -3,6 +3,7 @@
  * 디자인 개선: (A) indigo, (B) 하단 발광+첫행확장, (C) 계좌요약 2행, (E) 아코디언 애니메이션, (F) aria
  */
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 // ─── Types ───
 
@@ -73,6 +74,7 @@ export default function ListView({
   tab, setTab, stocks, account, isMock, marketStatus, trades, pendingOrders, onDetail,
   engineRunning, brokerConnected, onStrategyToggle, strategyLoading,
 }: ListViewProps) {
+  const navigate = useNavigate()
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
   const [hintVisible, setHintVisible] = useState(false)
 
@@ -325,7 +327,15 @@ export default function ListView({
 
       {/* 체결 내역 */}
       <div>
-        <h3 className="text-sm font-medium text-gray-400 mb-2">체결 내역</h3>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-medium text-gray-400">체결 내역</h3>
+          <button
+            onClick={() => navigate('/logs')}
+            className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+          >
+            전체 이력 →
+          </button>
+        </div>
         {trades.length === 0 ? (
           <div className="bg-gray-900 border border-gray-800 rounded-xl py-8 text-center text-sm text-gray-600">
             체결 내역이 없습니다
