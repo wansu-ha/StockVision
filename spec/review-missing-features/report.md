@@ -1,212 +1,301 @@
-> 작성일: 2026-03-15 | 상태: 초안 | 미개발 사항 리뷰 v3
+> 작성일: 2026-03-15 | 상태: 초안 | 미개발 사항 교차검증 리뷰 v4
 
-# StockVision 미개발 Spec & Plan 상세 분석 + 개발 순서
+# StockVision 교차검증 리뷰 — Spec · Plan · 아키텍처 · 제품문서 · 리서치
 
-## 1. 현황 요약
+## 검증 소스
 
-| # | Spec | 상태 | Plan | 공수 | 미충족 기준 |
-|---|------|------|------|------|------------|
-| 1 | frontend-quality | 초안 | ✅ | 7-10h | 6개 |
-| 2 | security-phase2 | 초안 | ✅ | 6-10h | 7개 |
-| 3 | legal (UI 연동) | 확정 | ✅ | 8-10h | 3개 |
-| 4 | kis-adapter-completion | 초안 | ✅ | 3-5h | 5개 |
-| 5 | engine-live-execution | 초안 | ✅ | 2-3일 | 4개 |
-| 6 | dsl-client-parser | 초안 | ✅ | 3-4일 | 6개 |
-| 7 | chart-timeframe | 초안 | ✅ (신규) | 5-7일 | 12개 |
-| 8 | local-server-resilience | 초안 | ✅ | 2-3일 | 7개 |
-| 9 | watchlist-heart | 초안 | ✅ (신규) | 1-2일 | 8개 |
-| 10 | relay-infra | 초안 | ✅ | 2-3주 | 16개 |
-| 11 | remote-ops | 초안 | ✅ | 2-3주 | 23개 |
+| 소스 | 파일 수 | 주요 내용 |
+|------|--------|----------|
+| spec/ (79개 디렉터리) | ~160 | 기능 spec + plan + reports |
+| docs/development-plan*.md | 3 | v1 원본 계획, v2 아키텍처 변경 |
+| docs/architecture*.md | 2 | Phase 3 아키텍처, 원래 설계 |
+| docs/product/ | 5+ | 제품 방향, Free/Pro 경계, UX 우선순위 |
+| docs/research/ | 52+ | 보안 감사, API 리뷰, 법무, LLM 연동 |
+| docs/legal/ | 5 | 이용약관, 개인정보, 면책, 브로커 준수 |
+| spec/phase-a-review.md | 1 | Phase A 졸업 블로커 |
+| spec/phase-b-backlog.md | 1 | Phase B 설계 미결정 |
 
 ---
 
-## 2. 교차 의존성 분석
+## Part 1: 새로 발견된 미해결 사항
 
-### 2.1 파일 충돌 매트릭스
+### 1.1 Phase A 졸업 블로커 — 기존 리뷰에서 누락 ⚠️
 
-| 공유 파일 | 관련 Spec | 충돌 유형 | 대응 |
-|----------|----------|----------|------|
-| `cloud_server/api/auth.py` | frontend-quality F3, legal | 양쪽 모두 엔드포인트 추가 | legal 선행 → F3 후행 |
-| `frontend/src/pages/Settings.tsx` | frontend-quality F3, legal | F3=닉네임, legal=약관 | legal 선행 → F3 후행 |
-| `local_server/cloud/ws_relay_client.py` | local-server-resilience R4, relay-infra | relay-infra가 파일 전면 교체 | ⚠️ R4는 relay-infra 후에만 의미 |
-| `local_server/broker/kis/auth.py` | kis-adapter-completion K2, chart-timeframe 1-3 | K2=approval_key, 1-3=REST 분봉 | 충돌 없음 (다른 메서드) |
-| `local_server/engine/bar_builder.py` | engine-live-execution, chart-timeframe | 다른 레이어 (지표 vs UI) | 충돌 없음 |
+이전 리뷰(v3)에서 **초안 상태 spec 11건**만 분석했으나, `phase-a-review.md`에 **이미 구현 완료 표기된 spec들의 미충족 기준**이 남아 있었다.
 
-### 2.2 핵심 의존 관계
+#### 프론트엔드 미구현 (frontend-ux-v2)
 
-```
-⚠️ 절대 의존 (순서 필수):
-  legal → frontend-quality F3    (auth.py, Settings.tsx 공유)
-  relay-infra → local-server-resilience R4  (ws_relay_client.py 전면 교체)
-  relay-infra → remote-ops       (WS 인프라 기반)
+| ID | 항목 | 상태 | 영향 |
+|----|------|------|------|
+| U2 | 엔진 신호등 카드 → ListView로 이동 | ❌ 미구현 | 계좌 상태 표시 안 됨 |
+| U3 | 전략 실행/중지 버튼 | ❌ 미구현 | UI에서 전략 제어 불가 |
+| U4 | 신호등 3색 (연결/엔진/킬스위치) | ❌ 미구현 | 시스템 상태 파악 불가 |
+| U5 | Header 신호등 제거 | ❌ 미구현 | 중복 UI 잔존 |
 
-💡 권장 순서 (필수는 아니지만 효율적):
-  kis-adapter-completion K2 → chart-timeframe Stage 1  (KIS auth 강화 후 REST 분봉)
-  chart-timeframe Stage 1 → engine-live-execution  (KIS REST 데이터 소스 공유 가능)
+#### 전략 목록 정보 부족 (strategy-list-info)
 
-✅ 완전 독립 (아무 순서나 가능):
-  security-phase2 (S1/S2/S4) ↔ 다른 모든 spec
-  dsl-client-parser ↔ 다른 모든 spec (순수 프론트엔드)
-  watchlist-heart ↔ 다른 모든 spec (순수 프론트엔드)
-  frontend-quality F1/F2 ↔ 다른 모든 spec
-```
+| ID | 항목 | 상태 |
+|----|------|------|
+| S1 | 전략 카드에 종목명 표시 | ❌ 미구현 |
+| S2 | 전략 방향(매수/매도) 표시 | ❌ 미구현 |
+| S3 | 실행 상태 표시 | ❌ 미구현 |
+
+#### 프론트엔드 버그 — 4건
+
+| 버그 | 심각도 | 위치 |
+|------|--------|------|
+| AuthContext setState 경쟁 조건 — RT 갱신 시 `localReady=false` 리셋 → 잔고 미로딩 | 🔴 높음 | `AuthContext.tsx` |
+| useStockData quotesQuery/namesQuery 클로저 race condition | 🔴 높음 | `useStockData.ts` |
+| 미체결 "취소" 버튼 stub — onClick 없음, PendingOrder.orderId 타입 누락 | 🟡 중간 | `ListView.tsx` |
+| Settings 키 등록 후 localStatus 캐시 미갱신 (5초 지연) | 🟡 중간 | `Settings.tsx` |
+
+#### 추가 품질 이슈 — 7건
+
+| 이슈 | 영향 |
+|------|------|
+| App.tsx 중첩 Routes에 404 fallback 없음 | 잘못된 URL → 빈 화면 |
+| useAccountStatus가 localReady 무관하게 폴링 → 인증 전 401 | 콘솔 에러 |
+| cloudClient 401 인터셉터 — AuthContext 정리 불완전 | 로그아웃 후 잔여 상태 |
+| LocalStatusData.broker에 `reason?: string` 없음 | 타입 불일치 |
+| 장 상태 공휴일 무시 (useMarketContext 미사용) | 공휴일에도 "장중" 표시 |
+| AdminGuard가 어드민 로그인 대신 메인으로 리다이렉트 | 어드민 접근 UX |
+| Register.tsx 라이트 테마 불일치 | 디자인 일관성 |
+
+---
+
+### 1.2 broker-auto-connect 미완성 — 기존 리뷰에서 누락
+
+Phase A 리뷰에서 **broker-auto-connect가 "구현 완료" 표기**되었으나, 실제로 프론트엔드 연동이 빠져 있다.
+
+| 항목 | 상태 |
+|------|------|
+| F8: 키 등록 후 즉시 재연결 트리거 | ❌ Settings.tsx에 `POST /api/broker/reconnect` 호출 없음 |
+| localClient.ts에 reconnect 함수 | ❌ 누락 |
+| 키 미등록 온보딩 CTA | ❌ 미구현 |
 
 ---
 
-## 3. 개발 순서 제안
+### 1.3 legal plan-v2 상세 — L1/L2/L3 미구현
 
-### Phase A — 기반 안정화 (1-2주)
+`spec/legal/plan-v2.md`에 상세 구현 계획이 있으나 전부 미시작:
 
-**목표**: 운영 전 필수 사항 해결. 보안, 안정성, 법무.
+**L1 (회원가입 약관 동의)**:
+- [ ] 체크박스 2개 미체크 시 가입 버튼 비활성
+- [ ] 서버 `terms_agreed=false` → 400
+- [ ] `legal_consents` 테이블에 2건 기록
+- [ ] 약관 링크 → 새 탭에서 전문 열람
 
-```
-Week 1:
-  ┌─ security-phase2 (S1→S2, S3, S4)    ← 보안 필수, 6-10h
-  ├─ frontend-quality (F1, F2)           ← ErrorBoundary + staleTime, 5-7h
-  ├─ kis-adapter-completion (K1, K2)     ← 실매매 기반, 3-5h
-  └─ watchlist-heart                     ← 독립 + 소규모, 1-2일
-      (모두 병렬 가능)
+**L2 (약관 열람)**:
+- [ ] `/legal/terms`, `/legal/privacy`, `/legal/disclaimer` 페이지
+- [ ] Settings에 "약관 및 고지" 섹션
+- [ ] Footer에 3개 링크
 
-Week 2:
-  ┌─ legal (UI 연동)                    ← 법무 필수, auth.py 수정
-  └─ frontend-quality (F3)              ← legal 후행 (auth.py 공유)
-      (순차)
-```
+**L3 (약관 버전 관리)**:
+- [ ] `legal_documents` 테이블 + 시드 데이터
+- [ ] `GET /api/v1/legal/documents/{type}` API
+- [ ] `GET /api/v1/legal/consent/status` API
+- [ ] 약관 업데이트 시 `requires_consent` 반환 → 재동의 모달
 
-**산출물**: 보안 강화, ErrorBoundary, 캐시 최적화, 약관 동의, 프로필 수정, KIS 어댑터 완성, 하트 토글
+**미결정 사항 (Q1-Q5)**:
+- Q1: 마크다운 렌더링 — `react-markdown` vs 직접 (제안: react-markdown)
+- Q2: 약관 원문 — DB vs 파일 (제안: DB)
+- Q3: 기존 사용자 — 다음 로그인 시 재동의
+- Q4: 면책 고지 시점 — 가입 시 vs 전략 활성화 시 (제안: 전략 활성화 시)
+- Q5: react-markdown 의존성 추가 필요 여부
 
 ---
+
+### 1.4 개발계획서 vs 현실 — 전략적 피벗 확인
+
+`docs/development-plan.md` (v1 원본)과 현재 구현을 비교한 결과, **의도적 피벗**과 **진짜 누락**을 구분해야 한다.
+
+#### 의도적 피벗 (문제 아님)
+
+| 원래 계획 | 현재 | 이유 |
+|----------|------|------|
+| LSTM/RF/SVM ML 모델 | Claude API 분석 | AI 예측 → LLM 비서로 전환 |
+| 가상 거래 시뮬레이터 | 브로커 직접 연동 | 실전 주문 엔진으로 전환 |
+| 중앙집중 DB (10+ 테이블) | 클라우드 최소 + 로컬 SQLite | 3프로세스 아키텍처 |
+| 다중 브로커 (Yahoo, CCXT) | KIS/키움 한국 증권사 | 한국 시장 집중 |
+
+#### 진짜 누락 (향후 구현 필요)
+
+| 항목 | 원래 Phase | 현재 상태 | 제안 시기 |
+|------|-----------|----------|----------|
+| 백테스팅 엔진 | Phase 4 | spec 없음 | v2 |
+| 포트폴리오 리밸런싱 | Phase 5 | spec 없음 | Phase E |
+| 리스크 메트릭 (VaR, MDD, Sharpe) | Phase 5 | spec 없음 | Phase E |
+| 2FA 인증 | Phase 1 | 미구현 | v2 |
+| 텔레그램/Slack 연동 | Phase D4 | spec 초안만 | Phase D |
+| 사용자 프로필/메모리 | Phase E | spec 없음 | Phase E |
+| BYO LLM 연동 | v2 | 설계만 | v2 |
+
+---
+
+### 1.5 제품 방향 문서에서 발견된 미결정 사항
+
+`docs/product/product-direction-log.md`, `free-pro-boundary.md`에서 제품 전략 미결정:
+
+| 미결정 사항 | 영향 | 긴급도 |
+|------------|------|--------|
+| 무료/Pro 경계 확정 | 가격 정책 | 🟡 런칭 전 |
+| 사용자 프로필 스키마 | Phase E 기반 | 🟢 나중 |
+| 비서 메모리 저장소 (로컬 vs 클라우드) | 아키텍처 | 🟢 나중 |
+| 메신저 1순위 채널 | Phase D | 🟢 나중 |
+| 오픈소스 라이선스 (AGPL vs MPL-2.0 vs 듀얼) | 공개 전 필수 | 🟡 런칭 전 |
+| LLM 권한 정책 (생성 가능 결과 범위) | 안전성 | 🟡 런칭 전 |
+
+---
+
+## Part 2: 기존 리뷰 항목 수정 사항
+
+### 2.1 개발 순서 수정 — Phase A에 추가 항목
+
+기존 Phase A (기반 안정화)에 **Phase A 졸업 블로커**를 포함해야 한다.
+
+```diff
+Phase A (Week 1-2) — 기반 안정화
++ ┌─ Phase A 졸업 블로커 (버그 4건 + UI 7건)          ← 신규 추가
+  ├─ security-phase2 (S1→S2, S3, S4)
+  ├─ frontend-quality (F1, F2)
+  ├─ kis-adapter-completion (K1, K2)
+  └─ watchlist-heart
+  순차: legal → frontend-quality (F3)
+```
+
+### 2.2 Alembic 마이그레이션 필요 목록 (확장)
+
+| Spec | 필드/테이블 | 마이그레이션 |
+|------|-----------|-------------|
+| security-phase2 S4 | `User.deleted_at` | ALTER TABLE users ADD |
+| legal L3 | `legal_documents` 테이블 | CREATE TABLE |
+| legal L3 | `legal_consents` 테이블 | CREATE TABLE |
+| legal L1 | `User.terms_accepted_at` (선택) | ALTER TABLE users ADD |
+
+### 2.3 npm 의존성 추가 필요
+
+| 패키지 | 용도 | 필요 Spec |
+|--------|------|----------|
+| `@heroicons/react` | HeartToggle 아이콘 | watchlist-heart |
+| `react-markdown` | 약관 렌더링 | legal L2 |
+
+---
+
+## Part 3: 갱신된 개발 순서
+
+### Phase A — 기반 안정화 + 졸업 블로커 (2-3주)
+
+```
+Week 1 (병렬):
+  ┌─ Phase A 버그 수정 (4건)
+  │    - AuthContext 경쟁 조건
+  │    - useStockData 클로저 race
+  │    - 미체결 취소 버튼 + orderId 타입
+  │    - Settings 키 등록 캐시
+  │
+  ├─ Phase A UI 미구현 (7건)
+  │    - frontend-ux-v2 U2~U5 (신호등, 버튼, Header)
+  │    - strategy-list-info S1~S3 (종목명, 방향, 상태)
+  │
+  ├─ security-phase2 (S1→S2, S3, S4)
+  ├─ kis-adapter-completion (K1, K2)
+  └─ watchlist-heart
+
+Week 2 (병렬 + 순차):
+  ┌─ frontend-quality (F1 ErrorBoundary, F2 staleTime)   ← 병렬
+  ├─ legal (L1 + L2 + L3)                                 ← 병렬
+  │    └→ frontend-quality F3 (legal 후행)                 ← 순차
+  └─ 추가 품질 이슈 (404 fallback, 폴링 가드, 공휴일)     ← 병렬
+```
 
 ### Phase B — 핵심 기능 완성 (3-4주)
 
-**목표**: 전략 엔진 E2E, DSL 편집, 차트 확장, 로컬 서버 안정성.
-
 ```
-Week 3-4:
-  ┌─ engine-live-execution (S2→S3→S5)   ← IndicatorProvider, 2-3일
-  ├─ dsl-client-parser (D1→D2→D3→D4)   ← TS 파서, 3-4일
-  └─ chart-timeframe Stage 1+2          ← 로컬 분봉 API + 클라우드 주봉, 3-4일
-      (모두 병렬 가능)
+Week 3-4 (병렬):
+  ┌─ engine-live-execution (IndicatorProvider)
+  ├─ dsl-client-parser (D1→D2→D3→D4)
+  └─ chart-timeframe Stage 1 + 2
 
 Week 5:
-  ┌─ chart-timeframe Stage 3            ← 프론트엔드 UI, 2-3일
-  └─ local-server-resilience (R1, R2, R3) ← R4 제외*, 2일
-      (병렬 가능)
+  ┌─ chart-timeframe Stage 3 (프론트엔드)
+  └─ local-server-resilience (R1, R2, R3 — R4 제외)
 ```
-
-⚠️ **local-server-resilience R4 (Heartbeat WS Ack)는 Phase C로 연기**
-- 이유: relay-infra가 ws_relay_client.py를 전면 교체 → R4를 지금 구현하면 코드 버려짐
-- R1 (Config atomic write), R2 (Mock 자동감지), R3 (SyncQueue)는 독립적이므로 여기서 구현
-
-**산출물**: 지표 기반 전략 실행, DSL 폼 편집, 분봉/주봉/월봉 차트, 로컬 서버 안정성
-
----
 
 ### Phase C — 원격 제어 (5-7주)
 
-**목표**: 릴레이 인프라 + 원격 운영 + 잔여 안정화.
-
 ```
-Week 6-8:
-  relay-infra (8단계 순차)              ← WS 인프라 전면 구축, 2-3주
-
-Week 8 (relay-infra 후반부와 병렬):
-  local-server-resilience R4            ← relay-infra 새 WS 구조에 맞춰 구현
-
-Week 9-11:
-  remote-ops (9단계)                    ← relay-infra 위에 원격 기능, 2-3주
+Week 6-8:  relay-infra (8단계)
+Week 8:    local-server-resilience R4 (relay-infra 후행)
+Week 9-11: remote-ops (9단계)
 ```
-
-**산출물**: 양방향 WS, E2E 암호화, 원격 킬스위치, FCM 푸시, PWA
 
 ---
 
-## 4. 재검토 결과 — 새로 발견된 필요사항
+## Part 4: 최종 미해결 항목 통합
 
-### 4.1 local-server-resilience R4 연기 필요 ⚠️
+### 카테고리별 미해결 항목 수
 
-**기존 plan**: R4를 Phase B에서 구현 (R1/R2와 병렬)
-**문제**: relay-infra가 `ws_relay_client.py`를 전면 교체할 예정
-- R4를 지금 구현하면 relay-infra에서 해당 코드가 삭제됨
-- **결정**: R4는 relay-infra 완료 후 Phase C에서 구현
+| 카테고리 | 항목 수 | 우선순위 | 이전 리뷰 대비 |
+|---------|--------|---------|--------------|
+| Phase A 졸업 블로커 (버그 + UI) | 18건 | 🔴 즉시 | **신규 발견** |
+| 초안 Spec 미충족 기준 | ~100건 | 🔴-🟡 | 기존 유지 |
+| Legal UI/API 미구현 (L1-L3) | 15건 | 🔴 운영 전 | **상세화** |
+| Alembic 마이그레이션 | 4건 | 🔴 구현 시 | **신규 발견** |
+| npm 의존성 추가 | 2건 | 🟡 구현 시 | **신규 발견** |
+| 제품 전략 미결정 | 6건 | 🟡 런칭 전 | **신규 발견** |
+| v2 기능 (백테스팅, 리밸런싱 등) | 7건 | 🟢 v2 | **신규 발견** |
+| **총계** | **~152건** | | +52건 추가 |
 
-→ `spec/local-server-resilience/plan.md` 수정 필요: R4를 relay-infra 의존으로 표기
+### 기존 리뷰에서 누락되었던 항목 요약
 
-### 4.2 legal → frontend-quality F3 순서 강제 ⚠️
-
-**기존 plan**: F1/F2/F3 모두 독립 (병렬 가능)
-**문제**: F3와 legal이 `auth.py`, `Settings.tsx` 공유
-- F3이 먼저 PATCH /profile을 추가하면, legal이 같은 파일에 terms 로직 추가 시 충돌
-- **결정**: legal 선행 → F3 후행
-
-→ `spec/frontend-quality/plan.md` 수정 필요: F3에 legal 의존 명시
-
-### 4.3 chart-timeframe ↔ engine-live-execution 데이터 소스 공유 기회
-
-**발견**: 두 spec 모두 로컬 서버에서 KIS REST 데이터 필요
-- chart-timeframe: KIS REST 분봉 조회 (Step 1-3)
-- engine-live-execution: yfinance 일봉 (독립 경로)
-- **현재는 독립** — 하지만 chart-timeframe의 SQLite 분봉 캐시가 engine에서 활용 가능
-- **결정**: 지금은 독립 유지, 추후 통합 검토
-
-### 4.4 heroicons 패키지 확인 필요
-
-**watchlist-heart plan**에서 `@heroicons/react` 사용
-- 프로젝트에 이미 설치되어 있는지 확인 필요
-- 미설치 시 `npm install @heroicons/react` 선행
-
-### 4.5 Alembic 마이그레이션 누락
-
-**security-phase2 S4**: `User.deleted_at` 필드 추가
-**legal**: `User.terms_accepted_at` 필드 추가 가능
-- 두 spec 모두 DB 스키마 변경이 필요하나 Alembic 마이그레이션 단계가 plan에 미포함
-- **결정**: 각 plan에 마이그레이션 step 추가 필요
-
-### 4.6 lightweight-charts lazy load API 확인 필요
-
-**chart-timeframe Step 3-6**: `onVisibleTimeRangeChanged` 콜백 사용
-- lightweight-charts 버전에 따라 API가 다를 수 있음
-- 프로젝트에서 사용 중인 버전 확인 후 plan 조정 필요
+| # | 항목 | 이유 |
+|---|------|------|
+| 1 | Phase A 졸업 블로커 18건 | "구현 완료" 표기 spec의 미충족 기준을 확인하지 않았음 |
+| 2 | broker-auto-connect F8 프론트엔드 | 백엔드는 구현되었으나 프론트 연동 누락 |
+| 3 | legal plan-v2 상세 (L1-L3, 30개 체크리스트) | plan-v2.md를 별도로 확인하지 않았음 |
+| 4 | Alembic 마이그레이션 4건 | Plan에 DB 스키마 변경은 있으나 마이그레이션 단계 없음 |
+| 5 | 개발계획서 v1 대비 미구현 7건 | 의도적 피벗 vs 진짜 누락 구분 필요했음 |
+| 6 | 제품 방향 미결정 6건 | spec이 아닌 product 문서에만 존재 |
+| 7 | 오픈소스 라이선스 미결정 | docs/open-source/ 문서에만 존재 |
 
 ---
 
-## 5. 총 공수 추정 (갱신)
+## Part 5: 의존 관계 전체 다이어그램 (갱신)
 
-| Phase | 기간 | 포함 Spec |
-|-------|------|----------|
-| A — 기반 안정화 | 2주 | security-phase2, frontend-quality (F1/F2), kis-adapter, watchlist-heart, legal, frontend-quality (F3) |
-| B — 핵심 기능 | 3-4주 | engine-live-execution, dsl-client-parser, chart-timeframe, local-server-resilience (R1/R2/R3) |
-| C — 원격 제어 | 5-7주 | relay-infra, local-server-resilience (R4), remote-ops |
-| **합계** | **10-13주** | |
+```
+Phase A (Week 1-3) ═══════════════════════════════════════
+  [Phase A 버그 4건] ─── 즉시              ⬅ 신규
+  [Phase A UI 7건] ─── 즉시                ⬅ 신규
+  [security-phase2] ─── 독립 (Alembic 포함) ⬅ 수정
+  [kis-adapter-completion] ─── 독립
+  [watchlist-heart] ─── 독립 (heroicons 확인)⬅ 수정
+  [frontend-quality F1/F2] ─── 독립
+  [legal L1+L2+L3] ──┐ (Alembic + react-markdown) ⬅ 상세화
+                      ↓
+  [frontend-quality F3] ← legal 후행
+
+Phase B (Week 4-6) ═══════════════════════════════════════
+  [engine-live-execution] ─── 독립
+  [dsl-client-parser] ─── 독립
+  [chart-timeframe Stage 1+2] ─── 독립
+  [chart-timeframe Stage 3] ← Stage 1+2 후행
+  [local-server-resilience R1/R2/R3] ─── 독립 (R4 제외)
+
+Phase C (Week 7-13) ═══════════════════════════════════════
+  [relay-infra] ──────────────┐
+                              ↓
+  [local-server-resilience R4] ← relay-infra 후행
+                              ↓
+  [remote-ops] ← relay-infra 후행
+```
 
 ---
 
-## 6. 의존 관계 전체 다이어그램
+## Part 6: Plan 수정 필요 목록
 
-```
-Phase A (Week 1-2)
-═══════════════════════════════════════════════════════
-  [security-phase2] ─── 독립        ──────────────┐
-  [frontend-quality F1/F2] ─── 독립   ──────────┐  │
-  [kis-adapter-completion] ─── 독립    ────────┐ │  │
-  [watchlist-heart] ─── 독립          ───────┐ │ │  │
-                                             │ │ │  │
-  [legal] ──────────────────────────┐        │ │ │  │
-                                    ↓        │ │ │  │
-  [frontend-quality F3] ← legal 후행 ────────┤ │ │  │
-                                             │ │ │  │
-Phase B (Week 3-5)                           │ │ │  │
-═══════════════════════════════════════════════════════
-  [engine-live-execution] ─── 독립     ──────┤ │ │  │
-  [dsl-client-parser] ─── 독립        ──────┤ │ │  │
-  [chart-timeframe] ─── kis-adapter 권장   ──┤ │ │  │
-  [local-server-resilience R1/R2/R3] ──────┐ │ │ │  │
-                                           │ │ │ │  │
-Phase C (Week 6-11)                        │ │ │ │  │
-═══════════════════════════════════════════════════════
-  [relay-infra] ─────────────────────┐     │ │ │ │  │
-                                     ↓     │ │ │ │  │
-  [local-server-resilience R4] ← relay 후행 │ │ │  │
-                                     ↓     │ │ │ │  │
-  [remote-ops] ← relay-infra 완료 후 ──────┘ │ │ │  │
-```
+| Plan 파일 | 수정 내용 |
+|----------|----------|
+| `spec/local-server-resilience/plan.md` | R4를 relay-infra 의존으로 표기, Phase C로 이동 |
+| `spec/frontend-quality/plan.md` | F3에 legal 선행 의존 명시 |
+| `spec/security-phase2/plan.md` | S4에 Alembic 마이그레이션 step 추가 |
+| `spec/legal/plan-v2.md` | Q1-Q5 결정 반영 필요 |
