@@ -4,6 +4,7 @@
  */
 import axios from 'axios'
 import { localAuth } from './localClient'
+import { AUTH_EVENTS } from '../context/authEvents'
 import type { Rule, CreateRulePayload, UpdateRulePayload } from '../types/strategy'
 import type { MarketContextData } from '../types/dashboard'
 
@@ -39,6 +40,7 @@ client.interceptors.response.use(
         if (restored?.data?.access_token) {
           sessionStorage.setItem(JWT_KEY, restored.data.access_token)
           localStorage.setItem(RT_KEY, restored.data.refresh_token)
+          window.dispatchEvent(new CustomEvent(AUTH_EVENTS.TOKEN_REFRESHED, { detail: { jwt: restored.data.access_token, rt: restored.data.refresh_token } }))
           original.headers.Authorization = `Bearer ${restored.data.access_token}`
           return client(original)
         }
@@ -55,11 +57,13 @@ client.interceptors.response.use(
           sessionStorage.setItem(JWT_KEY, newJwt)
           localStorage.setItem(RT_KEY, newRt)
           localAuth.setAuthToken(newJwt, newRt).catch(() => {})
+          window.dispatchEvent(new CustomEvent(AUTH_EVENTS.TOKEN_REFRESHED, { detail: { jwt: newJwt, rt: newRt } }))
           original.headers.Authorization = `Bearer ${newJwt}`
           return client(original)
         } catch {
           sessionStorage.removeItem(JWT_KEY)
           localStorage.removeItem(RT_KEY)
+          window.dispatchEvent(new CustomEvent(AUTH_EVENTS.AUTH_EXPIRED))
           window.location.href = '/login'
         }
       }

@@ -12,6 +12,7 @@ GET  /api/v1/auth/oauth/{provider}/login      OAuth 인증 URL 반환
 POST /api/v1/auth/oauth/{provider}/callback   OAuth code 교환 → JWT 발급
 POST /api/v1/auth/verify-password             비밀번호 재검증 (원격 arm용)
 """
+import re
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -27,6 +28,7 @@ from cloud_server.core.security import (
 from cloud_server.models.user import (
     EmailVerificationToken, PasswordResetToken, RefreshToken, User
 )
+from cloud_server.models.legal import LegalConsent
 from cloud_server.api.dependencies import current_user
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
@@ -37,17 +39,28 @@ router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 MIN_PASSWORD_LENGTH = 8
 
 
+def _validate_password_strength(v: str) -> str:
+    """S7: 비밀번호 강도 검증 — 8자 이상 + 영문 + 숫자"""
+    if len(v) < MIN_PASSWORD_LENGTH:
+        raise ValueError(f"비밀번호는 최소 {MIN_PASSWORD_LENGTH}자 이상이어야 합니다.")
+    if not re.search(r"[A-Za-z]", v):
+        raise ValueError("비밀번호에 영문자가 포함되어야 합니다.")
+    if not re.search(r"[0-9]", v):
+        raise ValueError("비밀번호에 숫자가 포함되어야 합니다.")
+    return v
+
+
 class RegisterBody(BaseModel):
     email: EmailStr
     password: str
     nickname: str | None = None
+    terms_agreed: bool = False
+    privacy_agreed: bool = False
 
     @field_validator("password")
     @classmethod
-    def password_min_length(cls, v: str) -> str:
-        if len(v) < MIN_PASSWORD_LENGTH:
-            raise ValueError(f"비밀번호는 최소 {MIN_PASSWORD_LENGTH}자 이상이어야 합니다.")
-        return v
+    def password_strength(cls, v: str) -> str:
+        return _validate_password_strength(v)
 
 
 class LoginBody(BaseModel):
@@ -73,10 +86,8 @@ class ResetPasswordBody(BaseModel):
 
     @field_validator("new_password")
     @classmethod
-    def password_min_length(cls, v: str) -> str:
-        if len(v) < MIN_PASSWORD_LENGTH:
-            raise ValueError(f"비밀번호는 최소 {MIN_PASSWORD_LENGTH}자 이상이어야 합니다.")
-        return v
+    def password_strength(cls, v: str) -> str:
+        return _validate_password_strength(v)
 
 
 # ── 회원가입 ──────────────────────────────────────────────────────────
@@ -86,6 +97,10 @@ class ResetPasswordBody(BaseModel):
 def register(body: RegisterBody, request: Request, db: Session = Depends(get_db)):
     """회원가입 + 이메일 인증 발송"""
     check_register_rate(request)
+
+    # L1: 약관 동의 검증
+    if not body.terms_agreed or not body.privacy_agreed:
+        raise HTTPException(400, "이용약관과 개인정보처리방침에 동의해야 합니다.")
 
     if db.query(User).filter(User.email == body.email).first():
         raise HTTPException(status_code=409, detail="이미 사용 중인 이메일입니다.")
@@ -101,10 +116,17 @@ def register(body: RegisterBody, request: Request, db: Session = Depends(get_db)
     token = generate_token()
     ev = EmailVerificationToken(
         user_id=user.id,
-        token=token,
+        token_hash=hash_token(token),  # S5: 해시 저장
         expires_at=datetime.utcnow() + timedelta(hours=24),
     )
     db.add(ev)
+
+    # L1: 약관 동의 기록
+    for doc_type, version in [("terms", "1.1"), ("privacy", "1.1")]:
+        db.add(LegalConsent(
+            user_id=user.id, doc_type=doc_type, doc_version=version,
+        ))
+
     db.commit()
 
     send_verification_email(body.email, token)
@@ -118,7 +140,7 @@ def register(body: RegisterBody, request: Request, db: Session = Depends(get_db)
 def verify_email(token: str, db: Session = Depends(get_db)):
     """이메일 인증 완료"""
     ev = db.query(EmailVerificationToken).filter(
-        EmailVerificationToken.token == token,
+        EmailVerificationToken.token_hash == hash_token(token),  # S5: 해시 비교
         EmailVerificationToken.used == False,  # noqa: E712
     ).first()
 
@@ -147,7 +169,7 @@ def login(body: LoginBody, request: Request, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="이메일 또는 비밀번호가 올바르지 않습니다.")
     if not user.email_verified:
         raise HTTPException(status_code=403, detail="이메일 인증이 필요합니다.")
-    if not user.is_active:
+    if not user.is_active or user.deleted_at:
         raise HTTPException(status_code=403, detail="비활성화된 계정입니다.")
 
     jwt_token = create_jwt(user.id, user.email, role=user.role)
@@ -243,7 +265,7 @@ def forgot_password(body: ForgotPasswordBody, request: Request, db: Session = De
         token = generate_token()
         prt = PasswordResetToken(
             user_id=user.id,
-            token=token,
+            token_hash=hash_token(token),  # S5: 해시 저장
             expires_at=datetime.utcnow() + timedelta(minutes=10),
         )
         db.add(prt)
@@ -259,7 +281,7 @@ def forgot_password(body: ForgotPasswordBody, request: Request, db: Session = De
 def reset_password(body: ResetPasswordBody, db: Session = Depends(get_db)):
     """새 비밀번호 설정"""
     prt = db.query(PasswordResetToken).filter(
-        PasswordResetToken.token == body.token,
+        PasswordResetToken.token_hash == hash_token(body.token),  # S5: 해시 비교
         PasswordResetToken.used == False,  # noqa: E712
     ).first()
 

@@ -10,6 +10,7 @@ export default function Login() {
 
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
+  const [keepLoggedIn, setKeepLoggedIn] = useState(false)
   const [error, setError]       = useState('')
   const [loading, setLoading]   = useState(false)
 
@@ -18,7 +19,7 @@ export default function Login() {
     setError('')
     setLoading(true)
     try {
-      await login(email, password)
+      await login(email, password, keepLoggedIn)
       navigate('/')
     } catch (err: any) {
       const msg = err?.response?.data?.detail
@@ -64,6 +65,15 @@ export default function Login() {
               required
             />
           </div>
+          <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={keepLoggedIn}
+              onChange={e => setKeepLoggedIn(e.target.checked)}
+              className="rounded border-gray-600 bg-gray-800 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0"
+            />
+            로그인 유지
+          </label>
           <button
             type="submit"
             disabled={loading}

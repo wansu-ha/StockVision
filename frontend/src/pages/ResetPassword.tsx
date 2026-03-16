@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { FormEvent } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { authApi } from '../services/auth'
@@ -6,7 +6,22 @@ import { authApi } from '../services/auth'
 export default function ResetPassword() {
   const [params]  = useSearchParams()
   const navigate  = useNavigate()
-  const token     = params.get('token') ?? ''
+  // S8: fragment 우선, 쿼리스트링 폴백 (하위 호환)
+  const [token] = useState(() => {
+    const hash = window.location.hash
+    if (hash) {
+      const fragParams = new URLSearchParams(hash.slice(1))
+      return fragParams.get('token') ?? params.get('token') ?? ''
+    }
+    return params.get('token') ?? ''
+  })
+
+  // S8: fragment에서 토큰 추출 후 URL에서 제거 (히스토리 노출 방지)
+  useEffect(() => {
+    if (window.location.hash) {
+      window.history.replaceState(null, '', window.location.pathname)
+    }
+  }, [])
 
   const [password, setPassword]   = useState('')
   const [confirm, setConfirm]     = useState('')
