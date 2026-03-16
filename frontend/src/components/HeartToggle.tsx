@@ -1,6 +1,6 @@
 import { HeartIcon as HeartOutline } from '@heroicons/react/24/outline'
 import { HeartIcon as HeartSolid } from '@heroicons/react/24/solid'
-import { useRef, useCallback } from 'react'
+import { useRef, useCallback, useEffect } from 'react'
 
 interface HeartToggleProps {
   symbol: string
@@ -13,6 +13,10 @@ export default function HeartToggle({
   symbol, isWatchlisted, onToggle, size = 20,
 }: HeartToggleProps) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => () => {
+    if (timerRef.current) clearTimeout(timerRef.current)
+  }, [])
 
   const handleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()

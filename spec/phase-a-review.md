@@ -1,6 +1,9 @@
 # Phase A 프론트엔드 종합 리뷰
 
-> 작성일: 2026-03-11 | 리뷰어: Claude Code
+> 작성일: 2026-03-11 | 갱신일: 2026-03-16 | 리뷰어: Claude Code
+>
+> **Phase A 구현 상태**: A1~A9 구현 완료 (브랜치 `claude/review-missing-features-UhJr7`)
+> 상세: `spec/review-missing-features/reports/phase-a-implementation.md`
 
 ## 1. 페이지/컴포넌트 현황
 
@@ -32,26 +35,26 @@
 
 ### broker-auto-connect
 - 백엔드 전용 스펙. 프론트엔드 구조는 대부분 준비됨
-- **Gap 1**: `useAccountStatus`의 `LocalStatusData.broker` 타입에 `reason?: string` 없음
-- **Gap 2**: F8 (키 등록 후 즉시 재연결) — `Settings.tsx`에 `POST /api/broker/reconnect` 호출 없음, `localClient.ts`에 해당 함수 없음
+- ~~**Gap 1**: `useAccountStatus`의 `LocalStatusData.broker` 타입에 `reason?: string` 없음~~ → ✅ 이미 존재 확인
+- ~~**Gap 2**: F8 (키 등록 후 즉시 재연결) — `Settings.tsx`에 `POST /api/broker/reconnect` 호출 없음~~ → ✅ A9에서 수정
 
 ### frontend-ux-v2
 
 | 수용 기준 | 현재 상태 |
 |----------|----------|
-| U1 장 상태 카드 표시 | 완료 (ListView L107-108) |
-| U2 엔진 신호등 카드 이동 | 미구현 |
-| U3 전략 실행/중지 버튼 | 미구현 |
-| U4 신호등 3색 | 미구현 |
-| U5 Header 신호등 제거 | 미구현 |
+| U1 장 상태 카드 표시 | ✅ 완료 |
+| U2 엔진 신호등 카드 이동 | ✅ 이미 구현됨 (A5 확인) |
+| U3 전략 실행/중지 버튼 | ✅ 이미 구현됨 (A5 확인) |
+| U4 신호등 3색 | ✅ 이미 구현됨 (A5 확인) |
+| U5 Header 신호등 제거 | ✅ 이미 구현됨 (A5 확인) |
 
 ### strategy-list-info
 
 | 수용 기준 | 현재 상태 |
 |----------|----------|
-| S1 종목명 표시 | 미구현 (`rule.symbol`만) |
-| S2 방향 표시 | 미구현 |
-| S3 실행 상태 | 미구현 |
+| S1 종목명 표시 | ✅ 이미 구현됨 (A5 확인) |
+| S2 방향 표시 | ✅ 이미 구현됨 (A5 확인) |
+| S3 실행 상태 | ✅ 이미 구현됨 (A5 확인) |
 
 ## 3. 스펙에 빠진 Phase A 필수 항목
 
@@ -85,33 +88,21 @@
 
 ### Phase A 졸업까지 남은 작업
 
-**백엔드 (선행 조건):**
-- broker-auto-connect 전체 구현 (lifespan 자동 연결, 생명주기 분리, status reason, reconnect)
+**졸업 블로커 — 구현 완료 (2026-03-16):**
+1. ~~frontend-ux-v2 U2~U5~~ → ✅ 이미 구현됨 확인
+2. ~~Settings.tsx — 키 등록 후 reconnect 트리거~~ → ✅ A9
+3. ~~strategy-list-info S1, S2, S3~~ → ✅ 이미 구현됨 확인
+4. ~~AuthContext setState 경쟁 조건~~ → ✅ A1+A2
+5. ~~useStockData 클로저 race condition~~ → ✅ A4
+6. ~~cloudClient 401 인터셉터 정리~~ → ✅ A1+A2
+7. ~~Settings 키 등록 캐시 미갱신~~ → ✅ A9
+8. ~~App.tsx 404 fallback~~ → ✅ A8 확인 (이미 존재)
+9. ~~useAccountStatus localReady 가드~~ → ✅ A8 확인 (이미 존재)
 
-**프론트엔드 필수 (졸업 블로커):**
-1. frontend-ux-v2 U2~U5 구현 (신호등+버튼+Header 제거)
-2. Settings.tsx — 키 등록 후 reconnect 트리거
-3. strategy-list-info S1, S2 구현 (종목명, 방향)
-
-**프론트엔드 권장 (졸업 품질):**
-4. 로컬 서버 미실행 상태 구분 배너
-5. 키 미등록 온보딩 CTA
-6. PendingOrder.orderId + 취소 버튼 연결
-
-**버그 수정 필수 (Phase A 블로커):**
-7. AuthContext setState 경쟁 조건 — RT 갱신 시 `localReady`가 `false`로 리셋됨 → 잔고 미로딩
-8. useStockData quotesQuery/namesQuery 클로저 race condition — symbols 변경 시 잘못된 매핑
-9. 미체결 "취소" 버튼 stub — onClick 없음, 비활성화 또는 연결 필요
-
-**프론트엔드 권장 (졸업 품질):**
-10. cloudClient 401 인터셉터 — AuthContext 상태·sv_email 정리 불완전
-11. Settings 키 등록 후 localStatus 캐시 미갱신 (최대 5초 지연)
-12. App.tsx 중첩 Routes에 404 fallback 없음 — 잘못된 URL 시 빈 화면
-13. useAccountStatus가 localReady 무관하게 폴링 → 인증 전 401 발생
-
-**기술 부채 (Phase A 비블로커):**
+**잔여 항목 (Phase A 비블로커):**
+- 미체결 "취소" 버튼 stub — onClick 없음, PendingOrder.orderId 누락
+- 키 미등록 온보딩 CTA
 - Register.tsx 라이트 테마 불일치 + auth.ts 중복 구현
-- 장 상태 서버 컨텍스트 우선 사용 (공휴일 무시)
-- AdminGuard가 어드민 로그인 페이지 대신 메인으로 리다이렉트
-- localClient 에러 처리 불일치 (setBrokerKeys만 throw, 나머지는 null)
-- ListView pendingOrders key에 인덱스 사용 (orderId 사용해야 함)
+- 장 상태 공휴일 무시
+- localClient 에러 처리 불일치
+- ListView pendingOrders key에 인덱스 사용

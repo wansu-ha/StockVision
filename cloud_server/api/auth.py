@@ -346,8 +346,8 @@ async def oauth_callback(
             name = profile.get("name", "")
         else:
             raise HTTPException(status_code=400, detail=f"지원하지 않는 제공자: {provider}")
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"OAuth2 인증 실패: {e}")
+    except Exception:
+        raise HTTPException(status_code=400, detail="OAuth2 인증 실패")
 
     result = OAuthService.login_or_register(
         provider=provider,

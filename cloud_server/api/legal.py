@@ -114,4 +114,4 @@ def record_consent(
     db.add(consent)
     db.commit()
 
-    return {"success": True}
+    return {"success": True, "data": {"doc_type": body.doc_type, "doc_version": body.doc_version}}
