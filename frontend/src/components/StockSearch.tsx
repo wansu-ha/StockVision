@@ -4,19 +4,24 @@ import { MagnifyingGlassIcon, XMarkIcon, ArrowRightIcon } from '@heroicons/react
 import { Card, CardBody, Input, Button, Chip } from '@heroui/react'
 import { cloudStocks } from '../services/cloudClient'
 import type { StockMasterItem } from '../services/cloudClient'
+import HeartToggle from './HeartToggle'
 
 interface StockSearchProps {
   onStockSelect?: (stock: StockMasterItem) => void
   placeholder?: string
   className?: string
   enablePageTransition?: boolean
+  watchlistSet?: Set<string>
+  onToggleWatchlist?: (symbol: string, add: boolean) => void
 }
 
 const StockSearch = ({
   onStockSelect,
   placeholder = "종목 코드 또는 회사명으로 검색...",
   className = "",
-  enablePageTransition = true
+  enablePageTransition = true,
+  watchlistSet,
+  onToggleWatchlist,
 }: StockSearchProps) => {
   const [searchTerm, setSearchTerm] = useState('')
   const [results, setResults] = useState<StockMasterItem[]>([])
@@ -137,6 +142,14 @@ const StockSearch = ({
                         <div className="flex items-center space-x-2">
                           {stock.market && (
                             <Chip size="sm" variant="flat" color="primary">{stock.market}</Chip>
+                          )}
+                          {watchlistSet && onToggleWatchlist && (
+                            <HeartToggle
+                              symbol={stock.symbol}
+                              isWatchlisted={watchlistSet.has(stock.symbol)}
+                              onToggle={onToggleWatchlist}
+                              size={16}
+                            />
                           )}
                           <ArrowRightIcon className="h-4 w-4 text-gray-400 group-hover:text-blue-500 group-hover:translate-x-1 transition-all" />
                         </div>

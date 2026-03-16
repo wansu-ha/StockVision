@@ -4,6 +4,7 @@
  */
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import HeartToggle from '../HeartToggle'
 
 // ─── Types ───
 
@@ -32,6 +33,7 @@ export interface PendingOrder {
   qty: number
   price: number
   type: string
+  orderId?: string
 }
 
 export interface AccountInfo {
@@ -68,11 +70,15 @@ interface ListViewProps {
   brokerConnected: boolean
   onStrategyToggle?: () => void
   strategyLoading: boolean
+  onCancelOrder?: (orderId: string) => void
+  watchlistSet?: Set<string>
+  onToggleWatchlist?: (symbol: string, add: boolean) => void
 }
 
 export default function ListView({
   tab, setTab, stocks, account, isMock, marketStatus, trades, pendingOrders, onDetail,
-  engineRunning, brokerConnected, onStrategyToggle, strategyLoading,
+  engineRunning, brokerConnected, onStrategyToggle, strategyLoading, onCancelOrder,
+  watchlistSet, onToggleWatchlist,
 }: ListViewProps) {
   const navigate = useNavigate()
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
@@ -221,6 +227,14 @@ export default function ListView({
                     <div className="w-28 text-right text-xs text-gray-500 hidden lg:block">
                       {s.lastTrade || '—'}
                     </div>
+                    {watchlistSet && onToggleWatchlist && (
+                      <HeartToggle
+                        symbol={s.symbol}
+                        isWatchlisted={watchlistSet.has(s.symbol)}
+                        onToggle={onToggleWatchlist}
+                        size={18}
+                      />
+                    )}
                   </div>
 
                   {/* (E) 아코디언 확장 영역 — max-height transition */}
@@ -306,8 +320,8 @@ export default function ListView({
                 </tr>
               </thead>
               <tbody>
-                {pendingOrders.map((o, i) => (
-                  <tr key={i} className="border-t border-gray-800/50 hover:bg-gray-800/30 transition-colors">
+                {pendingOrders.map((o) => (
+                  <tr key={o.orderId ?? `${o.symbol}-${o.time}`} className="border-t border-gray-800/50 hover:bg-gray-800/30 transition-colors">
                     <td className="px-4 py-2.5 font-mono text-gray-400">{o.time}</td>
                     <td className="px-4 py-2.5 font-medium">{o.symbol}</td>
                     <td className={`px-4 py-2.5 ${o.side === '매수' ? 'text-red-400' : 'text-blue-400'}`}>{o.side}</td>
@@ -315,7 +329,16 @@ export default function ListView({
                     <td className="px-4 py-2.5 text-right font-mono">{o.price.toLocaleString()}</td>
                     <td className="px-4 py-2.5 text-right text-xs text-gray-400">{o.type}</td>
                     <td className="px-4 py-2.5 text-right">
-                      <button className="text-xs text-gray-600 cursor-not-allowed" disabled title="준비 중">취소</button>
+                      {o.orderId && onCancelOrder ? (
+                        <button
+                          onClick={() => onCancelOrder(o.orderId!)}
+                          className="text-xs text-yellow-400 hover:text-yellow-300 transition"
+                        >
+                          취소
+                        </button>
+                      ) : (
+                        <button className="text-xs text-gray-600 cursor-not-allowed" disabled>취소</button>
+                      )}
                     </td>
                   </tr>
                 ))}

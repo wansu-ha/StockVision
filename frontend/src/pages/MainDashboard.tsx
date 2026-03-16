@@ -16,6 +16,7 @@ import ListView from '../components/main/ListView'
 import DetailView from '../components/main/DetailView'
 import { useAuth } from '../context/AuthContext'
 import { useStockData } from '../hooks/useStockData'
+import { useWatchlistToggle } from '../hooks/useWatchlistToggle'
 import { useAccountStatus } from '../hooks/useAccountStatus'
 import { useAccountBalance } from '../hooks/useAccountBalance'
 import { useMarketContext } from '../hooks/useMarketContext'
@@ -34,7 +35,8 @@ export default function MainDashboard() {
 
   const queryClient = useQueryClient()
   const { localReady } = useAuth()
-  const { myStocks, watchStocks, rules } = useStockData()
+  const { myStocks, watchStocks, watchlistSet, rules } = useStockData()
+  const { mutate: toggleWatchlist } = useWatchlistToggle()
   const { engineRunning, brokerConnected, credentials, isMock, killSwitch, lossLock } = useAccountStatus()
   const { balance, openOrders } = useAccountBalance(brokerConnected)
   const { context } = useMarketContext()
@@ -197,6 +199,8 @@ export default function MainDashboard() {
               brokerConnected={effectiveBroker}
               onStrategyToggle={isRemote ? undefined : handleStrategyToggle}
               strategyLoading={strategyLoading}
+              watchlistSet={watchlistSet}
+              onToggleWatchlist={(sym, add) => toggleWatchlist({ symbol: sym, add })}
             />
             </>
           ) : (
@@ -206,6 +210,8 @@ export default function MainDashboard() {
               rules={rules.filter(r => r.symbol === selectedStock?.symbol)}
               context={context}
               onBack={handleBack}
+              isWatchlisted={selectedStock ? watchlistSet.has(selectedStock.symbol) : false}
+              onToggleWatchlist={(sym, add) => toggleWatchlist({ symbol: sym, add })}
             />
           )}
         </div>
