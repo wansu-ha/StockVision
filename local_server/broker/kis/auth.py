@@ -42,6 +42,7 @@ class KisAuth:
         self._app_key = app_key
         self._app_secret = app_secret
         self._token_info: Optional[TokenInfo] = None
+        self._approval_key: Optional[str] = None
         self._lock = asyncio.Lock()  # 동시 갱신 방지
 
     async def get_access_token(self) -> str:
@@ -93,9 +94,44 @@ class KisAuth:
             self._token_info.expires_at.isoformat(),
         )
 
+    async def get_approval_key(self) -> str:
+        """WebSocket 접속용 approval_key를 발급받는다.
+
+        KIS WebSocket은 access_token과 별도의 approval_key가 필요하다.
+        POST /oauth2/Approval 엔드포인트를 호출하여 발급받으며,
+        발급된 키는 캐싱하여 재사용한다.
+
+        Returns:
+            str: WebSocket approval_key
+
+        Raises:
+            httpx.HTTPStatusError: API 오류 시
+        """
+        async with self._lock:
+            if self._approval_key is not None:
+                return self._approval_key
+
+            url = f"{KIS_BASE_URL}/oauth2/Approval"
+            payload = {
+                "grant_type": "client_credentials",
+                "appkey": self._app_key,
+                "secretkey": self._app_secret,
+            }
+
+            logger.info("KIS WebSocket approval_key 발급 요청")
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(url, json=payload)
+                resp.raise_for_status()
+
+            data = resp.json()
+            self._approval_key = data["approval_key"]
+            logger.info("KIS WebSocket approval_key 발급 완료")
+            return self._approval_key
+
     def invalidate(self) -> None:
         """캐시된 토큰을 무효화한다. (인증 오류 발생 시 호출)"""
         self._token_info = None
+        self._approval_key = None
         logger.info("캐시된 토큰 무효화")
 
     async def build_headers(self) -> dict[str, str]:

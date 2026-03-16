@@ -25,6 +25,7 @@ import asyncio
 import json
 import logging
 from typing import Any
+from urllib.parse import urlparse
 
 import hmac
 
@@ -97,13 +98,27 @@ def get_connection_manager() -> ConnectionManager:
     return manager
 
 
+# S6: 허용 Origin (로컬 환경만)
+_ALLOWED_ORIGINS = {"localhost", "127.0.0.1"}
+
+
 @router.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket) -> None:
     """WebSocket 엔드포인트.
 
+    S6: Origin 검증 후 accept.
     AS-1: 연결 후 5초 내 첫 프레임으로 auth 메시지를 받아 인증한다.
     query param 대신 메시지 기반 인증 (로그/히스토리 노출 방지).
     """
+    # S6: Origin 검증
+    origin = ws.headers.get("origin")
+    if origin:
+        parsed = urlparse(origin)
+        hostname = parsed.hostname or ""
+        if hostname not in _ALLOWED_ORIGINS:
+            await ws.close(code=4003, reason="Origin not allowed")
+            return
+
     await ws.accept()
 
     # 첫 프레임 인증 (5초 타임아웃)
