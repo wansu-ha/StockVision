@@ -1,5 +1,6 @@
 import { useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import Markdown from 'react-markdown'
 import cloudClient from '../services/cloudClient'
 
 const TITLES: Record<string, string> = {
@@ -66,8 +67,8 @@ export default function LegalDocument() {
           </div>
         ) : (
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-            <div className="prose prose-invert prose-sm max-w-none whitespace-pre-wrap text-gray-300 leading-relaxed">
-              {data.content_md}
+            <div className="prose prose-invert prose-sm max-w-none text-gray-300 leading-relaxed">
+              <Markdown>{data.content_md}</Markdown>
             </div>
           </div>
         )}

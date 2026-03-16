@@ -22,7 +22,7 @@ import { useAccountBalance } from '../hooks/useAccountBalance'
 import { useMarketContext } from '../hooks/useMarketContext'
 import { useRemoteMode } from '../hooks/useRemoteMode'
 import { useRemoteControl } from '../hooks/useRemoteControl'
-import { localLogs, localEngine } from '../services/localClient'
+import { localLogs, localEngine, localAccount } from '../services/localClient'
 import type { Stock, AccountInfo, Trade, PendingOrder, MarketStatus } from '../components/main/ListView'
 
 export default function MainDashboard() {
@@ -150,6 +150,15 @@ export default function MainDashboard() {
     }
   }
 
+  const handleCancelOrder = async (orderId: string) => {
+    try {
+      await localAccount.cancelOrder(orderId)
+      queryClient.invalidateQueries({ queryKey: ['openOrders'] })
+    } catch {
+      // 취소 실패 시 조용히 무시 (UI에서 재시도 가능)
+    }
+  }
+
   const handleDetail = (stock: Stock) => {
     setSelectedStock(stock)
     setView('detail')
@@ -201,6 +210,7 @@ export default function MainDashboard() {
               strategyLoading={strategyLoading}
               watchlistSet={watchlistSet}
               onToggleWatchlist={(sym, add) => toggleWatchlist({ symbol: sym, add })}
+              onCancelOrder={isRemote ? undefined : handleCancelOrder}
             />
             </>
           ) : (

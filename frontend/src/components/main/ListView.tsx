@@ -151,7 +151,12 @@ export default function ListView({
                 {strategyLoading ? '...' : engineRunning ? '중지' : '전략 실행'}
               </button>
             ) : (
-              <span className="text-[11px] text-gray-500">설정에서 키 등록</span>
+              <button
+                onClick={() => navigate('/settings')}
+                className="px-2.5 py-1 rounded-lg text-xs font-medium bg-gray-700 text-gray-300 hover:bg-gray-600 transition"
+              >
+                키 등록하기 →
+              </button>
             )}
           </div>
         </div>

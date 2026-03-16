@@ -293,6 +293,29 @@ export default function Settings() {
           </div>
         </section>
 
+        {/* 약관 및 고지 */}
+        <section className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+          <h2 className="text-base font-semibold mb-4">약관 및 고지</h2>
+          <div className="space-y-2">
+            {[
+              { label: '이용약관', path: '/legal/terms' },
+              { label: '개인정보처리방침', path: '/legal/privacy' },
+              { label: '투자 위험 고지', path: '/legal/disclaimer' },
+            ].map(({ label, path }) => (
+              <a
+                key={path}
+                href={path}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between px-4 py-3 rounded-lg bg-gray-800/50 hover:bg-gray-800 transition group"
+              >
+                <span className="text-sm text-gray-300">{label}</span>
+                <span className="text-xs text-gray-500 group-hover:text-gray-400">새 탭에서 열기 →</span>
+              </a>
+            ))}
+          </div>
+        </section>
+
         {/* 디바이스 관리 */}
         <section className="bg-gray-800/50 rounded-xl p-6 border border-gray-700/50">
           <DeviceManager />
