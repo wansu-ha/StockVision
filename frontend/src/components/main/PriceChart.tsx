@@ -207,6 +207,7 @@ export default function PriceChart({ symbol }: PriceChartProps) {
   const { data: bars } = useQuery<DailyBar[]>({
     queryKey: ['bars', symbol, startStr],
     queryFn: () => symbol ? cloudBars.get(symbol, startStr) : Promise.resolve([]),
+    staleTime: 5 * 60_000,
     enabled: !!symbol,
     retry: 1,
   })
