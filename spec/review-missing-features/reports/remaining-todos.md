@@ -48,13 +48,13 @@ alembic upgrade head
 
 ## 🟡 운영 전 필수 — Phase A 졸업 잔여
 
-### 4. 보안 미해결
+### 4. 보안 — ✅ 전부 해결 확인 (2026-03-16)
 
-| 항목 | 심각도 | 상세 |
-|------|--------|------|
-| 이메일/비밀번호 리셋 토큰 평문 저장 | 🔴 P1 | `EmailVerificationToken.token`, `PasswordResetToken.token`에 `hash_token()` 미적용. `RefreshToken`은 적용됨 |
-| 비밀번호 강도 검증 | 🟡 | 현재 빈 문자열 허용 |
-| WS Origin 헤더 검증 | 🟡 | localhost 외부 접근 가능 |
+재검증 결과 모두 이미 구현됨:
+- ✅ S5 토큰 해싱 — `token_hash` 컬럼 (SHA-256)
+- ✅ S7 비밀번호 강도 — `_validate_password_strength()`, 최소 8자
+- ✅ S6 WS Origin 검증 — `ws.py:114`
+- ✅ S8 reset-password fragment — `#token=`
 
 ### 5. UI 미구현 잔여
 

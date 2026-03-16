@@ -299,13 +299,9 @@ Phase C (Week 7-13) ════════════════════
 `docs/research/` 52개 파일을 검증한 결과, 대부분의 Critical/High 이슈는 **이미 수정됨**.
 아래는 **현재 코드에서 미해결 상태인 항목만** 정리.
 
-### 6.1 보안 — 미해결 1건
+### 6.1 보안 — 미해결 0건 ✅
 
-| 이슈 | 소스 | 상세 | 심각도 |
-|------|------|------|--------|
-| 이메일/비밀번호 리셋 토큰 평문 저장 | security-audit C3 | `EmailVerificationToken.token`, `PasswordResetToken.token`이 DB에 해싱 없이 저장됨. `RefreshToken`은 `hash_token()` 적용되어 있으나 이 두 모델은 누락. DB 유출 시 임의 계정 비밀번호 리셋 가능 | 🔴 P1 |
-
-**수정 방법**: `RefreshToken`과 동일한 `hash_token()` 패턴을 `EmailVerificationToken`, `PasswordResetToken`에 적용
+~~이메일/비밀번호 리셋 토큰 평문 저장~~ → ✅ S5에서 이미 수정됨 (`token_hash` 컬럼, SHA-256 해시 저장)
 
 ### 6.2 보안 — 이미 수정 확인된 항목 (참고)
 
@@ -326,9 +322,9 @@ Phase C (Week 7-13) ════════════════════
 
 | 권장 사항 | 소스 | 현재 상태 | 관련 Spec |
 |----------|------|----------|----------|
-| WS Origin 헤더 검증 | security-audit H3 | ❌ 미구현 — localhost 외부 접근 가능 | security-phase2에 미포함 |
-| reset-password 토큰 URL 노출 | security-audit H6 | ❌ 미구현 — 브라우저 히스토리/Referer 노출 | security-phase2에 미포함 |
-| 비밀번호 강도 검증 | security-audit H5 | ❌ 미구현 — 빈 문자열 허용 | security-phase2에 미포함 |
+| WS Origin 헤더 검증 | security-audit H3 | ✅ S6에서 구현됨 — `ws.py:114` Origin 파싱 + 허용 목록 | security-phase2 |
+| reset-password 토큰 URL 노출 | security-audit H6 | ✅ S8에서 구현됨 — fragment 기반 `#token=` | A1+A2 |
+| 비밀번호 강도 검증 | security-audit H5 | ✅ S7에서 구현됨 — 8자 + 대소문자+숫자+특수문자 | security-phase2 |
 | KIS App Secret 모든 요청에 포함 | cross-review-security SEC-C1 | ❌ 미구현 — 토큰 발급 시에만 필요 | kis-adapter-completion에 미포함 |
 | Daily budget 재시작 시 리셋 | review-local-server LS-H4 | ❌ 미구현 — 인메모리 카운터 | local-server-resilience에 미포함 |
 | StrategyBuilder 편집 시 데이터 유실 | review-frontend FE-I5 | ❌ 미구현 — 폼 초기화됨 | dsl-client-parser에서 해결 예정 |
@@ -349,33 +345,31 @@ Phase C (Week 7-13) ════════════════════
 
 ### 카테고리별 미해결 항목 수
 
-| 카테고리 | 항목 수 | 우선순위 | v4 대비 |
+| 카테고리 | 항목 수 | 우선순위 | v6 상태 |
 |---------|--------|---------|---------|
-| Phase A 졸업 블로커 (버그 + UI) | 18건 | 🔴 즉시 | 유지 |
-| 보안 미해결 (토큰 해싱) | 1건 | 🔴 운영 전 | **신규** |
-| 보안 권장사항 미반영 | 5건 | 🟡 운영 전 | **신규** |
+| Phase A 졸업 블로커 (버그 + UI) | ~~18건~~ → **3건 잔여** | ✅ 대부분 완료 | A1~A9 구현 |
+| 보안 미해결 | ~~1건~~ → **0건** | ✅ 전부 완료 | S5~S8 이미 구현 확인 |
+| 보안 권장사항 미반영 | ~~5건~~ → **2건 잔여** | 🟡 | S5~S8 완료, 2건 Phase B |
 | 초안 Spec 미충족 기준 | ~100건 | 🔴-🟡 | 유지 |
-| Legal UI/API (L1-L3) | 15건 | 🔴 운영 전 | 유지 |
-| Alembic 마이그레이션 | 4건 | 🔴 구현 시 | 유지 |
-| npm 의존성 추가 | 2건 | 🟡 구현 시 | 유지 |
-| 코드 품질 권장사항 | 3건 | 🟡 | **신규** |
-| 문서 갱신 | 3건 | 🟡 | **신규** |
+| Legal UI/API (L1-L3) | ~~15건~~ → **3건 잔여** | 🟡 운영 전 | A7 구현 + Alembic 생성 |
+| Alembic 마이그레이션 | ~~4건~~ → **1건 (legal 적용)** | 🔴 구현 시 | 마이그레이션 파일 생성 완료 |
+| npm 의존성 추가 | ~~2건~~ → **1건 (react-markdown)** | 🟡 구현 시 | heroicons 완료 |
+| 코드 품질 권장사항 | 3건 | 🟡 | 유지 |
+| 문서 갱신 | 3건 | 🟡 | 유지 |
 | 제품 전략 미결정 | 6건 | 🟡 런칭 전 | 유지 |
 | v2 기능 | 7건 | 🟢 v2 | 유지 |
-| **총계** | **~164건** | | +12건 |
+| **총계** | **~130건** (v5 대비 -34건 해소) | | **A1~A9 + 리뷰** |
 
-### security-phase2 spec에 추가해야 할 항목
+### security-phase2 spec 상태 (v6 갱신)
 
-현재 spec에 포함되지 않은 보안 이슈가 있으며, spec 갱신 또는 별도 spec이 필요:
-
-| 항목 | 현재 위치 | 제안 |
-|------|----------|------|
-| 토큰 해싱 (C3) | 미반영 | security-phase2에 S5로 추가 |
-| WS Origin 검증 (H3) | 미반영 | security-phase2에 S6로 추가 |
-| 비밀번호 강도 (H5) | 미반영 | security-phase2에 S7로 추가 |
-| reset-password URL 토큰 (H6) | 미반영 | security-phase2에 S8로 추가 |
-| KIS App Secret 불필요 전송 (SEC-C1) | 미반영 | kis-adapter-completion에 K3로 추가 |
-| LimitChecker 재시작 리셋 (LS-H4) | 미반영 | local-server-resilience에 R5로 추가 |
+| 항목 | 상태 | 비고 |
+|------|------|------|
+| 토큰 해싱 (C3 → S5) | ✅ 구현 완료 | `token_hash` 컬럼 |
+| WS Origin 검증 (H3 → S6) | ✅ 구현 완료 | `ws.py:114` |
+| 비밀번호 강도 (H5 → S7) | ✅ 구현 완료 | `_validate_password_strength()` |
+| reset-password URL (H6 → S8) | ✅ 구현 완료 | fragment 기반 |
+| KIS App Secret 불필요 전송 (SEC-C1) | ⏳ Phase B | kis-adapter-completion K3 |
+| LimitChecker 재시작 리셋 (LS-H4) | ⏳ Phase B | local-server-resilience R5 |
 
 ---
 
