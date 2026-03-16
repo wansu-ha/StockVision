@@ -29,6 +29,8 @@ import AlertContainer from './components/AlertContainer'
 import ToastContainer from './components/ToastContainer'
 import AdminGuard from './components/AdminGuard'
 import OAuthCallback from './pages/OAuthCallback'
+import LegalDocument from './pages/LegalDocument'
+import ErrorBoundary from './components/ErrorBoundary'
 import { AuthProvider, useAuth } from './context/AuthContext'
 
 const queryClient = new QueryClient({
@@ -59,6 +61,7 @@ function AppRoutes() {
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/oauth/callback" element={<OAuthCallback />} />
+      <Route path="/legal/:type" element={<LegalDocument />} />
       {import.meta.env.DEV && (
         <>
           <Route path="/proto-a" element={<Suspense fallback={null}><ProtoA /></Suspense>} />
@@ -128,15 +131,17 @@ if ('serviceWorker' in navigator) {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <Router>
-          <AlertContainer />
-          <ToastContainer />
-          <AppRoutes />
-        </Router>
-      </AuthProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <Router>
+            <AlertContainer />
+            <ToastContainer />
+            <AppRoutes />
+          </Router>
+        </AuthProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   )
 }
 
