@@ -89,17 +89,20 @@ async def get_bars(
             "volume": bar.volume,
         })
 
-    data = [
-        {
-            "date": str(b.date),
-            "open": b.open,
-            "high": b.high,
-            "low": b.low,
-            "close": b.close,
-            "volume": b.volume,
-        }
-        for b in bars
-    ]
+    data = sorted(
+        [
+            {
+                "date": str(b.date),
+                "open": b.open,
+                "high": b.high,
+                "low": b.low,
+                "close": b.close,
+                "volume": b.volume,
+            }
+            for b in bars
+        ],
+        key=lambda x: x["date"],
+    )
     if resolution != "1d":
         data = _aggregate_daily_bars(data, resolution)
     return {"success": True, "data": data, "count": len(data), "resolution": resolution}

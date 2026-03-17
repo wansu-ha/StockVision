@@ -7,7 +7,7 @@
 
 export interface Condition {
   variable: string
-  operator: '>' | '<' | '>=' | '<=' | '=='
+  operator: '>' | '<' | '>=' | '<=' | '==' | '!='
   value: number
 }
 

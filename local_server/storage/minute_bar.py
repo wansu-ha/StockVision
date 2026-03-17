@@ -39,7 +39,7 @@ class MinuteBarStore:
             """)
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(str(self._db_path))
+        conn = sqlite3.connect(str(self._db_path), check_same_thread=False)
         conn.execute("PRAGMA journal_mode=WAL")
         return conn
 
