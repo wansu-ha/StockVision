@@ -120,19 +120,21 @@
 
 기존 7건 + 이번 리뷰에서 추가된 4건. 개별 항목은 아래 테이블에서 추적.
 
-| # | 이슈 | 파일 |
-|---|------|------|
-| Q1 | 404 fallback 추가 | `App.tsx` |
-| Q2 | useAccountStatus 폴링 가드 (인증 전 차단) | `useAccountStatus.ts` |
-| Q3 | cloudClient 401 인터셉터 정리 | `cloudClient.ts`, `AuthContext.tsx` |
-| Q4 | LocalStatusData.broker에 `reason` 추가 | 타입 파일 |
-| Q5 | 장 상태 공휴일 (useMarketContext 활용) | `MainDashboard.tsx` |
-| Q6 | AdminGuard 리다이렉트 개선 | `AdminGuard.tsx` |
-| Q7 | Register.tsx 다크 테마 적용 | `Register.tsx` |
-| F1+ | ErrorBoundary 라우트 리셋 | `ErrorBoundary.tsx` |
-| F2+ | staleTime 미설정 쿼리 ~14건 | 다수 파일 |
-| D1 | .env 플랜 상수 추가 | `core/config.py` |
-| D4 | 메신저 드롭다운 UI 선점 | `Settings.tsx` |
+| # | 이슈 | 파일 | 상태 |
+|---|------|------|------|
+| Q1 | 404 fallback 추가 | `App.tsx` | ✅ 구현 완료 |
+| Q2 | useAccountStatus 폴링 가드 (인증 전 차단) | `useAccountStatus.ts` | ✅ 구현 완료 |
+| Q3 | cloudClient 401 인터셉터 정리 | `cloudClient.ts`, `AuthContext.tsx` | ✅ 구현 완료 |
+| Q4 | LocalStatusData.broker에 `reason` 추가 | 타입 파일 | ✅ 구현 완료 |
+| Q5 | 장 상태 공휴일 (useMarketContext 활용) | `MainDashboard.tsx` | ❌ 미구현 |
+| Q6 | AdminGuard 리다이렉트 개선 | `AdminGuard.tsx` | ✅ 구현 완료 |
+| Q7 | Register.tsx 다크 테마 적용 | `Register.tsx` | ✅ 구현 완료 |
+| F1+ | ErrorBoundary 라우트 리셋 | `ErrorBoundary.tsx` | ❌ 미구현 |
+| F2+ | staleTime 미설정 쿼리 ~7건 | 다수 파일 | ❌ 미구현 |
+| D1 | .env 플랜 상수 추가 | `core/config.py` | ❌ 미구현 |
+| D4 | 메신저 드롭다운 UI 선점 | `Settings.tsx` | ❌ 미구현 |
+
+**A8 잔여 5건 + A6 F3 닉네임 = 총 6건 → `spec/phase-a-cleanup/` 에서 추적**
 
 #### A9. broker-auto-connect — ✅ 구현 완료 (2026-03-16)
 
@@ -152,7 +154,8 @@
 - [x] UI 미구현 U2~U5, S1~S3 — 기구현 확인 (2026-03-16, `spec/phase-a-review.md`)
 - [ ] ErrorBoundary 라우트 리셋 + staleTime 잔여 ~14건
 - [x] 약관 동의/열람/버전관리 (L1~L3) 완료 (2026-03-16)
-- [ ] 품질 이슈 잔여: F1+ 라우트 리셋, F2+ staleTime, Q5 공휴일, Q7 다크 테마
+- [ ] 품질 이슈 잔여: F1+ 라우트 리셋, F2+ staleTime, Q5 공휴일 → `spec/phase-a-cleanup/`
+- [x] Q1~Q4, Q6 구현 완료 확인 (2026-03-17), Q7 다크 테마 구현 완료 확인 (2026-03-17)
 - [x] broker-auto-connect 프론트 연동 완료 (2026-03-16)
 - [ ] 프로필 수정 (F3) 구현
 - [ ] `npm run build` 경고 없음

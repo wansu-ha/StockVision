@@ -47,7 +47,7 @@ MUTABLE_CONFIG_KEYS = {"broker.app_key", "broker.app_secret", "broker.account_no
 
 ### M3 — Rate Limiter 분산 무력화
 
-**파일**: `cloud_server/services/rate_limit.py`
+**파일**: `cloud_server/core/rate_limit.py`
 **문제**: in-memory rate limiter가 multi-worker 환경에서 분산되어 보호 무력화.
 **수정**: Redis 기반 rate limiter로 전환 (이미 TODO 존재).
 
@@ -80,7 +80,7 @@ if count == 1:
 
 ### M5 — Dev 모드 토큰 로그 노출
 
-**파일**: `cloud_server/services/email.py`
+**파일**: `cloud_server/core/email.py`
 **문제**: dev 모드에서 비밀번호 재설정 토큰이 포함된 이메일 본문을 INFO 로그에 출력.
 **수정**: 토큰을 마스킹하거나, 전체 이메일 본문 대신 수신자/제목만 로그.
 
@@ -90,16 +90,15 @@ if count == 1:
 
 ---
 
-### M6 — localStorage JWT 키 오류
+### M6 — localStorage JWT 키 오류 — ✅ 이미 수정됨
 
-**파일**: `frontend/src/services/onboarding.ts` (또는 관련 파일)
+**파일**: `frontend/src/hooks/useOnboarding.ts`
 **문제**: `localStorage.getItem('jwt')` — 실제 키는 `sessionStorage.getItem('sv_jwt')`.
-사용되지 않는 키 조회 → 항상 null → 인증 우회 가능.
-**수정**: 올바른 키로 수정하거나, 사용되지 않는 코드 제거.
+**현재**: `localStorage.getItem('jwt')` 호출이 프로젝트에 존재하지 않음. `useOnboarding.ts`는 `stockvision:onboarding_completed` 키 사용. 인증은 `AuthContext.tsx`에서 `sv_jwt`/`sv_rt` 키로 정상 관리.
 
 **수용 기준**:
-- [ ] `localStorage.getItem('jwt')` 호출 제거 또는 올바른 키로 수정
-- [ ] 인증 상태가 정확하게 반영됨
+- [x] `localStorage.getItem('jwt')` 호출 제거 — 이미 없음
+- [x] 인증 상태가 정확하게 반영됨 — AuthContext에서 올바른 키 사용
 
 ---
 

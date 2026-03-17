@@ -36,7 +36,7 @@ PLAN_HISTORY_DAYS: int = int(os.environ.get("PLAN_HISTORY_DAYS", "30"))
 
 ### Step 4: Q5 장 상태 공휴일
 
-1. `cloud_server/services/context_service.py` — `build_context()`에 `is_holiday` 필드 추가
+1. `cloud_server/services/context_service.py` — `KOREAN_HOLIDAYS` 상수 정의 + `build_context()`에 `is_holiday` 필드 추가
 2. `frontend/src/types/dashboard.ts` — `MarketContextData`에 `is_holiday?: boolean`
 3. `frontend/src/pages/MainDashboard.tsx` — 장 상태 판정 로직 수정:
    ```typescript

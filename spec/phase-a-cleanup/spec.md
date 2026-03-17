@@ -114,8 +114,11 @@ const status = hhmm >= 900 && hhmm < 1530 ? '장중' : hhmm < 900 ? '장전' : '
 **변경**:
 
 1. **백엔드** — Context API 응답에 `is_holiday: bool` 필드 추가
-   - `context_service.py`에서 `market_variables` 테이블의 공휴일 데이터 조회
-   - 공휴일 데이터가 없는 경우 `false` 반환
+   - `context_service.py`에 `KOREAN_HOLIDAYS` 상수 (해당 연도 공휴일 날짜 리스트) 정의
+   - `build_context()`에서 오늘 날짜가 리스트에 포함되면 `is_holiday: true`
+   - 주말은 프론트에서 자체 판단 (백엔드 중복 불필요)
+   - ※ 공휴일 관련 코드/테이블이 프로젝트에 없으므로 하드코딩으로 시작.
+     매년 수동 갱신 또는 향후 외부 API 연동으로 확장 가능
 
 2. **프론트엔드 타입** — `MarketContextData`에 `is_holiday?: boolean` 추가
 
