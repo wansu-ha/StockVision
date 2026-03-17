@@ -110,3 +110,29 @@ async def get_open_orders(
         "data": items,
         "count": len(items),
     }
+
+
+@router.post(
+    "/orders/{order_id}/cancel",
+    summary="개별 주문 취소",
+)
+async def cancel_order(
+    order_id: str,
+    request: Request,
+    _: None = Depends(require_local_secret),
+) -> dict[str, Any]:
+    """개별 미체결 주문을 취소한다."""
+    broker = _get_broker(request)
+
+    try:
+        result = await broker.cancel_order(order_id)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"주문 취소 실패: {e}",
+        ) from e
+
+    return {
+        "success": True,
+        "data": {"order_id": order_id, "result": result},
+    }

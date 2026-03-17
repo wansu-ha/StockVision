@@ -13,8 +13,8 @@ export interface LoginResponse {
 }
 
 export const authApi = {
-  register: (email: string, password: string, nickname?: string) =>
-    axios.post(`${BASE}/register`, { email, password, nickname }),
+  register: (email: string, password: string, nickname?: string, termsAgreed?: boolean, privacyAgreed?: boolean) =>
+    axios.post(`${BASE}/register`, { email, password, nickname, terms_agreed: termsAgreed, privacy_agreed: privacyAgreed }),
 
   verifyEmail: (token: string) =>
     axios.get(`${BASE}/verify-email`, { params: { token } }),

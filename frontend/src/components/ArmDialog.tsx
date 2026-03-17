@@ -6,6 +6,7 @@
  */
 import { useState } from 'react'
 import { cloudVerifyPassword } from '../services/cloudClient'
+import { getApiError } from '../utils/apiError'
 import type { RemoteState } from '../types'
 
 interface Props {
@@ -39,8 +40,8 @@ export default function ArmDialog({ state, onArm, onClose }: Props) {
       } else {
         setError('비밀번호가 올바르지 않습니다.')
       }
-    } catch (err: any) {
-      setError(err?.response?.data?.detail || '비밀번호 검증에 실패했습니다.')
+    } catch (err: unknown) {
+      setError(getApiError(err, '비밀번호 검증에 실패했습니다.'))
     } finally {
       setLoading(false)
     }

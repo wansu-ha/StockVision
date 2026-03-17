@@ -21,15 +21,18 @@ logger = logging.getLogger(__name__)
 
 KIS_BASE_URL = "https://openapi.koreainvestment.com:9443"
 
-# 실전 주문 tr_id 매핑
+# K1: 실전 주문 tr_id 매핑
+# KIS API 문서 기준: 매수/매도 모두 TTTC0801U 사용 가능.
+# SLL_TYPE("01"=매수, "02"=매도) + ORD_DVSN("00"=지정가, "01"=시장가)으로 구분.
+# TTTC0802U는 매수 시장가 전용 (KIS 포털 "주식주문(시장가)" 참조).
 _ORDER_TR_ID: dict[tuple[OrderSide, OrderType], str] = {
     (OrderSide.BUY, OrderType.MARKET): "TTTC0802U",   # 매수 시장가
     (OrderSide.BUY, OrderType.LIMIT): "TTTC0801U",    # 매수 지정가
-    (OrderSide.SELL, OrderType.MARKET): "TTTC0801U",  # 매도 시장가 (동일 tr_id, ord_dvsn으로 구분)
+    (OrderSide.SELL, OrderType.MARKET): "TTTC0801U",  # 매도 시장가
     (OrderSide.SELL, OrderType.LIMIT): "TTTC0801U",   # 매도 지정가
 }
 
-# 모의투자 주문 tr_id 매핑 (V 접두어)
+# 모의투자 주문 tr_id 매핑 (V 접두어, 동일 구조)
 _MOCK_ORDER_TR_ID: dict[tuple[OrderSide, OrderType], str] = {
     (OrderSide.BUY, OrderType.MARKET): "VTTC0802U",
     (OrderSide.BUY, OrderType.LIMIT): "VTTC0801U",

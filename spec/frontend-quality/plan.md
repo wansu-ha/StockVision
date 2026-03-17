@@ -7,9 +7,11 @@
 ```
 F1 (ErrorBoundary)   ─── 독립
 F2 (staleTime)       ─── 독립
-F3 (프로필 수정)      ─── 독립 (백엔드 + 프론트 동시)
+F3 (프로필 수정)      ─── ⚠️ legal spec 완료 후 (auth.py, Settings.tsx 공유)
 
-→ 3개 모두 독립. 병렬 작업 가능.
+→ F1, F2 병렬 가능. F3은 legal spec의 L2(약관 동의 UI) 완료 후 진행.
+  사유: legal이 auth.py에 동의 필드 추가 + Settings.tsx에 동의 관리 UI 추가하므로,
+  F3이 먼저 들어가면 충돌 발생.
 ```
 
 ## Step 1: ErrorBoundary (F1)

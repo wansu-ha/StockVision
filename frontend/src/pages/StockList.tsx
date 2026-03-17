@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMemo } from 'react'
 import {
   MagnifyingGlassIcon,
   TrashIcon,
@@ -50,6 +51,19 @@ const StockList = () => {
 
   const detailMap = new Map(stockDetails.map(s => [s.symbol, s]))
 
+  const watchlistSet = useMemo(
+    () => new Set(watchlist.map(w => w.symbol)),
+    [watchlist]
+  )
+
+  const handleToggleWatchlist = (symbol: string, add: boolean) => {
+    if (add) {
+      addMut.mutate(symbol)
+    } else {
+      removeMut.mutate(symbol)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-950">
       <div className="max-w-4xl mx-auto px-6 py-8">
@@ -65,6 +79,8 @@ const StockList = () => {
             onStockSelect={handleAddStock}
             placeholder="종목 코드 또는 회사명 검색 → 클릭하여 추가"
             enablePageTransition={false}
+            watchlistSet={watchlistSet}
+            onToggleWatchlist={handleToggleWatchlist}
           />
           {addMut.isError && (
             <p className="text-red-500 text-sm mt-2">추가 실패 — 이미 등록된 종목일 수 있습니다</p>
