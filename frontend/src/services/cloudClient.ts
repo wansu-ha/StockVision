@@ -287,4 +287,12 @@ export const cloudHealth = {
     axios.get(`${CLOUD_URL}/health`, { timeout: 5000 }).then((r) => r.data).catch(() => null),
 }
 
+/** 약관 동의 — /api/v1/legal */
+export const legalApi = {
+  getConsentStatus: () =>
+    client.get('/api/v1/legal/consent/status').then(r => r.data),
+  recordConsent: (docType: string, docVersion: string) =>
+    client.post('/api/v1/legal/consent', { doc_type: docType, doc_version: docVersion }).then(r => r.data),
+}
+
 export default client
