@@ -1,7 +1,7 @@
 # Free / Pro / Team 경계 확정안
 
 작성일: 2026-03-10
-상태: 확정안 초안
+상태: 확정
 관련 문서:
 - `docs/product/pricing-plan-draft.md`
 - `docs/product/product-direction-log.md`
@@ -197,3 +197,15 @@ Team은 개인 사용자의 연장이 아니라 `협업용 운영 레이어`다.
 `같은 비서를 기기를 넘어 이어서 쓰고`,
 `귀찮은 운영을 대신 맡기고`,
 `기록과 맥락이 더 오래 유지되는 경험`에서 만들어야 한다.
+
+## 13. 구현 방식 (2026-03-17 확정)
+
+초기(무료 플랜만 존재)에는 `.env` 환경변수로 제한값을 관리한다.
+
+```env
+PLAN_MAX_STRATEGIES=3
+PLAN_HISTORY_DAYS=30
+```
+
+서버 config에서 `settings.PLAN_MAX_STRATEGIES`로 참조.
+Pro 결제 시스템 도입 시 DB `plans` 테이블 + 사용자별 `plan_id`로 전환한다.

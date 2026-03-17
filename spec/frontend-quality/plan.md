@@ -1,6 +1,6 @@
 # 프론트엔드 품질 — 구현 계획
 
-> 작성일: 2026-03-16 | 상태: 초안 | spec: `spec/frontend-quality/spec.md`
+> 작성일: 2026-03-16 | 상태: 부분 구현 | F1 ✅ F2 ⚠️40% F3 ❌ | spec: `spec/frontend-quality/spec.md`
 
 ## 의존관계
 

@@ -1,6 +1,6 @@
 # KIS 어댑터 보완 — 구현 계획
 
-> 작성일: 2026-03-16 | 상태: 초안 | spec: `spec/kis-adapter-completion/spec.md`
+> 작성일: 2026-03-16 | 상태: 구현 완료 | spec: `spec/kis-adapter-completion/spec.md`
 
 ## 선행 조건
 

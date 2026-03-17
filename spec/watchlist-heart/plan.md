@@ -1,6 +1,6 @@
 # 관심종목 하트 토글 — 구현 계획
 
-> 작성일: 2026-03-15 | 상태: 초안 | spec: `spec/watchlist-heart/spec.md`
+> 작성일: 2026-03-15 | 상태: 구현 완료 | spec: `spec/watchlist-heart/spec.md`
 
 ## 의존관계
 

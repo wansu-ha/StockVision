@@ -1,6 +1,6 @@
 # 보안 2차 — 구현 계획
 
-> 작성일: 2026-03-16 | 상태: 초안 | spec: `spec/security-phase2/spec.md`
+> 작성일: 2026-03-16 | 상태: 구현 완료 | spec: `spec/security-phase2/spec.md`
 
 ## 의존관계
 

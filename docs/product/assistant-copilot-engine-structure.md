@@ -1,6 +1,6 @@
 # Assistant / Strategy Copilot / System Trader / Execution Layer 구조
 작성일: 2026-03-10
-상태: 초안 v2
+상태: 확정
 관련 문서:
 - `docs/product/product-direction-log.md`
 - `docs/product/assistant-system-prompt-draft.md`
@@ -133,6 +133,13 @@ Assistant는 `메모리 중심`이다.
 - 금지 규칙
 - 최근 경고와 복기
 - 비서 톤과 브리핑 방식
+
+#### 메모리 저장소 (2026-03-17 확정)
+
+- **정본**: 로컬 PC (`~/.stockvision/memory/`)
+- **Pro**: 클라우드에 암호화 백업/동기화 (AES-256)
+- **모바일**: 클라우드 릴레이 경유 → 로컬 서버 → LLM 호출
+- **PC 오프라인 시**: 비서 사용 불가 (Pro: 마지막 동기화 기준 기본 응답만)
 
 ### 5.2 Strategy Copilot
 
