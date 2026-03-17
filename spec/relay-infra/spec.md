@@ -1,6 +1,6 @@
 # 릴레이 인프라 (Relay Infrastructure)
 
-> 작성일: 2026-03-12 | 상태: 초안 | Phase C (C6-a)
+> 작성일: 2026-03-12 | 상태: 확정 | Phase C (C6-a)
 >
 > 대체: `spec/remote-control/spec.md` §5 통신 경로 부분을 대체
 

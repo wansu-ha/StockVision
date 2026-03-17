@@ -1,4 +1,4 @@
-> 작성일: 2026-03-10 | 상태: 초안 | Branch: feat/engine-live-execution
+> 작성일: 2026-03-10 | 상태: 확정 | Branch: feat/engine-live-execution
 
 # 전략 엔진 E2E 실행 — Spec
 
