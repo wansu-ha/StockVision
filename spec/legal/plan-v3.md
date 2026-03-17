@@ -1,6 +1,6 @@
 # 동의 관리 통합 구현 계획서 (재동의 + 면책 고지)
 
-> 작성일: 2026-03-16 | 수정: 2026-03-17 | 상태: 초안 | 범위: plan-v2 Step F + 면책 고지 시점
+> 작성일: 2026-03-16 | 수정: 2026-03-17 | 상태: 구현 완료 | 범위: plan-v2 Step F + 면책 고지 시점
 
 ---
 
@@ -305,28 +305,28 @@ Step 3과 Step 4는 병렬 가능하나, 같은 개발자가 순차 진행하는
 
 ### F1: 재동의 모달
 
-- [ ] 로그인 후 `consent/status` API 호출
-- [ ] `terms.up_to_date=false` → 재동의 모달 표시
-- [ ] `privacy.up_to_date=false` → 재동의 모달 표시
-- [ ] 모달 배경 클릭/ESC로 닫기 불가
-- [ ] "변경 확인" 클릭 → 약관 전문 새 탭
-- [ ] 체크박스 미체크 시 "동의하고 계속" 비활성
-- [ ] "동의하고 계속" → POST /consent (해당 doc_type별) → 모달 닫힘
-- [ ] "로그아웃" → 세션 종료, 로그인 페이지 이동
-- [ ] 동의 완료 후 서비스 정상 이용 가능
-- [ ] 모든 약관 up_to_date=true → 모달 미표시
+- [x] 로그인 후 `consent/status` API 호출
+- [x] `terms.up_to_date=false` → 재동의 모달 표시
+- [x] `privacy.up_to_date=false` → 재동의 모달 표시
+- [x] 모달 배경 클릭/ESC로 닫기 불가
+- [x] "변경 확인" 클릭 → 약관 전문 새 탭
+- [x] 체크박스 미체크 시 "동의하고 계속" 비활성
+- [x] "동의하고 계속" → POST /consent (해당 doc_type별) → 모달 닫힘
+- [x] "로그아웃" → 세션 종료, 로그인 페이지 이동
+- [x] 동의 완료 후 서비스 정상 이용 가능
+- [x] 모든 약관 up_to_date=true → 모달 미표시
 
 ### F2: 면책 고지 (전략 활성화 시)
 
-- [ ] 엔진 시작 클릭 시 `disclaimer.up_to_date` 확인
-- [ ] `false` → DisclaimerModal 표시
-- [ ] 5개 위험 항목 표시 (spec §6.1 문구)
-- [ ] "전문 보기" → `/legal/disclaimer` 새 탭
-- [ ] 체크박스 미체크 시 "동의하고 시작" 비활성
-- [ ] "동의하고 시작" → POST /consent (disclaimer) → 엔진 시작
-- [ ] "취소" → 모달 닫기, 엔진 미시작
-- [ ] 동의 후 다음 엔진 시작 시 모달 미표시
-- [ ] 엔진 정지는 disclaimer 체크 없이 가능
+- [x] 엔진 시작 클릭 시 `disclaimer.up_to_date` 확인
+- [x] `false` → DisclaimerModal 표시
+- [x] 5개 위험 항목 표시 (spec §6.1 문구)
+- [x] "전문 보기" → `/legal/disclaimer` 새 탭
+- [x] 체크박스 미체크 시 "동의하고 시작" 비활성
+- [x] "동의하고 시작" → POST /consent (disclaimer) → 엔진 시작
+- [x] "취소" → 모달 닫기, 엔진 미시작
+- [x] 동의 후 다음 엔진 시작 시 모달 미표시
+- [x] 엔진 정지는 disclaimer 체크 없이 가능
 
 ---
 
