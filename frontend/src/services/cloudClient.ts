@@ -84,6 +84,7 @@ export const cloudAuth = {
     client.post('/api/v1/auth/logout', { refresh_token: refreshToken }).then((r) => r.data),
   verifyEmail: (token: string) =>
     client.get('/api/v1/auth/verify-email', { params: { token } }).then((r) => r.data),
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   updateProfile: (_nickname: string) => {
     // TODO: 서버에 /api/v1/auth/profile 엔드포인트 없음 — 클라우드 서버 구현 후 연결
     console.warn('cloudAuth.updateProfile: 서버 엔드포인트 미구현')

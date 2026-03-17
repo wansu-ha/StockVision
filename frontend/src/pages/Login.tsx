@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { getApiError } from '../utils/apiError'
 import OAuthButtons from '../components/OAuthButtons'
 
 export default function Login() {
@@ -21,12 +22,12 @@ export default function Login() {
     try {
       await login(email, password, keepLoggedIn)
       navigate('/')
-    } catch (err: any) {
-      const msg = err?.response?.data?.detail
+    } catch (err: unknown) {
+      const msg = getApiError(err, '로그인에 실패했습니다.')
       if (msg === '이메일 인증이 필요합니다.') {
         setError('이메일 인증을 완료해주세요. 받은 편지함을 확인하세요.')
       } else {
-        setError(msg || '로그인에 실패했습니다.')
+        setError(msg)
       }
     } finally {
       setLoading(false)

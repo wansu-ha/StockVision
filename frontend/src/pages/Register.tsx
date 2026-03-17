@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import type { FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { authApi } from '../services/auth'
+import { getApiError } from '../utils/apiError'
 
 export default function Register() {
   const [email, setEmail]             = useState('')
@@ -30,8 +31,8 @@ export default function Register() {
     try {
       await authApi.register(email, password, nickname || undefined, termsAgreed, privacyAgreed)
       setDone(true)
-    } catch (err: any) {
-      setError(err?.response?.data?.detail || '회원가입에 실패했습니다.')
+    } catch (err: unknown) {
+      setError(getApiError(err, '회원가입에 실패했습니다.'))
     } finally {
       setLoading(false)
     }

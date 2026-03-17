@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import type { FormEvent } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { authApi } from '../services/auth'
+import { getApiError } from '../utils/apiError'
 
 export default function ResetPassword() {
   const [params]  = useSearchParams()
@@ -39,8 +40,8 @@ export default function ResetPassword() {
     try {
       await authApi.resetPassword(token, password)
       navigate('/login', { state: { message: '비밀번호가 재설정되었습니다. 다시 로그인해주세요.' } })
-    } catch (err: any) {
-      setError(err?.response?.data?.detail || '비밀번호 재설정에 실패했습니다.')
+    } catch (err: unknown) {
+      setError(getApiError(err, '비밀번호 재설정에 실패했습니다.'))
     } finally {
       setLoading(false)
     }
