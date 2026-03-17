@@ -1,10 +1,12 @@
 # StockVision 개발 계획서 v3
 
-> 작성일: 2026-03-15 | 상태: 초안
+> 작성일: 2026-03-15 | 갱신: 2026-03-17 | 상태: 확정
 > 선행: `docs/development-plan-v2.md` (3프로세스 전환), `spec/review-missing-features/report.md` (교차검증)
 >
 > 이 문서는 전체 미해결 항목 ~164건을 Phase A/B/C/D로 조직한 **구현 로드맵**이다.
 > 각 Phase 내 작업은 의존관계를 고려한 순서로 배치되었다.
+>
+> **2026-03-17 갱신**: A1~A4, A6(F1+F2), A7, A9 구현 완료. D1~D6 결정 완료. Alembic+시드 적용. 로컬 서버 v0.1.3 릴리스.
 
 ---
 
@@ -34,7 +36,7 @@
 
 모두 **독립** 작업으로 병렬 진행 가능.
 
-#### A1. Phase A 버그 수정 (4건) — 🔴 즉시
+#### A1. Phase A 버그 수정 (4건) — ✅ 구현 완료 (2026-03-16)
 
 | # | 버그 | 파일 | 심각도 |
 |---|------|------|--------|
@@ -43,9 +45,7 @@
 | B3 | 미체결 "취소" 버튼 stub — onClick 없음, PendingOrder.orderId 타입 누락 | `ListView.tsx` | 🟡 |
 | B4 | Settings 키 등록 후 localStatus 캐시 미갱신 (5초 지연) | `Settings.tsx` | 🟡 |
 
-**예상 공수**: 2-3일
-
-#### A2. security-phase2 (S1~S8) — 🔴 운영 전 필수
+#### A2. security-phase2 (S1~S8) — ✅ 구현 완료 (2026-03-16)
 
 | Step | 항목 | 파일 | 의존 |
 |------|------|------|------|
@@ -59,9 +59,8 @@
 | S8 | 리셋 URL fragment 전환 | `auth.py`, `ResetPassword.tsx` | S5 후 |
 
 **Alembic 마이그레이션**: S4 (deleted_at), S5 (token_hash)
-**예상 공수**: 4-5일
 
-#### A3. kis-adapter-completion (K1~K3) — 🟡
+#### A3. kis-adapter-completion (K1~K3) — ✅ 구현 완료 (2026-03-16)
 
 | Step | 항목 | 파일 |
 |------|------|------|
@@ -70,9 +69,8 @@
 | K3 | App Secret 불필요 전송 제거 | `auth.py` |
 
 **선행**: KIS API 문서 확인 필요
-**예상 공수**: 2-3일
 
-#### A4. watchlist-heart (하트 토글) — 🟡
+#### A4. watchlist-heart (하트 토글) — ✅ 구현 완료 (2026-03-16)
 
 | Step | 항목 | 파일 |
 |------|------|------|
@@ -81,12 +79,9 @@
 | 3 | StockSearch 적용 | `StockSearch.tsx` |
 | 4 | DetailView 적용 | `DetailView.tsx` |
 
-**npm 의존성**: `@heroicons/react` 확인 필요
-**예상 공수**: 1-2일
-
 ---
 
-### Week 2 — UI 갭 + 품질 + 법무
+### Phase A 잔여 — UI 갭 + 품질
 
 #### A5. Phase A UI 미구현 (7건)
 
@@ -102,30 +97,27 @@
 
 **예상 공수**: 3-4일
 
-#### A6. frontend-quality (F1~F3) — 🟡
+#### A6. frontend-quality (F1~F3) — ⚠️ 부분 구현
 
-| Step | 항목 | 파일 | 의존 |
+| Step | 항목 | 파일 | 상태 |
 |------|------|------|------|
-| F1 | ErrorBoundary | `ErrorBoundary.tsx` (신규), `App.tsx` | 독립 |
-| F2 | staleTime 설정 | 다수 (6+ 파일) | 독립 |
-| F3 | 프로필 수정 (닉네임) | `auth.py`, `Settings.tsx` | **⚠️ legal 완료 후** |
+| F1 | ErrorBoundary | `ErrorBoundary.tsx`, `App.tsx` | ✅ (라우트 리셋 미구현) |
+| F2 | staleTime 설정 | 다수 (6+ 파일) | ⚠️ 8/20+ 쿼리만 설정 |
+| F3 | 프로필 수정 (닉네임) | `auth.py`, `Settings.tsx` | ❌ 미구현 |
 
-**예상 공수**: 2-3일 (F1+F2), F3은 legal 후 1일
-
-#### A7. legal (L1~L3) — 🔴 운영 전 필수
+#### A7. legal (L1~L3) — ✅ 구현 완료 (2026-03-16)
 
 | Step | 항목 | 파일 |
 |------|------|------|
 | L1 | 회원가입 약관 동의 | `Register.tsx`, `auth.py`, 마이그레이션 |
-| L2 | 약관 열람 페이지 | `LegalTerms.tsx` (신규), `Settings.tsx`, `Footer` |
-| L3 | 약관 버전 관리 | `legal_documents` 테이블, API, 재동의 모달 |
+| L2 | 약관 열람 페이지 | `LegalDocument.tsx`, `Settings.tsx`, `Layout.tsx` |
+| L3 | 약관 버전 관리 | `legal_documents` 테이블, API, ConsentGate, DisclaimerModal |
 
-**Alembic 마이그레이션**: `legal_documents`, `legal_consents` 테이블
-**npm 의존성**: `react-markdown`
-**미결정 사항**: Q1~Q5 (plan-v2.md 참조) — 구현 전 결정 필요
-**예상 공수**: 4-5일
+**Alembic 마이그레이션**: 운영 DB 적용 완료 (2026-03-17 stamp + seed)
 
-#### A8. 추가 품질 이슈 (7건)
+#### A8. 추가 품질 이슈 (7건 + 추가 4건)
+
+기존 7건 + 이번 리뷰에서 추가된 4건. 상세: `spec/phase-a-cleanup/plan.md`
 
 | # | 이슈 | 파일 |
 |---|------|------|
@@ -136,31 +128,32 @@
 | Q5 | 장 상태 공휴일 (useMarketContext 활용) | `MainDashboard.tsx` |
 | Q6 | AdminGuard 리다이렉트 개선 | `AdminGuard.tsx` |
 | Q7 | Register.tsx 다크 테마 적용 | `Register.tsx` |
+| F1+ | ErrorBoundary 라우트 리셋 | `ErrorBoundary.tsx` |
+| F2+ | staleTime 미설정 쿼리 ~14건 | 다수 파일 |
+| D1 | .env 플랜 상수 추가 | `core/config.py` |
+| D4 | 메신저 드롭다운 UI 선점 | `Settings.tsx` |
 
-**예상 공수**: 2일
-
-#### A9. broker-auto-connect 프론트엔드 미완성
+#### A9. broker-auto-connect — ✅ 구현 완료 (2026-03-16)
 
 | # | 항목 | 파일 |
 |---|------|------|
 | F8 | 키 등록 후 reconnect 트리거 | `Settings.tsx`, `localClient.ts` |
 | — | 키 미등록 온보딩 CTA | `ListView.tsx` |
 
-**예상 공수**: 1일
-
 ---
 
 ### Phase A 완료 기준
 
-- [ ] 4건 버그 전부 수정
-- [ ] 보안 S1~S8 전부 적용
-- [ ] KIS 어댑터 K1~K3 완료
-- [ ] 하트 토글 ListView/StockSearch/DetailView 적용
+- [x] 4건 버그 전부 수정 (2026-03-16)
+- [x] 보안 S1~S8 전부 적용 (2026-03-16)
+- [x] KIS 어댑터 K1~K3 완료 (2026-03-16)
+- [x] 하트 토글 ListView/StockSearch/DetailView 적용 (2026-03-16)
 - [ ] UI 미구현 U2~U5, S1~S3 완료
-- [ ] ErrorBoundary + staleTime 적용
-- [ ] 약관 동의/열람/버전관리 (L1~L3) 완료
-- [ ] 품질 이슈 7건 해결
-- [ ] broker-auto-connect 프론트 연동 완료
+- [ ] ErrorBoundary 라우트 리셋 + staleTime 잔여 14건
+- [x] 약관 동의/열람/버전관리 (L1~L3) 완료 (2026-03-16)
+- [ ] 품질 이슈 Q1~Q7 + 추가 4건 해결
+- [x] broker-auto-connect 프론트 연동 완료 (2026-03-16)
+- [ ] 프로필 수정 (F3) 구현
 - [ ] `npm run build` 경고 없음
 - [ ] `npm run lint` 통과
 
@@ -317,24 +310,25 @@
 
 ## 5. Phase D — 런칭 전 정리
 
-### D1. 제품 전략 미결정 (6건)
+### D1. 제품 전략 — ✅ 6건 전부 결정 완료 (2026-03-17)
 
-| 미결정 사항 | 영향 | 결정 시점 |
-|------------|------|----------|
-| 무료/Pro 경계 확정 | 가격 정책, UI 분기 | Phase B 완료 전 |
-| 오픈소스 라이선스 (AGPL vs MPL-2.0 vs 듀얼) | 공개 전 필수 | Phase C 전 |
-| LLM 권한 정책 (생성 가능 결과 범위) | 안전성 | Phase B 완료 전 |
-| 메신저 1순위 채널 | Phase D 알림 기능 | Phase C 중 |
-| 사용자 프로필 스키마 | Phase E 기반 | Phase C 후 |
-| 비서 메모리 저장소 (로컬 vs 클라우드) | 아키텍처 | Phase C 후 |
+| 결정 사항 | 결과 | 문서 |
+|----------|------|------|
+| 무료/Pro 경계 | `.env` 상수 → Pro 때 DB 전환 | `docs/product/free-pro-boundary.md` (확정) |
+| 오픈소스 라이선스 | MPL-2.0 | `docs/open-source/oss-license-strategy.md` (확정) |
+| LLM 권한 정책 | 금지 권한 하드코딩, config에 provider/limit만 | `docs/product/llm-permission-policy.md` (확정) |
+| 메신저 채널 | 전부 제공 목표, Settings 드롭다운 UI 선점 | Phase A8에서 UI 구현 |
+| 사용자 프로필 스키마 | 벤치마킹 리서치 후 결정 | Phase D에서 착수 |
+| 비서 메모리 저장소 | 로컬 PC 정본, Pro만 클라우드 암호화 백업 | `docs/product/assistant-copilot-engine-structure.md` (확정) |
 
-### D2. 문서 갱신 (3건)
+### D2. 문서 갱신
 
-| 문서 | 이슈 |
-|------|------|
-| Phase 1/2 문서 5건 | SUPERSEDED 헤더 추가 |
-| architecture.md | Phase C 기능 8건 추가 |
-| 6개 spec 상태 헤더 | "구현 완료"로 갱신 |
+| 문서 | 이슈 | 상태 |
+|------|------|------|
+| Phase 1/2 문서 5건 | SUPERSEDED 헤더 추가 | 미착수 |
+| architecture.md | Phase C 기능 8건 추가 | 미착수 |
+| spec 상태 헤더 | "구현 완료"로 갱신 | ✅ 7건 완료 (2026-03-17) |
+| docs/product 3건 | 확정 상태 전환 | ✅ 완료 (2026-03-17) |
 
 ### D3. 프로덕션 하드닝 (M1~M6)
 
@@ -403,15 +397,15 @@ Phase C (Week 7-13) ════════════════════
 
 ## 8. Alembic 마이그레이션 목록
 
-| Phase | Spec | 테이블/컬럼 | 마이그레이션 |
-|-------|------|-----------|-------------|
-| A | security-phase2 S4 | `users.deleted_at` | ALTER TABLE |
-| A | security-phase2 S5 | `email_verification_tokens.token_hash`, `password_reset_tokens.token_hash` | ALTER TABLE + 데이터 마이그레이션 |
-| A | legal L1 | `users.terms_accepted_at` (선택) | ALTER TABLE |
-| A | legal L3 | `legal_documents` | CREATE TABLE |
-| A | legal L3 | `legal_consents` | CREATE TABLE |
+> ✅ 운영 DB 적용 완료 (2026-03-17). `create_all()`로 이미 생성된 테이블을 `alembic stamp head`로 동기화.
 
-**순서**: S4 → S5 → L1/L3 (한번에 묶어도 무방)
+| Phase | Spec | 테이블/컬럼 | 마이그레이션 | 상태 |
+|-------|------|-----------|-------------|------|
+| A | initial | 전체 스키마 | `5fc19af729fc` | ✅ stamp |
+| A | security-phase2 | `password_hash` nullable | `a1b2c3d4e5f6` | ✅ stamp |
+| A | legal L3 | `legal_documents`, `legal_consents` | `b7c8d9e0f1a2` | ✅ stamp |
+
+시드 데이터: `legal_documents` 3건 (terms, privacy, disclaimer v1.0) 삽입 완료.
 
 ---
 
@@ -444,34 +438,38 @@ Phase C (Week 7-13) ════════════════════
 
 `workflow.md` 규칙에 따라:
 
-### Phase A 커밋 순서 (예상)
+### Phase A 커밋 이력 + 잔여
 
 ```
-1. docs: development-plan-v3 + spec/plan 수정         ← 현재 작업
-2. fix: Phase A 버그 4건 (B1~B4)
-3. feat(security): S1 rate limiter 신뢰 + S2 Redis
-4. feat(security): S3 RT sessionStorage + S4 soft-delete
-5. feat(security): S5 토큰 해싱 + S6 WS Origin + S7 비밀번호 + S8 리셋 URL
-6. feat(kis): K1 TR ID 검증 + K2 approval key + K3 appsecret 제거
-7. feat(watchlist): HeartToggle + ListView/StockSearch/DetailView
-8. feat(ux): U2~U5 신호등 + S1~S3 전략 카드 정보
-9. feat(quality): F1 ErrorBoundary + F2 staleTime
-10. feat(legal): L1 약관 동의 + L2 열람 페이지 + L3 버전 관리
-11. feat(quality): F3 프로필 수정 (legal 후행)
-12. fix: 품질 이슈 Q1~Q7
-13. feat(broker): auto-connect 프론트엔드 연동
+완료:
+✅ docs: development-plan-v3 + spec/plan 수정
+✅ fix: Phase A 버그 4건
+✅ feat(security): S1~S8
+✅ feat(kis): K1~K3
+✅ feat(watchlist): HeartToggle
+✅ feat(quality): F1 ErrorBoundary + F2 staleTime (부분)
+✅ feat(legal): L1~L3
+✅ feat(broker): auto-connect
+✅ chore: bump local server v0.1.3
+✅ docs: spec 7건 상태 갱신 + product 3건 확정
+
+잔여:
+→ feat(ux): U2~U5 신호등 + S1~S3 전략 카드 정보
+→ feat(quality): F1+ 라우트 리셋 + F2+ staleTime 잔여 + F3 닉네임
+→ fix: 품질 이슈 Q1~Q7
+→ feat(settings): 메신저 드롭다운 UI + .env 플랜 상수
 ```
 
 ---
 
 ## 12. 리스크 & 블로커
 
-| 리스크 | 영향 | 대응 |
-|--------|------|------|
-| KIS API 문서 접근 불가 | K1, K2 검증 불가 | 모의서버 기준 + 주석 표기 |
-| legal Q1-Q5 미결정 | L2 구현 지연 | Q1-Q5 결정 후 착수 |
-| relay-infra 복잡도 | Phase C 일정 초과 | 단계별 검증, MVP 우선 |
-| React 19 호환성 | 라이브러리 충돌 가능 | react-markdown 등 호환 확인 |
+| 리스크 | 영향 | 대응 | 상태 |
+|--------|------|------|------|
+| KIS API 문서 접근 불가 | K1, K2 검증 불가 | 모의서버 기준 + 주석 표기 | ✅ 해소 (코드 구현 완료) |
+| legal Q1-Q5 미결정 | L2 구현 지연 | Q1-Q5 결정 후 착수 | ✅ 해소 (구현 완료) |
+| relay-infra 복잡도 | Phase C 일정 초과 | 단계별 검증, MVP 우선 | 유효 |
+| React 19 호환성 | 라이브러리 충돌 가능 | react-markdown 등 호환 확인 | ✅ 해소 (호환 확인) |
 
 ---
 
