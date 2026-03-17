@@ -9,7 +9,8 @@ import type { IChartApi } from 'lightweight-charts'
 import { useQuery } from '@tanstack/react-query'
 import { cloudBars } from '../../services/cloudClient'
 import type { DailyBar } from '../../services/cloudClient'
-import { localLogs } from '../../services/localClient'
+import { localLogs, localBars } from '../../services/localClient'
+import type { MinuteBar } from '../../services/localClient'
 
 // ─── 차트 타입 ───
 
@@ -21,6 +22,23 @@ const CHART_TYPES: { id: ChartType; label: string }[] = [
   { id: 'heikin', label: '하이킨' },
   { id: 'ohlc',   label: 'OHLC' },
   { id: 'line',   label: '라인' },
+]
+
+// 해상도 옵션 — source: 'local' = 로컬 분봉 DB, 'cloud' = 클라우드 일봉+
+type Resolution = '1m' | '5m' | '15m' | '1h' | '1d' | '1w' | '1mo'
+interface ResolutionOption {
+  id: Resolution
+  label: string
+  source: 'local' | 'cloud'
+}
+const RESOLUTION_OPTIONS: ResolutionOption[] = [
+  { id: '1m',  label: '1분',  source: 'local' },
+  { id: '5m',  label: '5분',  source: 'local' },
+  { id: '15m', label: '15분', source: 'local' },
+  { id: '1h',  label: '1시간', source: 'local' },
+  { id: '1d',  label: '일',   source: 'cloud' },
+  { id: '1w',  label: '주',   source: 'cloud' },
+  { id: '1mo', label: '월',   source: 'cloud' },
 ]
 
 const PERIOD_OPTIONS = [
@@ -155,8 +173,12 @@ export default function PriceChart({ symbol }: PriceChartProps) {
   const prevTypeRef = useRef<ChartType | null>(null)
   const [period, setPeriod] = useState<(typeof PERIOD_OPTIONS)[number]['label']>('3M')
   const [chartType, setChartType] = useState<ChartType>('candle')
+  const [resolution, setResolution] = useState<Resolution>('1d')
   const [isZoomed, setIsZoomed] = useState(false)
   const dataLenRef = useRef(0)
+
+  const resOption = RESOLUTION_OPTIONS.find(r => r.id === resolution)!
+  const isIntraday = resOption.source === 'local'
 
   // 차트 생성 (한 번만) — 볼륨만 생성, 메인 시리즈는 데이터 useEffect에서
   useEffect(() => {
@@ -198,19 +220,39 @@ export default function PriceChart({ symbol }: PriceChartProps) {
     return () => { ro.disconnect(); chart.remove() }
   }, [])
 
+  // 분봉 해상도일 때 시간축에 시/분 표시
+  useEffect(() => {
+    chartRef.current?.timeScale().applyOptions({ timeVisible: isIntraday })
+  }, [isIntraday])
+
   // 기간에 따른 시작일 계산
   const days = PERIOD_OPTIONS.find(p => p.label === period)!.days
   const startDate = new Date()
   startDate.setDate(startDate.getDate() - days)
   const startStr = startDate.toISOString().slice(0, 10)
 
-  const { data: bars } = useQuery<DailyBar[]>({
-    queryKey: ['bars', symbol, startStr],
-    queryFn: () => symbol ? cloudBars.get(symbol, startStr) : Promise.resolve([]),
+  // 클라우드 일봉/주봉/월봉
+  const { data: cloudData } = useQuery<DailyBar[]>({
+    queryKey: ['bars', symbol, startStr, resolution],
+    queryFn: () => symbol ? cloudBars.get(symbol, startStr, undefined, resolution) : Promise.resolve([]),
     staleTime: 5 * 60_000,
-    enabled: !!symbol,
+    enabled: !!symbol && !isIntraday,
     retry: 1,
   })
+
+  // 로컬 분봉 (1m/5m/15m/1h)
+  const { data: localData } = useQuery<MinuteBar[]>({
+    queryKey: ['localBars', symbol, resolution, startStr],
+    queryFn: () => symbol ? localBars.get(symbol, resolution, startStr) : Promise.resolve([]),
+    staleTime: 30_000,
+    enabled: !!symbol && isIntraday,
+    retry: 1,
+  })
+
+  // 통합 데이터: DailyBar 형식으로 정규화
+  const bars: DailyBar[] | undefined = isIntraday
+    ? localData?.map(b => ({ date: b.time, open: b.open, high: b.high, low: b.low, close: b.close, volume: b.volume }))
+    : cloudData
 
   // 체결 로그 fetch (마커용)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -300,6 +342,14 @@ export default function PriceChart({ symbol }: PriceChartProps) {
             {CHART_TYPES.map(t => (
               <button key={t.id} onClick={() => setChartType(t.id)} aria-pressed={chartType === t.id} className={btnClass(chartType === t.id)}>
                 {t.label}
+              </button>
+            ))}
+          </div>
+          <div className="w-px h-4 bg-gray-700 mx-2" />
+          <div className="flex items-center gap-1" role="group" aria-label="해상도">
+            {RESOLUTION_OPTIONS.map(r => (
+              <button key={r.id} onClick={() => setResolution(r.id)} aria-pressed={resolution === r.id} className={btnClass(resolution === r.id)}>
+                {r.label}
               </button>
             ))}
           </div>

@@ -1,6 +1,6 @@
 """시장 데이터 API — 가격, 현재가, 재무, 배당.
 
-GET /api/v1/stocks/{symbol}/bars        일봉 OHLCV
+GET /api/v1/stocks/{symbol}/bars        일봉/주봉/월봉 OHLCV
 GET /api/v1/stocks/{symbol}/quote       현재가 (지연)
 GET /api/v1/stocks/{symbol}/financials  재무 데이터
 GET /api/v1/stocks/{symbol}/dividends   배당 이력
@@ -28,10 +28,17 @@ async def get_bars(
     symbol: str,
     start: date = Query(default=None),
     end: date = Query(default=None),
+    resolution: str = Query("1d", pattern="^(1d|1w|1mo)$"),
     user: dict = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    """일봉 OHLCV 조회. DB 캐시 → on-demand 수집 폴백."""
+    """일봉/주봉/월봉 OHLCV 조회. DB 캐시 → on-demand 수집 폴백.
+
+    resolution:
+      1d  — 일봉 (기본값)
+      1w  — 주봉 (일봉 집계)
+      1mo — 월봉 (일봉 집계)
+    """
     if start is None:
         start = date.today() - timedelta(days=365)
     if end is None:
@@ -60,13 +67,15 @@ async def get_bars(
             }
             for b in cached
         ]
-        return {"success": True, "data": data, "count": len(data)}
+        if resolution != "1d":
+            data = _aggregate_daily_bars(data, resolution)
+        return {"success": True, "data": data, "count": len(data), "resolution": resolution}
 
     # on-demand 수집
     agg = get_aggregator()
     bars = await agg.get_daily_bars(symbol, start, end)
     if not bars:
-        return {"success": True, "data": [], "count": 0}
+        return {"success": True, "data": [], "count": 0, "resolution": resolution}
 
     # DB 저장
     from cloud_server.services.market_repository import MarketRepository
@@ -91,7 +100,42 @@ async def get_bars(
         }
         for b in bars
     ]
-    return {"success": True, "data": data, "count": len(data)}
+    if resolution != "1d":
+        data = _aggregate_daily_bars(data, resolution)
+    return {"success": True, "data": data, "count": len(data), "resolution": resolution}
+
+
+def _aggregate_daily_bars(bars: list[dict], resolution: str) -> list[dict]:
+    """일봉 → 주봉(1w) 또는 월봉(1mo) 집계."""
+    if not bars:
+        return []
+
+    from itertools import groupby
+    from datetime import date as date_type
+
+    def week_key(b):
+        d = date_type.fromisoformat(b["date"]) if isinstance(b["date"], str) else b["date"]
+        iso = d.isocalendar()
+        return f"{iso[0]}-W{iso[1]:02d}"
+
+    def month_key(b):
+        d = date_type.fromisoformat(b["date"]) if isinstance(b["date"], str) else b["date"]
+        return f"{d.year}-{d.month:02d}"
+
+    key_fn = week_key if resolution == "1w" else month_key
+
+    result = []
+    for _, group in groupby(bars, key=key_fn):
+        group_list = list(group)
+        result.append({
+            "date": group_list[0]["date"],
+            "open": group_list[0]["open"],
+            "high": max(b["high"] for b in group_list if b.get("high") is not None),
+            "low": min(b["low"] for b in group_list if b.get("low") is not None),
+            "close": group_list[-1]["close"],
+            "volume": sum(b.get("volume") or 0 for b in group_list),
+        })
+    return result
 
 
 @router.get("/{symbol}/quote")

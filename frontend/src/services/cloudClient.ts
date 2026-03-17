@@ -175,8 +175,8 @@ export interface StockQuote {
 }
 
 export const cloudBars = {
-  get: (symbol: string, start?: string, end?: string) =>
-    client.get<{ data: DailyBar[] }>(`/api/v1/stocks/${symbol}/bars`, { params: { start, end } })
+  get: (symbol: string, start?: string, end?: string, resolution?: string) =>
+    client.get<{ data: DailyBar[] }>(`/api/v1/stocks/${symbol}/bars`, { params: { start, end, resolution } })
       .then((r) => r.data.data ?? []),
 }
 

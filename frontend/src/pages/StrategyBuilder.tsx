@@ -8,6 +8,8 @@ import type { Rule, CreateRulePayload } from '../types/strategy'
 import { AVAILABLE_INDICATORS, CONTEXT_FIELDS } from '../types/strategy'
 import ConditionRow from '../components/ConditionRow'
 import RuleList from '../components/RuleList'
+import DslEditor from '../components/DslEditor'
+import { dslToConditions } from '../utils/dslConverter'
 
 interface FormState {
   name: string
@@ -47,7 +49,9 @@ export default function StrategyBuilder() {
   const [editId, setEditId]   = useState<number | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [error, setError]     = useState<string | null>(null)
-  const [readOnlyScript, setReadOnlyScript] = useState<string | null>(null)
+  // 조건 편집 모드: 'form' = 폼 UI, 'script' = DSL 텍스트 편집
+  const [condMode, setCondMode] = useState<'form' | 'script'>('form')
+  const [dslText, setDslText]  = useState<string>('')
 
   const { data: rulesData } = useQuery({
     queryKey: ['rules'],
@@ -57,11 +61,14 @@ export default function StrategyBuilder() {
 
   const saveMut = useMutation({
     mutationFn: () => {
-      const payload = formToPayload(form)
+      // script 모드일 때는 dslText를 그대로 payload에 사용
+      const payload = condMode === 'script'
+        ? { ...formToPayload(form), script: dslText }
+        : formToPayload(form)
       return editId ? cloudRules.update(editId, payload) : cloudRules.create(payload)
     },
     onSuccess: () => {
-      invalidate(); setShowForm(false); setEditId(null); setForm(EMPTY_FORM); setError(null); setReadOnlyScript(null)
+      invalidate(); setShowForm(false); setEditId(null); setForm(EMPTY_FORM); setError(null); setCondMode('form'); setDslText('')
       cloudRules.list().then((rules) => localRules.sync(rules)).catch(() => {})
     },
     onError: (err: unknown) => {
@@ -109,18 +116,52 @@ export default function StrategyBuilder() {
   const addSellCond = () =>
     setForm({ ...form, sellConditions: [...form.sellConditions, { variable: 'kospi_rsi_14', operator: '>', value: 70 }] })
 
+  /** 폼 → 스크립트 모드 전환: 현재 폼 조건을 DSL 문자열로 변환 */
+  const switchToScript = () => {
+    setDslText(conditionsToDsl(form.buyConditions, form.sellConditions))
+    setCondMode('script')
+  }
+
+  /** 스크립트 → 폼 모드 전환: DSL을 파싱해 폼 조건으로 복원 (오류 시 모드 유지) */
+  const switchToForm = () => {
+    const converted = dslToConditions(dslText)
+    if (!converted.success) return // 오류 있으면 전환 보류
+    setForm({
+      ...form,
+      buyConditions: converted.buyConditions.length > 0 ? converted.buyConditions : form.buyConditions,
+      sellConditions: converted.sellConditions.length > 0 ? converted.sellConditions : form.sellConditions,
+    })
+    setCondMode('form')
+  }
+
   const startEdit = (rule: Rule) => {
     setEditId(rule.id)
-    // TODO: script → 폼 역파싱 (복잡한 DSL은 읽기 전용)
-    setForm({
-      name: rule.name,
-      symbol: rule.symbol,
-      buyConditions: EMPTY_FORM.buyConditions,
-      sellConditions: EMPTY_FORM.sellConditions,
-      qty: rule.execution?.qty_value ?? rule.qty ?? 10,
-      is_active: rule.is_active,
-    })
-    setReadOnlyScript(rule.script ?? null)
+    const script = rule.script ?? ''
+    // script → 폼 역파싱 시도; 실패 시 DSL 모드로 열기
+    const converted = script ? dslToConditions(script) : null
+    if (converted && converted.success && (converted.buyConditions.length > 0 || converted.sellConditions.length > 0)) {
+      setForm({
+        name: rule.name,
+        symbol: rule.symbol,
+        buyConditions: converted.buyConditions.length > 0 ? converted.buyConditions : EMPTY_FORM.buyConditions,
+        sellConditions: converted.sellConditions.length > 0 ? converted.sellConditions : EMPTY_FORM.sellConditions,
+        qty: rule.execution?.qty_value ?? rule.qty ?? 10,
+        is_active: rule.is_active,
+      })
+      setCondMode('form')
+      setDslText(script)
+    } else {
+      setForm({
+        name: rule.name,
+        symbol: rule.symbol,
+        buyConditions: EMPTY_FORM.buyConditions,
+        sellConditions: EMPTY_FORM.sellConditions,
+        qty: rule.execution?.qty_value ?? rule.qty ?? 10,
+        is_active: rule.is_active,
+      })
+      setDslText(script)
+      setCondMode(script ? 'script' : 'form')
+    }
     setShowForm(true)
   }
 
@@ -130,7 +171,7 @@ export default function StrategyBuilder() {
         <h1 className="text-2xl font-bold">전략 빌더</h1>
         {!showForm && (
           <button
-            onClick={() => { setShowForm(true); setEditId(null); setForm(EMPTY_FORM); setError(null); setReadOnlyScript(null) }}
+            onClick={() => { setShowForm(true); setEditId(null); setForm(EMPTY_FORM); setError(null); setCondMode('form'); setDslText('') }}
             className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 text-sm"
           >
             + 새 전략
@@ -191,11 +232,34 @@ export default function StrategyBuilder() {
               </div>
             </div>
 
-            {editId && readOnlyScript ? (
-              <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4">
-                <p className="text-sm text-gray-400 mb-2">기존 전략 조건 (읽기 전용)</p>
-                <pre className="bg-gray-800 p-3 rounded text-sm text-gray-300 whitespace-pre-wrap">{readOnlyScript}</pre>
-                <p className="text-xs text-gray-500 mt-2">조건 수정은 DSL 역파싱 지원 후 가능합니다.</p>
+            {/* 조건 편집 모드 토글 */}
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-gray-300">조건 편집</span>
+              <div className="flex rounded-lg overflow-hidden border border-gray-700 text-xs">
+                <button
+                  type="button"
+                  onClick={() => condMode === 'script' ? switchToForm() : undefined}
+                  className={`px-3 py-1 transition-colors ${condMode === 'form' ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}
+                >
+                  폼
+                </button>
+                <button
+                  type="button"
+                  onClick={() => condMode === 'form' ? switchToScript() : undefined}
+                  className={`px-3 py-1 transition-colors ${condMode === 'script' ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}
+                >
+                  DSL
+                </button>
+              </div>
+            </div>
+
+            {condMode === 'script' ? (
+              /* DSL 텍스트 편집 모드 */
+              <div>
+                <DslEditor value={dslText} onChange={setDslText} />
+                <p className="text-xs text-gray-500 mt-1">
+                  폼 모드로 전환하면 DSL을 파싱해 조건을 복원합니다 (파싱 오류 시 전환 불가).
+                </p>
               </div>
             ) : (
               <>
@@ -251,7 +315,7 @@ export default function StrategyBuilder() {
               {saveMut.isPending ? '저장 중...' : '저장'}
             </button>
             <button
-              onClick={() => { setShowForm(false); setEditId(null); setError(null); setReadOnlyScript(null) }}
+              onClick={() => { setShowForm(false); setEditId(null); setError(null); setCondMode('form'); setDslText('') }}
               className="px-4 py-2 border border-gray-700 rounded-xl text-sm text-gray-300 hover:bg-gray-800 transition"
             >
               취소

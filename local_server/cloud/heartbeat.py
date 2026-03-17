@@ -129,10 +129,11 @@ async def start_heartbeat() -> None:
                 if resp.get("stock_master_version") is not None:
                     last_stock_master_version = str(resp["stock_master_version"])
 
-            # 성공 → 실패 카운터 리셋 + 트레이 초록
+            # 성공 → 실패 카운터 리셋 + 트레이 초록 + SyncQueue flush
             if consecutive_failures > 0:
                 consecutive_failures = 0
                 _update_tray("ok")
+                await _flush_sync_queue(client)
 
         except CloudClientError as e:
             if e.status_code == 401:
@@ -303,3 +304,30 @@ def _send_toast(title: str, message: str) -> None:
         show_toast(title, message)
     except Exception:
         pass
+
+
+async def _flush_sync_queue(client: CloudClient) -> None:
+    """연결 복구 시 오프라인 큐를 순서대로 플러시한다."""
+    from local_server.storage.sync_queue import get_sync_queue
+    queue = get_sync_queue()
+    if queue.is_empty():
+        return
+
+    flushed = 0
+    while not queue.is_empty():
+        items = queue.peek_all()
+        if not items:
+            break
+        item = items[0]
+        try:
+            action = item.get("type", "")
+            if action.startswith("rule_"):
+                await client.fetch_rules()  # 서버 규칙으로 덮어쓰기 (last-write-wins)
+            queue.dequeue()
+            flushed += 1
+        except Exception:
+            logger.error("SyncQueue flush 실패 — 재시도 보류 (%d건 잔여)", queue.count())
+            break
+
+    if flushed:
+        logger.info("SyncQueue flush 완료: %d건 처리", flushed)

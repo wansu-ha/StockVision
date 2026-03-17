@@ -113,6 +113,23 @@ export const localLogs = {
       .catch(() => null),
 }
 
+/** 분봉 — /api/v1/bars/{symbol} (로컬 서버) */
+export interface MinuteBar {
+  time: string
+  open: number
+  high: number
+  low: number
+  close: number
+  volume: number
+}
+
+export const localBars = {
+  get: (symbol: string, resolution?: string, start?: string, end?: string) =>
+    client.get<{ data: MinuteBar[] }>(`/v1/bars/${symbol}`, { params: { resolution, start, end } })
+      .then((r) => r.data.data ?? [])
+      .catch(() => []),
+}
+
 /** 계좌 (잔고 + 미체결) */
 export interface AccountBalance {
   cash: number

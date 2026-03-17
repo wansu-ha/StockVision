@@ -142,11 +142,30 @@ def create_adapter(broker_type: str | None = None, **kwargs) -> BrokerAdapter:
     return AdapterFactory.create(broker_type, **kwargs)
 
 
+def _detect_mock_mode(broker_type: str, credentials: dict) -> bool | None:
+    """계좌번호/URL 패턴으로 mock/실전 자동 판별. 판별 불가 시 None."""
+    if broker_type == BROKER_TYPE_KIWOOM:
+        base_url = credentials.get("base_url", "")
+        if "mock" in base_url.lower() or "virtual" in base_url.lower():
+            return True
+        if "api.kiwoom.com" in base_url.lower():
+            return False
+    elif broker_type == BROKER_TYPE_KIS:
+        account_no = credentials.get("account_no", "")
+        # KIS 모의투자 계좌: 계좌번호 앞 2자리가 "50" (KIS 문서 기준)
+        if len(account_no) >= 2:
+            prefix = account_no[:2]
+            if prefix == "50":
+                return True
+    return None
+
+
 def create_broker_from_config() -> BrokerAdapter:
     """config.json + keyring 자격증명으로 BrokerAdapter를 생성한다.
 
     config.json의 broker.type에 따라 keyring에서 자격증명을 읽고
     적절한 어댑터를 생성한다. 환경변수보다 keyring을 우선한다.
+    계좌번호/URL 패턴으로 mock/실전을 자동 감지하여 불일치 시 경고한다.
 
     Raises:
         ValueError: 자격증명 미등록 또는 지원하지 않는 브로커 타입
@@ -171,6 +190,15 @@ def create_broker_from_config() -> BrokerAdapter:
         account_no = load_credential(KEY_ACCOUNT_NO)
         if not app_key or not app_secret:
             raise ValueError("KIS API Key가 등록되지 않았습니다.")
+        auto_detected = _detect_mock_mode(broker_type, {"account_no": account_no or ""})
+        if auto_detected is not None and auto_detected != is_mock:
+            logger.warning(
+                "⚠️ mock 설정 불일치: 수동=%s, 자동감지=%s — 자동감지 값 사용",
+                is_mock, auto_detected,
+            )
+            is_mock = auto_detected
+            cfg.set("broker.is_mock", auto_detected)
+            cfg.save()
         return AdapterFactory.create(
             BROKER_TYPE_KIS,
             app_key=app_key, app_secret=app_secret,
@@ -182,6 +210,15 @@ def create_broker_from_config() -> BrokerAdapter:
         secret_key = load_credential(KEY_KIWOOM_SECRET_KEY)
         if not app_key or not secret_key:
             raise ValueError("키움 API Key가 등록되지 않았습니다.")
+        auto_detected = _detect_mock_mode(broker_type, {"base_url": os.getenv("KIWOOM_BASE_URL", "")})
+        if auto_detected is not None and auto_detected != is_mock:
+            logger.warning(
+                "⚠️ mock 설정 불일치: 수동=%s, 자동감지=%s — 자동감지 값 사용",
+                is_mock, auto_detected,
+            )
+            is_mock = auto_detected
+            cfg.set("broker.is_mock", auto_detected)
+            cfg.save()
         return AdapterFactory.create(
             BROKER_TYPE_KIWOOM,
             app_key=app_key, secret_key=secret_key, is_mock=is_mock,
