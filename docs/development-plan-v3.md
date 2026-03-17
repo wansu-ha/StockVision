@@ -1,23 +1,24 @@
-# StockVision 개발 계획서 v3
+# StockVision 개발 계획서 v3 — 기술 구현 백로그
 
 > 작성일: 2026-03-15 | 갱신: 2026-03-17 | 상태: 확정
 > 선행: `docs/development-plan-v2.md` (3프로세스 전환), `spec/review-missing-features/report.md` (교차검증)
 >
-> 이 문서는 전체 미해결 항목 ~164건을 Phase A/B/C/D로 조직한 **구현 로드맵**이다.
-> 각 Phase 내 작업은 의존관계를 고려한 순서로 배치되었다.
+> **정본 관계**: Phase 현황과 사용자 가치 기준 로드맵은 `docs/roadmap.md`가 정본이다.
+> 이 문서는 **기술 구현 백로그**로, roadmap.md의 Phase(A~E)와 다른 축(A → T1 → T2 → T3)으로 기술 항목을 조직한다.
+> roadmap Phase와 이 문서의 단계는 1:1 대응이 아니며, 각자의 관점에서 독립적으로 추적한다.
 >
-> **2026-03-17 갱신**: A1~A4, A6(F1+F2), A7, A9 구현 완료. D1~D6 결정 완료. Alembic+시드 적용. 로컬 서버 v0.1.3 릴리스.
+> **2026-03-17 갱신**: A1~A4, A5(U2~U5/S1~S3 기구현 확인), A6(F1+F2), A7, A9 구현 완료. D1~D6 결정 완료. Alembic+시드 적용. 로컬 서버 v0.1.3 릴리스.
 
 ---
 
 ## 1. 전체 요약
 
-| Phase | 기간 (예상) | 핵심 목표 | 주요 항목 수 |
-|-------|-----------|----------|------------|
+| 단계 | 기간 (예상) | 핵심 목표 | 주요 항목 수 |
+|------|-----------|----------|------------|
 | **A** | 2-3주 | 기반 안정화 + Phase A 졸업 | ~50건 |
-| **B** | 3-4주 | 핵심 기능 완성 | ~40건 |
-| **C** | 5-7주 | 원격 제어 인프라 | ~35건 |
-| **D** | 런칭 전 | 제품 미결정 + 문서 정리 | ~15건 |
+| **T1** | 3-4주 | 엔진 완성 + DSL + 차트 확장 | ~40건 |
+| **T2** | 5-7주 | 릴레이 인프라 + 원격 제어 보강 | ~35건 |
+| **T3** | 런칭 전 | 제품 미결정 + 문서 정리 + 하드닝 | ~15건 |
 | v2 | 런칭 후 | 백테스팅, 리밸런싱, 2FA 등 | ~7건 |
 
 **총계: ~164건** (버그 4, UI 갭 7, 품질 7, 보안 9, 법무 15, Spec 미충족 ~100, 미결정 6, v2 7)
@@ -117,7 +118,7 @@
 
 #### A8. 추가 품질 이슈 (7건 + 추가 4건)
 
-기존 7건 + 이번 리뷰에서 추가된 4건. 상세: `spec/phase-a-cleanup/plan.md`
+기존 7건 + 이번 리뷰에서 추가된 4건. 개별 항목은 아래 테이블에서 추적.
 
 | # | 이슈 | 파일 |
 |---|------|------|
@@ -148,10 +149,10 @@
 - [x] 보안 S1~S8 전부 적용 (2026-03-16)
 - [x] KIS 어댑터 K1~K3 완료 (2026-03-16)
 - [x] 하트 토글 ListView/StockSearch/DetailView 적용 (2026-03-16)
-- [ ] UI 미구현 U2~U5, S1~S3 완료
-- [ ] ErrorBoundary 라우트 리셋 + staleTime 잔여 14건
+- [x] UI 미구현 U2~U5, S1~S3 — 기구현 확인 (2026-03-16, `spec/phase-a-review.md`)
+- [ ] ErrorBoundary 라우트 리셋 + staleTime 잔여 ~14건
 - [x] 약관 동의/열람/버전관리 (L1~L3) 완료 (2026-03-16)
-- [ ] 품질 이슈 Q1~Q7 + 추가 4건 해결
+- [ ] 품질 이슈 잔여: F1+ 라우트 리셋, F2+ staleTime, Q5 공휴일, Q7 다크 테마
 - [x] broker-auto-connect 프론트 연동 완료 (2026-03-16)
 - [ ] 프로필 수정 (F3) 구현
 - [ ] `npm run build` 경고 없음
@@ -159,7 +160,9 @@
 
 ---
 
-## 3. Phase B — 핵심 기능 완성 (3-4주)
+## 3. T1 — 엔진 완성 + DSL + 차트 확장 (3-4주)
+
+> roadmap.md Phase와 별도 축. 기술 구현 백로그.
 
 ### 목표
 - 실전 매매 엔진 완성 (지표 계산, DSL 파서)
@@ -168,7 +171,7 @@
 
 ### Week 3-4 (병렬)
 
-#### B1. engine-live-execution (IndicatorProvider) — 🔴
+#### T1-1. engine-live-execution (IndicatorProvider) — 🔴
 
 전략 규칙이 기술 지표 (MA, RSI, MACD 등)를 실시간으로 계산하여 매매 신호를 생성하는 핵심 모듈.
 
@@ -182,7 +185,7 @@
 **관련 파일**: `local_server/engine/indicator_provider.py`, `local_server/engine/strategy_runner.py`
 **예상 공수**: 5-7일
 
-#### B2. dsl-client-parser (D1~D4) — 🔴
+#### T1-2. dsl-client-parser (D1~D4) — 🔴
 
 프론트엔드에서 전략 규칙 DSL을 파싱/검증하여 서버 의존 없이 즉시 피드백.
 
@@ -195,7 +198,7 @@
 
 **예상 공수**: 5-7일
 
-#### B3. chart-timeframe Stage 1+2 (백엔드) — 🟡
+#### T1-3. chart-timeframe Stage 1+2 (백엔드) — 🟡
 
 | Stage | 항목 | 파일 |
 |-------|------|------|
@@ -206,7 +209,7 @@
 
 ### Week 5
 
-#### B4. chart-timeframe Stage 3 (프론트엔드) — 🟡
+#### T1-4. chart-timeframe Stage 3 (프론트엔드) — 🟡
 
 | 항목 | 파일 |
 |------|------|
@@ -214,10 +217,10 @@
 | PriceChart 타임프레임 UI | `PriceChart.tsx` |
 | 데이터 소스 분기 (로컬 분봉 vs 클라우드 일/주/월봉) | `useStockData.ts` |
 
-**의존**: B3 (Stage 1+2) 완료 후
+**의존**: T1-3 (Stage 1+2) 완료 후
 **예상 공수**: 3-4일
 
-#### B5. local-server-resilience (R1, R2, R3, R5) — 🟡
+#### T1-5. local-server-resilience (R1, R2, R3, R5) — 🟡
 
 | Step | 항목 | 파일 |
 |------|------|------|
@@ -226,12 +229,12 @@
 | R3 | SyncQueue 연동 | `rules.py`, `heartbeat.py`, `sync_queue.py` |
 | R5 | LimitChecker 재시작 복원 | `limit_checker.py` |
 
-**R4 (Heartbeat WS Ack)**: ⚠️ Phase C로 이동 (relay-infra 의존)
+**R4 (Heartbeat WS Ack)**: ⚠️ T2로 이동 (relay-infra 의존)
 **예상 공수**: 3-4일
 
 ---
 
-### Phase B 완료 기준
+### T1 완료 기준
 
 - [ ] IndicatorProvider 실시간 지표 계산 동작
 - [ ] DSL 파서가 프론트에서 규칙 검증
@@ -242,12 +245,14 @@
 
 ---
 
-## 4. Phase C — 원격 제어 인프라 (5-7주)
+## 4. T2 — 릴레이 인프라 + 원격 제어 보강 (5-7주)
+
+> roadmap.md Phase C에서 릴레이/원격 핵심(C6-a, C6-c)은 이미 구현됨. 이 섹션은 잔여 보강 항목.
 
 ### 목표
-- 클라우드 릴레이 인프라 구축
-- 웹에서 로컬 엔진 제어
-- 원격 모니터링 + 긴급 제어
+- 릴레이 인프라 보강 (FCM 푸시, 재전송 등)
+- 웹에서 로컬 엔진 제어 고도화
+- 원격 모니터링 + 긴급 제어 잔여
 
 ### Week 6-8: relay-infra (8단계)
 
@@ -297,7 +302,7 @@
 
 ---
 
-### Phase C 완료 기준
+### T2 완료 기준
 
 - [ ] 클라우드 릴레이 WS 통신 동작
 - [ ] E2E 암호화 적용
@@ -308,7 +313,7 @@
 
 ---
 
-## 5. Phase D — 런칭 전 정리
+## 5. T3 — 런칭 전 정리
 
 ### D1. 제품 전략 — ✅ 6건 전부 결정 완료 (2026-03-17)
 
@@ -359,38 +364,37 @@
 ## 7. 의존관계 전체 다이어그램
 
 ```
-Phase A (Week 1-3) ═══════════════════════════════════════════════
+Phase A (Week 1-3) — ✅ 완료 ═════════════════════════════════════
 
   Week 1 (모두 병렬):
-  ┌─ [A1] 버그 수정 4건
-  ├─ [A2] security-phase2 S1→S2, S3, S4, S5, S6, S7, S5→S8
-  ├─ [A3] kis-adapter-completion K1, K2→K3
-  └─ [A4] watchlist-heart Step 1→2/3/4
+  ┌─ [A1] 버그 수정 4건                     ✅
+  ├─ [A2] security-phase2 S1→S8             ✅
+  ├─ [A3] kis-adapter-completion K1~K3      ✅
+  └─ [A4] watchlist-heart                   ✅
 
   Week 2 (병렬 + 순차):
-  ┌─ [A5] UI 미구현 U2~U5, S1~S3          ← 병렬
-  ├─ [A6] frontend-quality F1, F2           ← 병렬
-  ├─ [A7] legal L1→L2→L3                   ← 병렬
-  │         └→ [A6] F3 (legal 후행)         ← 순차
-  ├─ [A8] 품질 이슈 Q1~Q7                  ← 병렬
-  └─ [A9] broker-auto-connect 프론트        ← 병렬
+  ┌─ [A5] UI U2~U5, S1~S3 (기구현 확인)    ✅
+  ├─ [A6] frontend-quality F1, F2 (부분)    ⚠️
+  ├─ [A7] legal L1→L2→L3                   ✅
+  ├─ [A8] 품질 이슈 (잔여 있음)             ⚠️
+  └─ [A9] broker-auto-connect               ✅
 
-Phase B (Week 4-6) ═══════════════════════════════════════════════
+T1 (Week 4-6) ════════════════════════════════════════════════════
 
   Week 3-4 (병렬):
-  ┌─ [B1] engine-live-execution
-  ├─ [B2] dsl-client-parser D1→D2→D3→D4
-  └─ [B3] chart-timeframe Stage 1+2
+  ┌─ [T1-1] engine-live-execution
+  ├─ [T1-2] dsl-client-parser D1→D2→D3→D4
+  └─ [T1-3] chart-timeframe Stage 1+2
 
   Week 5 (병렬 + 순차):
-  ┌─ [B4] chart-timeframe Stage 3           ← B3 후행
-  └─ [B5] local-server-resilience R1/R2/R3/R5  ← 병렬
+  ┌─ [T1-4] chart-timeframe Stage 3         ← T1-3 후행
+  └─ [T1-5] local-server-resilience R1~R5   ← 병렬
 
-Phase C (Week 7-13) ═══════════════════════════════════════════════
+T2 (Week 7-13) ═══════════════════════════════════════════════════
 
-  [relay-infra 8단계] ──────────────┐
-                                     ├→ [R4] Heartbeat WS Ack
-                                     └→ [remote-ops 9단계]
+  [relay-infra 보강] ──────────────┐
+                                    ├→ [R4] Heartbeat WS Ack
+                                    └→ [remote-ops 잔여]
 ```
 
 ---
@@ -430,7 +434,7 @@ Phase C (Week 7-13) ════════════════════
 | `frontend/src/context/AuthContext.tsx` | security-phase2 (S3), 버그 B1 | B1 → S3 |
 | `frontend/src/components/main/ListView.tsx` | UI (U2~U4), watchlist-heart, 버그 B3 | B3 → U2~U4 → heart |
 | `local_server/broker/kis/auth.py` | K2, K3 | K2 → K3 |
-| `local_server/cloud/ws_relay_client.py` | relay-infra (재작성), R4 | relay-infra → R4 |
+| `local_server/cloud/ws_relay_client.py` | T2 relay-infra (재작성), R4 | relay-infra → R4 |
 
 ---
 
