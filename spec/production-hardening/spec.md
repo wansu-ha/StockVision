@@ -80,7 +80,7 @@ if count == 1:
 
 ### M5 — Dev 모드 토큰 로그 노출
 
-**파일**: `cloud_server/core/email.py`
+**파일**: `cloud_server/services/email_service.py`
 **문제**: dev 모드에서 비밀번호 재설정 토큰이 포함된 이메일 본문을 INFO 로그에 출력.
 **수정**: 토큰을 마스킹하거나, 전체 이메일 본문 대신 수신자/제목만 로그.
 

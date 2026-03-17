@@ -129,10 +129,10 @@
 | Q5 | 장 상태 공휴일 (useMarketContext 활용) | `MainDashboard.tsx` | ❌ 미구현 |
 | Q6 | AdminGuard 리다이렉트 개선 | `AdminGuard.tsx` | ✅ 구현 완료 |
 | Q7 | Register.tsx 다크 테마 적용 | `Register.tsx` | ✅ 구현 완료 |
-| F1+ | ErrorBoundary 라우트 리셋 | `ErrorBoundary.tsx` | ❌ 미구현 |
+| F1+ | ErrorBoundary 라우트 리셋 | `App.tsx` | ❌ 미구현 |
 | F2+ | staleTime 미설정 쿼리 ~7건 | 다수 파일 | ❌ 미구현 |
 | D1 | .env 플랜 상수 추가 | `core/config.py` | ❌ 미구현 |
-| D4 | 메신저 드롭다운 UI 선점 | `Settings.tsx` | ❌ 미구현 |
+| D4 | 메신저 드롭다운 UI 선점 | `AlertSettings.tsx` | ❌ 미구현 |
 
 **A8 잔여 5건 + A6 F3 닉네임 = 총 6건 → `spec/phase-a-cleanup/` 에서 추적**
 
