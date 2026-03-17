@@ -1,6 +1,6 @@
 # 동의 관리 통합 구현 계획서 (재동의 + 면책 고지)
 
-> 작성일: 2026-03-16 | 상태: 초안 | 범위: plan-v2 Step F + 면책 고지 시점
+> 작성일: 2026-03-16 | 수정: 2026-03-17 | 상태: 초안 | 범위: plan-v2 Step F + 면책 고지 시점
 
 ---
 
@@ -108,11 +108,12 @@ export function useConsentStatus(enabled = true) {
 
 **동작 흐름**:
 1. `useConsentStatus()` 호출
-2. 로딩 중 → 스피너 (또는 children 그대로 렌더)
-3. `terms.up_to_date=false` 또는 `privacy.up_to_date=false` → `ConsentRenewalModal` 표시
-4. 모달은 배경 클릭/ESC로 닫기 불가 (강제 동의)
-5. 동의 완료 → `POST /consent` 호출 → `queryClient.invalidateQueries(['consentStatus'])`
-6. 모든 약관 `up_to_date=true` → children 렌더
+2. 로딩 중 → 스피너 (children 렌더 차단 — 동의 확인 전 접근 불가)
+3. API 에러 → 에러 UI + 재시도 버튼 (children 렌더 차단)
+4. `terms.up_to_date=false` 또는 `privacy.up_to_date=false` → `ConsentRenewalModal` 표시
+5. 모달은 배경 클릭/ESC로 닫기 불가 (강제 동의)
+6. 동의 완료 → `POST /consent` 호출 → `queryClient.invalidateQueries(['consentStatus'])`
+7. 모든 약관 `up_to_date=true` → children 렌더
 
 **UI 목업**:
 ```
@@ -340,18 +341,47 @@ Step 3과 Step 4는 병렬 가능하나, 같은 개발자가 순차 진행하는
 
 ---
 
-## 7. 엣지 케이스
+## 7. "동의 없이 못 쓴다" 증명 체인
+
+### 7.1 증명 구조
+
+```
+[회원가입] ─── Register.tsx: termsAgreed + privacyAgreed 필수
+    │           └ 서버: auth.py:125 LegalConsent DB 저장 (terms 1.1, privacy 1.1)
+    │           └ 버튼 disabled={!termsAgreed || !privacyAgreed}
+    ▼
+[로그인 후] ─── ConsentGate (ProtectedRoute 내부)
+    │           └ consent/status API → up_to_date 확인
+    │           └ false → 강제 모달 (닫기 불가, 로그아웃만 가능)
+    │           └ 증명: 약관 변경 시에도 동의 없이 서비스 이용 불가
+    ▼
+[전략 실행] ─── DisclaimerModal (handleStrategyToggle)
+                └ disclaimer.up_to_date=false → 실행 차단
+                └ 동의 후 POST /consent → DB 기록
+                └ 증명: 면책 동의 없이 자동매매 불가
+```
+
+### 7.2 보장 근거
+
+1. **라우터 레벨 차단**: ConsentGate가 ProtectedRoute 내부 → 인증된 모든 경로에 적용
+2. **서버 사이드 기록**: 동의는 `legal_consents` 테이블에 저장 (누가, 언제, 어떤 버전)
+3. **프론트 우회 불가**: 동의 상태는 서버 API에서 판단 (클라이언트 조작 무의미)
+4. **버전 관리**: CURRENT_VERSIONS 변경 시 자동으로 재동의 트리거
+
+### 7.3 엣지 케이스
 
 | 상황 | 처리 |
 |------|------|
-| consent/status API 실패 | ConsentGate: 에러 시 children 렌더 (서비스 차단 X) |
-| consent/status 로딩 중 | 스피너 없이 children 렌더 (깜빡임 방지) |
+| consent/status API 실패 | **차단 유지** — 에러 UI + 재시도 버튼 (통과 불가) |
+| consent/status 로딩 중 | 로딩 스피너 표시 (children 렌더 차단) |
 | 토큰 갱신 후 재진입 | React Query 캐시로 즉시 응답 (5분 stale) |
 | DEV 모드 AUTH_BYPASS | ConsentGate도 bypass (ProtectedRoute 내부이므로 자동) |
 | 동시에 terms + privacy 모두 재동의 필요 | 하나의 모달에 둘 다 표시, 한 번에 동의 |
 | disclaimer 버전 업데이트 | 다음 엔진 시작 시 자동으로 재동의 요청 |
 | POST /consent 실패 | 에러 toast 표시, 모달 유지 (재시도 가능) |
+| 신규 가입 직후 로그인 | terms/privacy는 가입 시 시딩됨 → ConsentGate 통과 |
+| disclaimer 미동의 상태로 서비스 이용 | 가능 (조회, 설정 등) — 전략 실행만 차단 (의도적 설계) |
 
 ---
 
-**마지막 갱신**: 2026-03-16
+**마지막 갱신**: 2026-03-17
