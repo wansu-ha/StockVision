@@ -3,7 +3,7 @@
 ; 사전 조건: PyInstaller onedir 빌드 완료 (dist/stockvision-local/)
 
 #define MyAppName "StockVision Bridge"
-#define MyAppVersion "0.1.0"
+#define MyAppVersion "0.1.3"
 #define MyAppPublisher "StockVision"
 #define MyAppExeName "stockvision-local.exe"
 #define MyAppURL "https://github.com/wansu-ha/StockVision"

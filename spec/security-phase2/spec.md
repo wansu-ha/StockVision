@@ -1,6 +1,6 @@
 # 보안 2차 — Rate Limiter · Redis · Refresh Token · Soft-Delete
 
-> 작성일: 2026-03-15 | 상태: 초안
+> 작성일: 2026-03-15 | 상태: 구현 완료
 > 선행: `spec/security-hardening/` (구현 완료 — local_secret, keyring, 비밀번호 검증)
 
 ## 1. 배경
