@@ -149,6 +149,9 @@ export const localAccount = {
     client.get<{ data: OpenOrder[] }>('/account/orders')
       .then((r) => r.data.data ?? [])
       .catch(() => []),
+  cancelOrder: (orderId: string) =>
+    client.post(`/account/orders/${orderId}/cancel`, null, { timeout: 15_000 })
+      .then((r) => r.data),
 }
 
 /** 전략 엔진 제어 (브로커 인증 포함하므로 타임아웃 여유) */

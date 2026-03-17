@@ -1,14 +1,18 @@
 # 외부 주문 감지 — 구현 계획
 
 > 작성일: 2026-03-12 | 상태: 초안 | spec: `spec/external-order-detection/spec.md`
-> **구현 보류**: System Trader Phase 3 (reconciler) 구현 후 착수
+> 갱신일: 2026-03-15 | 선행 조건 해소 — 착수 가능
 
-## 선행 작업
+## 현황 (2026-03-15 점검)
 
-1. System Trader Phase 3 — `reconciler.py` 구현
-   - 브로커 open order / fill 이벤트와 IntentStore 재조정
-   - `REDUCING` 모드 도입
-2. IntentStore 영속화 (현재 메모리 → SQLite 또는 log_db 연동)
+기존 KIS Reconciler(`local_server/broker/kis/reconciler.py`)가 GHOST 감지를 이미 수행 중.
+조용히 흡수하는 현재 동작을 **경고 + 정책 적용**으로 확장하면 됨.
+
+### 추가로 필요한 작업
+- GHOST 이벤트 → ExternalOrderEvent 변환 + 정책 적용
+- 최초 기동 시 기존 주문 오탐 방지 (초기 스캔 → 기존 주문 등록)
+- `_local_orders` 영속화 (재시작 대비)
+- 키움 어댑터에도 Reconciler 추가
 
 ## 구현 단계 (개요)
 
@@ -29,14 +33,14 @@ class ExternalOrderEvent:
     source: str = "UNKNOWN"
 ```
 
-### Step 2: Reconciler에 외부 주문 감지 로직 추가
+### Step 2: 기존 KIS Reconciler 확장
 
-**파일**: `local_server/engine/reconciler.py`
+**파일**: `local_server/broker/kis/reconciler.py` (수정)
 
-- 브로커 open orders 조회
-- IntentStore + "기존 주문" 목록과 대조
-- 매칭 안 되는 주문 → ExternalOrderEvent 발행
-- 최초 기동 시: 모든 기존 주문 등록 (오탐지 방지)
+- GHOST 감지 시 조용히 흡수 → ExternalOrderEvent 발행으로 변경
+- 최초 기동 플래그: 첫 `reconcile_once()` 실행 시 기존 주문 등록 (오탐지 방지)
+- `_local_orders` 영속화: SQLite 또는 JSON 파일 (재시작 대비)
+- 키움 어댑터에도 동일 Reconciler 연결
 
 ### Step 3: 외부 주문 감지 정책
 
@@ -77,7 +81,7 @@ class ExternalOrderPolicy(str, Enum):
 | 파일 | 변경 |
 |------|------|
 | `local_server/engine/trader_models.py` | ExternalOrderEvent 추가 |
-| `local_server/engine/reconciler.py` | 외부 주문 감지 로직 |
+| `local_server/broker/kis/reconciler.py` | 외부 주문 감지 로직 (기존 GHOST 확장) |
 | `local_server/engine/trader_policy.py` | ExternalOrderPolicy enum |
 | `local_server/engine/system_trader.py` | 정책 적용 |
 | `local_server/routers/trading.py` | 경고 해제 API |

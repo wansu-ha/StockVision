@@ -95,6 +95,7 @@ export function useLocalBridgeWS() {
       clearTimeout(timeout)
       wsRef.current?.close()
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 }
 

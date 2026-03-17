@@ -30,6 +30,7 @@ class User(Base):
     nickname       = Column(String(100), nullable=True)
     role           = Column(String(20), default="user", nullable=False)  # "user" | "admin"
     is_active      = Column(Boolean, default=True, nullable=False)
+    deleted_at     = Column(DateTime, nullable=True, default=None)  # S4: Soft-Delete
     created_at     = Column(DateTime, default=_utcnow, nullable=False)
     last_login_at  = Column(DateTime, nullable=True)
 
@@ -55,12 +56,12 @@ class RefreshToken(Base):
 
 
 class EmailVerificationToken(Base):
-    """이메일 인증 토큰 (24시간 TTL)"""
+    """이메일 인증 토큰 (24시간 TTL) — S5: SHA-256 해시 저장"""
     __tablename__ = "email_verification_tokens"
 
     id         = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
     user_id    = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
-    token      = Column(String(64), nullable=False, index=True)
+    token_hash = Column(String(64), nullable=False, index=True)  # S5: hash_token(raw)
     expires_at = Column(DateTime, nullable=False)
     used       = Column(Boolean, default=False, nullable=False)
 
@@ -68,12 +69,12 @@ class EmailVerificationToken(Base):
 
 
 class PasswordResetToken(Base):
-    """비밀번호 재설정 토큰 (10분 TTL)"""
+    """비밀번호 재설정 토큰 (10분 TTL) — S5: SHA-256 해시 저장"""
     __tablename__ = "password_reset_tokens"
 
     id         = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
     user_id    = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
-    token      = Column(String(64), nullable=False, index=True)
+    token_hash = Column(String(64), nullable=False, index=True)  # S5: hash_token(raw)
     expires_at = Column(DateTime, nullable=False)
     used       = Column(Boolean, default=False, nullable=False)
 

@@ -73,6 +73,18 @@ const Layout = ({ children }: LayoutProps) => {
       <main>
         {children}
       </main>
+
+      {/* Footer */}
+      <footer className="border-t border-gray-800 py-4 mt-8">
+        <div className="max-w-7xl mx-auto px-6 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-gray-600">
+          <Link to="/legal/terms" className="hover:text-gray-400 transition">이용약관</Link>
+          <span>&middot;</span>
+          <Link to="/legal/privacy" className="hover:text-gray-400 transition">개인정보처리방침</Link>
+          <span>&middot;</span>
+          <Link to="/legal/disclaimer" className="hover:text-gray-400 transition">투자 위험 고지</Link>
+          <span className="w-full text-center mt-1">&copy; 2026 StockVision</span>
+        </div>
+      </footer>
     </div>
   )
 }

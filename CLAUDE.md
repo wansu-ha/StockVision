@@ -27,9 +27,13 @@ sv_core/           # 공유 코어 모듈
 frontend/
   src/
     components/    # React 컴포넌트
+    context/       # AuthContext 등
+    hooks/         # useStockData, useAccountStatus 등
     pages/         # 페이지 (MainDashboard, Admin/*, Settings)
     services/      # API 클라이언트 (cloudClient, localClient)
+    stores/        # alertStore, toastStore (Zustand)
     types/         # TypeScript 타입
+    utils/         # e2eCrypto 등
     App.tsx        # 라우팅
 docs/              # 아키텍처, 개발 계획서
 spec/              # 기능별 spec/plan/reports

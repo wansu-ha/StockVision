@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { getApiError } from '../utils/apiError'
 import OAuthButtons from '../components/OAuthButtons'
 
 export default function Login() {
@@ -10,6 +11,7 @@ export default function Login() {
 
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
+  const [keepLoggedIn, setKeepLoggedIn] = useState(false)
   const [error, setError]       = useState('')
   const [loading, setLoading]   = useState(false)
 
@@ -18,14 +20,14 @@ export default function Login() {
     setError('')
     setLoading(true)
     try {
-      await login(email, password)
+      await login(email, password, keepLoggedIn)
       navigate('/')
-    } catch (err: any) {
-      const msg = err?.response?.data?.detail
+    } catch (err: unknown) {
+      const msg = getApiError(err, '로그인에 실패했습니다.')
       if (msg === '이메일 인증이 필요합니다.') {
         setError('이메일 인증을 완료해주세요. 받은 편지함을 확인하세요.')
       } else {
-        setError(msg || '로그인에 실패했습니다.')
+        setError(msg)
       }
     } finally {
       setLoading(false)
@@ -64,6 +66,15 @@ export default function Login() {
               required
             />
           </div>
+          <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={keepLoggedIn}
+              onChange={e => setKeepLoggedIn(e.target.checked)}
+              className="rounded border-gray-600 bg-gray-800 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0"
+            />
+            로그인 유지
+          </label>
           <button
             type="submit"
             disabled={loading}

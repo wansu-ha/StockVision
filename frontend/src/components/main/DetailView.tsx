@@ -7,7 +7,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import PriceChart from './PriceChart'
 import ExecutionTimeline from './ExecutionTimeline'
 import StockAnalysisCard from '../StockAnalysisCard'
-import { cloudRules, cloudWatchlist } from '../../services/cloudClient'
+import HeartToggle from '../HeartToggle'
+import { cloudRules } from '../../services/cloudClient'
 import { logsApi } from '../../services/logs'
 import type { Stock, Trade } from './ListView'
 import type { Rule } from '../../types/strategy'
@@ -20,9 +21,11 @@ interface DetailViewProps {
   rules: Rule[]
   context: MarketContextData | null
   onBack: () => void
+  isWatchlisted?: boolean
+  onToggleWatchlist?: (symbol: string, add: boolean) => void
 }
 
-export default function DetailView({ stock, trades, rules: propRules, context, onBack }: DetailViewProps) {
+export default function DetailView({ stock, trades, rules: propRules, context, onBack, isWatchlisted, onToggleWatchlist }: DetailViewProps) {
   const [ruleEditing, setRuleEditing] = useState<number | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
   const queryClient = useQueryClient()
@@ -48,14 +51,6 @@ export default function DetailView({ stock, trades, rules: propRules, context, o
     try {
       await cloudRules.remove(rule.id)
       queryClient.invalidateQueries({ queryKey: ['rules'] })
-    } catch { /* 에러 시 무시 */ }
-  }
-
-  const handleRemoveWatchlist = async () => {
-    try {
-      await cloudWatchlist.remove(stock.symbol)
-      queryClient.invalidateQueries({ queryKey: ['watchlist'] })
-      onBack()
     } catch { /* 에러 시 무시 */ }
   }
 
@@ -212,11 +207,19 @@ export default function DetailView({ stock, trades, rules: propRules, context, o
       </section>
 
       {/* 하단 액션 */}
-      <div className="mt-6 flex gap-3">
-        <button onClick={handleRemoveWatchlist} className="text-sm text-gray-500 hover:text-red-400 transition">
-          관심 종목 해제
-        </button>
-      </div>
+      {onToggleWatchlist && isWatchlisted !== undefined && (
+        <div className="mt-6 flex items-center gap-2">
+          <HeartToggle
+            symbol={stock.symbol}
+            isWatchlisted={isWatchlisted}
+            onToggle={onToggleWatchlist}
+            size={22}
+          />
+          <span className="text-sm text-gray-500">
+            {isWatchlisted ? '관심종목' : '관심종목 추가'}
+          </span>
+        </div>
+      )}
 
       {/* 규칙 추가 모달 */}
       {showAddModal && (

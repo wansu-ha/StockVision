@@ -252,7 +252,7 @@ class StrategyEngine:
                 record_result(candidate.rule_id, ResultStatus.BLOCKED, reason.value)
                 # 차단 로그 (intent_id로 타임라인 추적)
                 from local_server.storage.log_db import get_log_db, LOG_TYPE_ERROR
-                get_log_db().write(
+                await get_log_db().async_write(
                     LOG_TYPE_ERROR,
                     f"{reason.value}: {candidate.symbol} {candidate.side} 거부",
                     symbol=candidate.symbol,
@@ -266,7 +266,7 @@ class StrategyEngine:
                 md = market_data_map[candidate.signal_id]
                 # PROPOSED 로그 (전략 평가 통과)
                 from local_server.storage.log_db import get_log_db, LOG_TYPE_STRATEGY
-                get_log_db().write(
+                await get_log_db().async_write(
                     LOG_TYPE_STRATEGY,
                     f"{candidate.reason}: {candidate.symbol} {candidate.side}",
                     symbol=candidate.symbol,

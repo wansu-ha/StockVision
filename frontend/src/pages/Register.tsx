@@ -1,25 +1,38 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import type { FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { authApi } from '../services/auth'
+import { getApiError } from '../utils/apiError'
 
 export default function Register() {
-  const [email, setEmail]       = useState('')
-  const [password, setPassword] = useState('')
-  const [nickname, setNickname] = useState('')
-  const [error, setError]       = useState('')
-  const [done, setDone]         = useState(false)
-  const [loading, setLoading]   = useState(false)
+  const [email, setEmail]             = useState('')
+  const [password, setPassword]       = useState('')
+  const [nickname, setNickname]       = useState('')
+  const [termsAgreed, setTermsAgreed] = useState(false)
+  const [privacyAgreed, setPrivacyAgreed] = useState(false)
+  const [error, setError]             = useState('')
+  const [done, setDone]               = useState(false)
+  const [loading, setLoading]         = useState(false)
+
+  // S7: 비밀번호 강도 피드백
+  const passwordErrors = useMemo(() => {
+    if (!password) return []
+    const errs: string[] = []
+    if (password.length < 8) errs.push('8자 이상')
+    if (!/[A-Za-z]/.test(password)) errs.push('영문 포함')
+    if (!/[0-9]/.test(password)) errs.push('숫자 포함')
+    return errs
+  }, [password])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError('')
     setLoading(true)
     try {
-      await authApi.register(email, password, nickname || undefined)
+      await authApi.register(email, password, nickname || undefined, termsAgreed, privacyAgreed)
       setDone(true)
-    } catch (err: any) {
-      setError(err?.response?.data?.detail || '회원가입에 실패했습니다.')
+    } catch (err: unknown) {
+      setError(getApiError(err, '회원가입에 실패했습니다.'))
     } finally {
       setLoading(false)
     }
@@ -72,6 +85,16 @@ export default function Register() {
               required
               minLength={8}
             />
+            {passwordErrors.length > 0 && (
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {passwordErrors.map(err => (
+                  <span key={err} className="text-[11px] text-red-400 bg-red-400/10 px-2 py-0.5 rounded">{err}</span>
+                ))}
+              </div>
+            )}
+            {password.length > 0 && passwordErrors.length === 0 && (
+              <div className="mt-1.5 text-[11px] text-green-400">비밀번호 강도 충분</div>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium mb-1 text-gray-400">닉네임 (선택)</label>
@@ -82,9 +105,33 @@ export default function Register() {
               className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-xl text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-indigo-500 transition"
             />
           </div>
+          <div className="space-y-2 pt-1">
+            <label className="flex items-start gap-2 text-sm text-gray-400 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={termsAgreed}
+                onChange={e => setTermsAgreed(e.target.checked)}
+                className="mt-0.5 accent-indigo-500"
+              />
+              <span>
+                <a href="/legal/terms" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-300 underline">이용약관</a>에 동의합니다 (필수)
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm text-gray-400 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={privacyAgreed}
+                onChange={e => setPrivacyAgreed(e.target.checked)}
+                className="mt-0.5 accent-indigo-500"
+              />
+              <span>
+                <a href="/legal/privacy" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-300 underline">개인정보처리방침</a>에 동의합니다 (필수)
+              </span>
+            </label>
+          </div>
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !termsAgreed || !privacyAgreed}
             className="w-full bg-indigo-600 text-white py-2 rounded-xl hover:bg-indigo-500 disabled:opacity-50 transition"
           >
             {loading ? '처리 중...' : '회원가입'}

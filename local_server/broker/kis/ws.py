@@ -148,10 +148,10 @@ class KisWS:
     async def _get_approval_key(self) -> str:
         """WebSocket 접속용 approval_key를 발급받는다.
 
-        KIS WebSocket은 별도 approval_key가 필요하다.
-        현재는 access_token을 그대로 사용 (실제 API에서는 별도 endpoint 필요).
+        KIS WebSocket은 access_token과 별도의 approval_key가 필요하다.
+        KisAuth.get_approval_key()를 통해 /oauth2/Approval 엔드포인트에서 발급받는다.
         """
-        return await self._auth.get_access_token()
+        return await self._auth.get_approval_key()
 
     def _build_subscribe_msg(
         self, approval_key: str, symbol: str, subscribe: bool

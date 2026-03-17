@@ -1,7 +1,8 @@
 /** 설정 페이지 — Bridge 상태, API Key 등록, 엔진 제어, 알림 설정, 프로필 */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { localEngine } from '../services/localClient'
+import { useQueryClient } from '@tanstack/react-query'
+import { localEngine, localBroker } from '../services/localClient'
 import { useAuth } from '../context/AuthContext'
 import { useAlertStore } from '../stores/alertStore'
 import { useAccountStatus } from '../hooks/useAccountStatus'
@@ -24,6 +25,7 @@ export default function Settings() {
   const { email, logout } = useAuth()
   const addAlert = useAlertStore((s) => s.add)
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { engineRunning, brokerConnected, credentials, isMock } = useAccountStatus()
 
   // Bridge 연결 상태 (localReady와 독립적으로 /health 직접 폴링)
@@ -31,6 +33,7 @@ export default function Settings() {
   const [bridgeUptime, setBridgeUptime] = useState<number | null>(null)
   const [launchWaiting, setLaunchWaiting] = useState(false)
   const [launchFailed, setLaunchFailed] = useState(false)
+  const launchIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
     const check = () =>
@@ -55,6 +58,12 @@ export default function Settings() {
     return () => clearInterval(id)
   }, [])
 
+  useEffect(() => {
+    return () => {
+      if (launchIntervalRef.current) clearInterval(launchIntervalRef.current)
+    }
+  }, [])
+
   const handleLaunch = () => {
     setLaunchFailed(false)
     setLaunchWaiting(true)
@@ -66,6 +75,7 @@ export default function Settings() {
         .then(data => {
           if (data.app === 'stockvision') {
             clearInterval(id)
+            launchIntervalRef.current = null
             setLaunchWaiting(false)
             setBridgeConnected(true)
             setBridgeUptime(data.uptime ?? null)
@@ -74,11 +84,13 @@ export default function Settings() {
         .catch(() => {
           if (attempts >= 5) {
             clearInterval(id)
+            launchIntervalRef.current = null
             setLaunchWaiting(false)
             setLaunchFailed(true)
           }
         })
     }, 2000)
+    launchIntervalRef.current = id
   }
 
   const hasKeys = !!(credentials?.kiwoom?.app_key || credentials?.kis?.app_key)
@@ -242,7 +254,11 @@ export default function Settings() {
               )}
             </div>
           ) : (
-            <BrokerKeyForm onSuccess={() => addAlert('API Key 등록 완료', 'success')} />
+            <BrokerKeyForm onSuccess={async () => {
+              addAlert('API Key 등록 완료', 'success')
+              queryClient.invalidateQueries({ queryKey: ['localStatus'] })
+              try { await localBroker.reconnect() } catch { /* 연결 실패 — 무시 */ }
+            }} />
           )}
         </section>
 
@@ -276,7 +292,6 @@ export default function Settings() {
             </button>
           </div>
         </section>
-
         {/* 디바이스 관리 */}
         <section className="bg-gray-800/50 rounded-xl p-6 border border-gray-700/50">
           <DeviceManager />

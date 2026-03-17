@@ -4,6 +4,7 @@
  * cloudWatchlist → 관심 종목
  * cloudQuote → 각 종목 현재가
  */
+import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { cloudRules, cloudWatchlist, cloudQuote, cloudStocks } from '../services/cloudClient'
 import type { Rule } from '../types/strategy'
@@ -39,6 +40,7 @@ export function useStockData() {
   const rulesQuery = useQuery<Rule[]>({
     queryKey: ['rules'],
     queryFn: () => cloudRules.list(),
+    staleTime: 2 * 60_000,
     refetchInterval: 30_000,
     retry: 1,
   })
@@ -46,6 +48,7 @@ export function useStockData() {
   const watchlistQuery = useQuery<WatchlistItem[]>({
     queryKey: ['watchlist'],
     queryFn: () => cloudWatchlist.list(),
+    staleTime: 2 * 60_000,
     refetchInterval: 30_000,
     retry: 1,
   })
@@ -80,6 +83,7 @@ export function useStockData() {
       })
       return map
     },
+    staleTime: 10_000,
     refetchInterval: 15_000,
     enabled: allSymbols.length > 0,
     retry: 1,
@@ -110,9 +114,16 @@ export function useStockData() {
 
   const names = namesQuery.data ?? new Map<string, string>()
 
+  // 관심종목 심볼 Set (HeartToggle 빠른 lookup)
+  const watchlistSet = useMemo(
+    () => new Set(watchSymbols),
+    [watchSymbols]
+  )
+
   return {
     myStocks: buildStocks(mySymbols, quotes, ruleCountMap, names),
     watchStocks: buildStocks(watchSymbols, quotes, ruleCountMap, names),
+    watchlistSet,
     rules,
     isLoading: rulesQuery.isLoading || watchlistQuery.isLoading,
     error: rulesQuery.error || watchlistQuery.error,

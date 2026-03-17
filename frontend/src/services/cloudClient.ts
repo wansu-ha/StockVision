@@ -4,6 +4,7 @@
  */
 import axios from 'axios'
 import { localAuth } from './localClient'
+import { AUTH_EVENTS } from '../context/authEvents'
 import type { Rule, CreateRulePayload, UpdateRulePayload } from '../types/strategy'
 import type { MarketContextData } from '../types/dashboard'
 
@@ -39,6 +40,7 @@ client.interceptors.response.use(
         if (restored?.data?.access_token) {
           sessionStorage.setItem(JWT_KEY, restored.data.access_token)
           localStorage.setItem(RT_KEY, restored.data.refresh_token)
+          window.dispatchEvent(new CustomEvent(AUTH_EVENTS.TOKEN_REFRESHED, { detail: { jwt: restored.data.access_token, rt: restored.data.refresh_token } }))
           original.headers.Authorization = `Bearer ${restored.data.access_token}`
           return client(original)
         }
@@ -55,11 +57,13 @@ client.interceptors.response.use(
           sessionStorage.setItem(JWT_KEY, newJwt)
           localStorage.setItem(RT_KEY, newRt)
           localAuth.setAuthToken(newJwt, newRt).catch(() => {})
+          window.dispatchEvent(new CustomEvent(AUTH_EVENTS.TOKEN_REFRESHED, { detail: { jwt: newJwt, rt: newRt } }))
           original.headers.Authorization = `Bearer ${newJwt}`
           return client(original)
         } catch {
           sessionStorage.removeItem(JWT_KEY)
           localStorage.removeItem(RT_KEY)
+          window.dispatchEvent(new CustomEvent(AUTH_EVENTS.AUTH_EXPIRED))
           window.location.href = '/login'
         }
       }
@@ -80,6 +84,7 @@ export const cloudAuth = {
     client.post('/api/v1/auth/logout', { refresh_token: refreshToken }).then((r) => r.data),
   verifyEmail: (token: string) =>
     client.get('/api/v1/auth/verify-email', { params: { token } }).then((r) => r.data),
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   updateProfile: (_nickname: string) => {
     // TODO: 서버에 /api/v1/auth/profile 엔드포인트 없음 — 클라우드 서버 구현 후 연결
     console.warn('cloudAuth.updateProfile: 서버 엔드포인트 미구현')
@@ -281,6 +286,14 @@ export const cloudVerifyPassword = {
 export const cloudHealth = {
   check: () =>
     axios.get(`${CLOUD_URL}/health`, { timeout: 5000 }).then((r) => r.data).catch(() => null),
+}
+
+/** 약관 동의 — /api/v1/legal */
+export const legalApi = {
+  getConsentStatus: () =>
+    client.get('/api/v1/legal/consent/status').then(r => r.data),
+  recordConsent: (docType: string, docVersion: string) =>
+    client.post('/api/v1/legal/consent', { doc_type: docType, doc_version: docVersion }).then(r => r.data),
 }
 
 export default client

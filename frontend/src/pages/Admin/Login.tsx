@@ -3,6 +3,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import { getApiError } from '../../utils/apiError'
 
 /** JWT payload에서 role 추출 */
 function getRoleFromJwt(jwt: string | null): string | null {
@@ -38,9 +39,8 @@ export default function AdminLogin() {
         setError('관리자 권한이 없습니다.')
         await logout()
       }
-    } catch (err: any) {
-      const msg = err?.response?.data?.detail
-      setError(msg || '로그인에 실패했습니다.')
+    } catch (err: unknown) {
+      setError(getApiError(err, '로그인에 실패했습니다.'))
     } finally {
       setLoading(false)
     }

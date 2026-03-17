@@ -137,7 +137,7 @@ class AlertMonitor:
         # LogDB 기록
         try:
             from local_server.storage.log_db import get_log_db, LOG_TYPE_ALERT
-            get_log_db().write(
+            await get_log_db().async_write(
                 LOG_TYPE_ALERT,
                 message,
                 symbol=symbol,

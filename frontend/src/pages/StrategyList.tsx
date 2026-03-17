@@ -17,6 +17,7 @@ export default function StrategyList() {
   const { data: rules = [], isLoading } = useQuery<Rule[]>({
     queryKey: ['rules'],
     queryFn: cloudRules.list,
+    staleTime: 2 * 60_000,
     refetchInterval: 10000,
   })
 
