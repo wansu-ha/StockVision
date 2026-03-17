@@ -23,6 +23,8 @@ import { useMarketContext } from '../hooks/useMarketContext'
 import { useRemoteMode } from '../hooks/useRemoteMode'
 import { useRemoteControl } from '../hooks/useRemoteControl'
 import { localLogs, localEngine, localAccount } from '../services/localClient'
+import { useConsentStatus } from '../hooks/useConsentStatus'
+import DisclaimerModal from '../components/DisclaimerModal'
 import type { Stock, AccountInfo, Trade, PendingOrder, MarketStatus } from '../components/main/ListView'
 
 export default function MainDashboard() {
@@ -32,6 +34,7 @@ export default function MainDashboard() {
   const [tab, setTab] = useState<'my' | 'watch'>('my')
   const [strategyLoading, setStrategyLoading] = useState(false)
   const [showArmDialog, setShowArmDialog] = useState(false)
+  const [showDisclaimer, setShowDisclaimer] = useState(false)
 
   const queryClient = useQueryClient()
   const { localReady } = useAuth()
@@ -40,6 +43,7 @@ export default function MainDashboard() {
   const { engineRunning, brokerConnected, credentials, isMock, killSwitch, lossLock } = useAccountStatus()
   const { balance, openOrders } = useAccountBalance(brokerConnected)
   const { context } = useMarketContext()
+  const { data: consentStatus } = useConsentStatus()
 
   // 원격 모드 감지
   const { isRemote } = useRemoteMode()
@@ -137,6 +141,15 @@ export default function MainDashboard() {
   }
 
   const handleStrategyToggle = async () => {
+    // 엔진 시작 시: disclaimer 동의 여부 확인
+    if (!engineRunning && consentStatus && !consentStatus.disclaimer.up_to_date) {
+      setShowDisclaimer(true)
+      return
+    }
+    await executeStrategyToggle()
+  }
+
+  const executeStrategyToggle = async () => {
     setStrategyLoading(true)
     try {
       if (engineRunning) {
@@ -226,6 +239,18 @@ export default function MainDashboard() {
           )}
         </div>
       </main>
+
+      {/* 면책 고지 모달 */}
+      {showDisclaimer && consentStatus && (
+        <DisclaimerModal
+          latestVersion={consentStatus.disclaimer.latest_version}
+          onAccepted={() => {
+            setShowDisclaimer(false)
+            executeStrategyToggle()
+          }}
+          onCancel={() => setShowDisclaimer(false)}
+        />
+      )}
 
       {/* 원격 모드: Kill Switch FAB + Arm 다이얼로그 */}
       {isRemote && remoteConnected && (
