@@ -28,6 +28,7 @@ import Layout from './components/Layout'
 import AlertContainer from './components/AlertContainer'
 import ToastContainer from './components/ToastContainer'
 import AdminGuard from './components/AdminGuard'
+import ConsentGate from './components/ConsentGate'
 import OAuthCallback from './pages/OAuthCallback'
 import LegalDocument from './pages/LegalDocument'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -48,7 +49,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   // DEV: 서버 없이 UI 확인용 bypass
   if (import.meta.env.DEV && import.meta.env.VITE_AUTH_BYPASS === 'true') return <>{children}</>
   if (!isAuthenticated) return <Navigate to="/login" replace />
-  return <>{children}</>
+  return <ConsentGate>{children}</ConsentGate>
 }
 
 function AppRoutes() {
