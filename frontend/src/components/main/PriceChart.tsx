@@ -3,7 +3,7 @@
  * 차트 타입 전환(캔들/속빈/하이킨/OHLC/라인), 기간 선택(1W~1Y), 드래그 패닝, 휠 줌
  * 체결 로그 기반 매수/매도/실패 마커 표시
  */
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { createChart, ColorType, CandlestickSeries, BarSeries, LineSeries, HistogramSeries, createSeriesMarkers } from 'lightweight-charts'
 import type { IChartApi } from 'lightweight-charts'
 import { useQuery } from '@tanstack/react-query'
@@ -176,9 +176,50 @@ export default function PriceChart({ symbol }: PriceChartProps) {
   const [resolution, setResolution] = useState<Resolution>('1d')
   const [isZoomed, setIsZoomed] = useState(false)
   const dataLenRef = useRef(0)
+  // lazy load: 로드된 범위 추적 + 추가 로드된 과거 데이터
+  const loadedRangeRef = useRef<{ start: string } | null>(null)
+  const lazyDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isFetchingMoreRef = useRef(false)
+  const [extraBars, setExtraBars] = useState<DailyBar[]>([])
 
   const resOption = RESOLUTION_OPTIONS.find(r => r.id === resolution)!
   const isIntraday = resOption.source === 'local'
+
+  // 해상도/종목/기간 변경 시 lazy load 상태 리셋
+  useEffect(() => {
+    loadedRangeRef.current = null
+    setExtraBars([])
+  }, [resolution, symbol, period])
+
+  // lazy load: 좌측 스크롤 → 과거 데이터 추가 요청
+  const fetchMoreBars = useCallback(async (newStart: string, currentStart: string) => {
+    if (!symbol || isFetchingMoreRef.current) return
+    isFetchingMoreRef.current = true
+    try {
+      let older: DailyBar[]
+      if (isIntraday) {
+        const raw = await localBars.get(symbol, resolution, newStart, currentStart)
+        older = raw.map(b => ({ date: b.time, open: b.open, high: b.high, low: b.low, close: b.close, volume: b.volume }))
+      } else {
+        older = await cloudBars.get(symbol, newStart, currentStart, resolution)
+      }
+      if (older.length === 0) return
+      setExtraBars(prev => {
+        const existing = new Set(prev.map(b => b.date))
+        const unique = older.filter(b => !existing.has(b.date))
+        return [...unique, ...prev]
+      })
+      if (loadedRangeRef.current) {
+        loadedRangeRef.current.start = newStart
+      }
+    } finally {
+      isFetchingMoreRef.current = false
+    }
+  }, [symbol, resolution, isIntraday])
+
+  // ref로 최신 fetchMoreBars 접근 (chart effect는 [] deps)
+  const fetchMoreRef = useRef(fetchMoreBars)
+  fetchMoreRef.current = fetchMoreBars
 
   // 차트 생성 (한 번만) — 볼륨만 생성, 메인 시리즈는 데이터 useEffect에서
   useEffect(() => {
@@ -210,6 +251,25 @@ export default function PriceChart({ symbol }: PriceChartProps) {
     chart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
       if (!range || dataLenRef.current === 0) return
       setIsZoomed(range.to - range.from < dataLenRef.current - 1)
+    })
+
+    // lazy load: 좌측 끝 도달 감지 → 과거 데이터 요청
+    chart.timeScale().subscribeVisibleTimeRangeChange((range) => {
+      if (!range) return
+      const from = String(range.from) // date string 또는 timestamp
+      const loaded = loadedRangeRef.current
+      if (!loaded) return
+      // 보이는 범위의 시작이 로드된 범위의 시작 근처이면 더 요청
+      if (from <= loaded.start) {
+        if (lazyDebounceRef.current) clearTimeout(lazyDebounceRef.current)
+        lazyDebounceRef.current = setTimeout(() => {
+          // 30일분 추가 로드
+          const d = new Date(loaded.start)
+          d.setDate(d.getDate() - 30)
+          const newStart = d.toISOString().slice(0, 10)
+          fetchMoreRef.current(newStart, loaded.start)
+        }, 250)
+      }
     })
 
     const ro = new ResizeObserver(() => {
@@ -249,10 +309,17 @@ export default function PriceChart({ symbol }: PriceChartProps) {
     retry: 1,
   })
 
-  // 통합 데이터: DailyBar 형식으로 정규화
-  const bars: DailyBar[] | undefined = isIntraday
+  // 통합 데이터: DailyBar 형식으로 정규화 + lazy load 데이터 병합
+  const baseBars: DailyBar[] | undefined = isIntraday
     ? localData?.map(b => ({ date: b.time, open: b.open, high: b.high, low: b.low, close: b.close, volume: b.volume }))
     : cloudData
+  const bars: DailyBar[] | undefined = baseBars && extraBars.length > 0
+    ? (() => {
+        const baseSet = new Set(baseBars.map(b => b.date))
+        const unique = extraBars.filter(b => !baseSet.has(b.date))
+        return [...unique, ...baseBars]
+      })()
+    : baseBars
 
   // 체결 로그 fetch (마커용)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -271,6 +338,13 @@ export default function PriceChart({ symbol }: PriceChartProps) {
     const chart = chartRef.current
     const candles = bars ?? []
     dataLenRef.current = candles.length
+
+    // 로드된 범위 추적 (lazy load 기준)
+    if (candles.length > 0 && !loadedRangeRef.current) {
+      loadedRangeRef.current = { start: candles[0].date }
+    }
+
+    const isLazyAppend = extraBars.length > 0
 
     // fillLogData 파싱 (useEffect 내부에서 — 의존성 안정성)
     const fillLogs: FillLog[] = Array.isArray(fillLogData)
@@ -318,12 +392,12 @@ export default function PriceChart({ symbol }: PriceChartProps) {
       markersRef.current.setMarkers([])
     }
 
-    // 타입 변경만이면 줌 위치 유지, 데이터 변경이면 fitContent
-    if (!typeChanged) {
+    // lazy load 추가분이면 스크롤 위치 유지, 아니면 fitContent
+    if (!typeChanged && !isLazyAppend) {
       chart.timeScale().fitContent()
       setIsZoomed(false)
     }
-  }, [bars, chartType, fillLogData, startStr])
+  }, [bars, chartType, fillLogData, startStr, extraBars])
 
   const handleReset = () => {
     chartRef.current?.timeScale().fitContent()
