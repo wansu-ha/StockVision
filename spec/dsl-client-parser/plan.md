@@ -1,6 +1,6 @@
 # DSL 클라이언트 파서 — 구현 계획
 
-> 작성일: 2026-03-16 | 상태: 확정 | spec: `spec/dsl-client-parser/spec.md`
+> 작성일: 2026-03-16 | 상태: 구현 완료 | 갱신: 2026-03-18 | spec: `spec/dsl-client-parser/spec.md`
 
 ## 의존관계
 

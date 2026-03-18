@@ -1,6 +1,6 @@
 # 차트 타임프레임 — 구현 계획
 
-> 작성일: 2026-03-15 | 상태: 확정 | spec: `spec/chart-timeframe/spec.md`
+> 작성일: 2026-03-15 | 상태: 확정 | 갱신: 2026-03-18 (Stage 1+2 구현 완료) | spec: `spec/chart-timeframe/spec.md`
 
 ## 의존관계
 
