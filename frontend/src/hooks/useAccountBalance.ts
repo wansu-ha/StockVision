@@ -14,6 +14,7 @@ export function useAccountBalance(brokerConnected: boolean) {
     queryKey: ['accountBalance'],
     queryFn: () => localAccount.balance(),
     refetchInterval: 30_000,
+    staleTime: 5_000,
     enabled: localReady && brokerConnected,
     retry: 1,
   })
@@ -22,6 +23,7 @@ export function useAccountBalance(brokerConnected: boolean) {
     queryKey: ['openOrders'],
     queryFn: () => localAccount.orders(),
     refetchInterval: 15_000,
+    staleTime: 5_000,
     enabled: localReady && brokerConnected,
     retry: 1,
   })

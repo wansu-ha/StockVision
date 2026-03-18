@@ -61,6 +61,7 @@ export default function MainDashboard() {
     queryFn: () => localLogs.get({ log_type: 'fill', limit: 50 } as never),
     enabled: localReady,
     refetchInterval: 15_000,
+    staleTime: 10_000,
     retry: 1,
   })
 
@@ -70,6 +71,7 @@ export default function MainDashboard() {
     queryFn: () => localLogs.dailyPnl(),
     enabled: localReady,
     refetchInterval: 30_000,
+    staleTime: 15_000,
     retry: false,
   })
 

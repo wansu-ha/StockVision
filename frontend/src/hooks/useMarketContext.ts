@@ -8,6 +8,7 @@ export function useMarketContext() {
     queryKey: ['marketContext'],
     queryFn: () => cloudContext.get(),
     refetchInterval: 30_000,
+    staleTime: 15_000,
     retry: 1,
   })
 

@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import StockList from './pages/StockList'
 import ExecutionLog from './pages/ExecutionLog'
@@ -53,7 +53,9 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AppRoutes() {
+  const location = useLocation()
   return (
+    <ErrorBoundary key={location.pathname}>
     <Routes>
       {/* 공개 라우트 */}
       <Route path="/admin/login" element={<AdminLogin />} />
@@ -118,6 +120,7 @@ function AppRoutes() {
         </ProtectedRoute>
       } />
     </Routes>
+    </ErrorBoundary>
   )
 }
 

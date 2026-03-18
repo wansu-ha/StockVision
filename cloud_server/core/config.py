@@ -92,6 +92,10 @@ class Settings:
         if origin.strip()
     ]
 
+    # 플랜 제한 (Free → Pro 전환 시 DB 기반으로 변경 예정)
+    PLAN_MAX_STRATEGIES: int = int(os.environ.get("PLAN_MAX_STRATEGIES", "3"))
+    PLAN_HISTORY_DAYS: int = int(os.environ.get("PLAN_HISTORY_DAYS", "30"))
+
     # Rate Limiting (in-memory, 프로덕션은 Redis)
     RATE_LIMIT_LOGIN: int = 10      # 로그인: 10회/시간/IP
     RATE_LIMIT_REGISTER: int = 5    # 가입: 5회/시간/IP
