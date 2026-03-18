@@ -1,6 +1,6 @@
 # 즉시 착수 개발 스프린트 — 구현 계획서
 
-> 작성일: 2026-03-18 | 상태: 초안 (v2)
+> 작성일: 2026-03-18 | 상태: 초안 (v3) | 갱신: 2026-03-18 코드-문서 감사 반영
 
 ## 목표
 
@@ -10,25 +10,25 @@
 
 ## 범위
 
-### 포함 (5건)
+### 포함 (4건)
 
 | # | 항목 | 출처 | 복잡도 |
 |---|------|------|--------|
-| 1 | F2 staleTime 잔여 전수 정리 (~20건) | A6/A8 | trivial ×20 |
+| 1 | F2 staleTime 잔여 전수 정리 (~24건) | A6/A8 | trivial ×24 |
 | 2 | Q5 장 상태 공휴일 | A8 | small (백+프 3파일) |
 | 3 | F3 프로필 닉네임 수정 | A6 | small (백+프 3파일) |
-| 4 | B3 미체결 취소 버튼 연결 | A1 | small (프 2~3파일) |
-| 5 | R4 Heartbeat WS Ack 버전 파싱 | T1-5 | small (2파일) |
+| 4 | R4 Heartbeat WS Ack 버전 파싱 | T1-5 | small (2파일) |
 
 ### 제외 — 사유
 
 | 항목 | 제외 사유 |
 |------|----------|
 | ~~T1-1 IndicatorProvider~~ | **코드 기구현됨.** 단, 차단급 버그 있음 (KOSDAQ `.KS` 오분류, yfinance SPOF/배치). 수정 방향은 사용자 결정 필요 → 별도 세션 |
+| ~~B3 미체결 취소 버튼~~ | **기구현 확인** (MainDashboard.tsx handleCancelOrder → localAccount.cancelOrder, query invalidation 포함) |
 | B1/B2 race condition | 재현 시나리오 미확인, 디버깅 세션 필요 |
 | auth-extension | 사용자 결정 필요 (OAuth provider, 콜백 URL) |
 | remote-ops | auth-extension 의존 |
-| E2E 암호화 와이어링 | auth-extension 의존 |
+| E2E 암호화 와이어링 | auth-extension 의존 (E2E 암호화 코드 자체는 구현 완료: local e2e_crypto.py + frontend e2eCrypto.ts + 디바이스 페어링) |
 | KIS 분봉 e2e 테스트 | 실계좌 환경 필요 |
 
 ---
@@ -39,7 +39,7 @@
 
 ### Stage 1: F2 staleTime 잔여 전수 정리
 
-이번 세션에서 7건 완료 → 잔여 ~20건 추가 설정.
+이번 세션에서 7건 완료 → 잔여 ~24건 추가 설정.
 
 **원칙**: 폴링 쿼리는 `staleTime ≈ refetchInterval / 2`. 정적 데이터는 용도별.
 
@@ -98,16 +98,14 @@
 
 ---
 
-### Stage 4: B3 미체결 취소 버튼
+### ~~Stage 4: B3 미체결 취소 버튼~~ — 기구현 확인, 제거
 
-**수정 파일**:
-1. `frontend/src/types/` — PendingOrder에 `orderId` 필드 확인/추가
-2. `frontend/src/components/main/ListView.tsx` — 취소 버튼 onClick → 로컬 서버 취소 API
-3. `frontend/src/services/localClient.ts` — 취소 API 함수 확인/추가
+> 2026-03-18 감사 결과: `MainDashboard.tsx:168-175`에 `handleCancelOrder` 완전 구현됨.
+> `localAccount.cancelOrder(orderId)` 호출 + query invalidation 포함. ListView에 prop 전달 (line 228).
 
 ---
 
-### Stage 5: R4 Heartbeat WS Ack 버전 파싱
+### Stage 4: R4 Heartbeat WS Ack 버전 파싱
 
 relay-infra 완료로 의존성 해소.
 
@@ -121,12 +119,11 @@ relay-infra 완료로 의존성 해소.
 
 | # | 메시지 | Stage |
 |---|--------|-------|
-| 1 | `feat: F2 staleTime 전수 정리 (잔여 ~20건)` | 1 |
+| 1 | `feat: F2 staleTime 전수 정리 (잔여 ~24건)` | 1 |
 | 2 | `feat: Q5 장 상태 공휴일 반영 (백엔드 is_holiday + 프론트 휴장)` | 2 |
 | 3 | `feat: F3 프로필 닉네임 수정 (PATCH /auth/profile)` | 3 |
-| 4 | `fix: B3 미체결 취소 버튼 onClick 연결` | 4 |
-| 5 | `feat: R4 Heartbeat WS Ack 버전 파싱` | 5 |
-| 6 | `docs: dev-plan-v3 + spec 상태 갱신` | 전체 |
+| 4 | `feat: R4 Heartbeat WS Ack 버전 파싱` | 4 |
+| 5 | `docs: dev-plan-v3 + spec 상태 갱신` | 전체 |
 
 ---
 
@@ -138,11 +135,11 @@ relay-infra 완료로 의존성 해소.
 - [ ] F3 닉네임 → Stage 3
 - [ ] Q5 공휴일 → Stage 2
 - [x] D1, D4 ✅ (이전 세션)
-- [ ] B3 취소 → Stage 4
+- [x] B3 취소 ✅ (기구현 확인, 2026-03-18 감사)
 - [ ] B1, B2 — 별도 디버깅 세션
 - [ ] `npm run build` + `npm run lint` 통과
 
-→ **B1/B2 제외 Phase A 졸업 달성**
+→ **B1/B2 제외 Phase A 졸업 달성 (B3은 기구현)**
 
 ### T1-1 IndicatorProvider (별도 세션에서 결정 필요)
 - 코드 기구현 (엔진 연동 완료)
