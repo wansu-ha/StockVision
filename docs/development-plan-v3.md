@@ -7,7 +7,7 @@
 > 이 문서는 **기술 구현 백로그**로, roadmap.md의 Phase(A~E)와 다른 축(A → T1 → T2 → T3)으로 기술 항목을 조직한다.
 > roadmap Phase와 이 문서의 단계는 1:1 대응이 아니며, 각자의 관점에서 독립적으로 추적한다.
 >
-> **2026-03-18 갱신**: T1-2 DSL 파서 구현 완료, T1-3/T1-4 차트 타임프레임 Stage 1+2 구현 완료 (Stage 3 부분), T1-5 R1~R3 구현 완료, T2 relay-infra Step 1~4 구현 완료. 코드 리뷰 수정: CRITICAL-2(bars 인증), CRITICAL-3(groupby 정렬), CRITICAL-4(!=연산자), WARNING-1(SQLite thread safety).
+> **2026-03-18 갱신**: T1-2 DSL 파서 구현 완료, T1-3/T1-4 차트 타임프레임 Stage 1+2 구현 완료 (Stage 3 lazy load 추가), T1-5 R1~R3+R5 구현 완료, T2 relay-infra Step 1~8 구현/감사 완료 (ping/pong+JWT re-auth 추가). Phase A 소항목 정리 (F1+ ErrorBoundary 리셋, F2+ staleTime 7건, D1 플랜 상수, D4 알림 채널). 코드 리뷰 수정: CRITICAL-2(bars 인증), CRITICAL-3(groupby 정렬), CRITICAL-4(!=연산자), WARNING-1(SQLite thread safety).
 > **2026-03-17 갱신**: A1~A4, A5(U2~U5/S1~S3 기구현 확인), A6(F1+F2), A7, A9 구현 완료. D1~D6 결정 완료. Alembic+시드 적용. 로컬 서버 v0.1.3 릴리스. T2에 auth-extension(C6-b) 추가, relay-infra/remote-ops Step 목록 실제 plan.md와 정합.
 
 ---
@@ -224,7 +224,7 @@
 **의존**: T1-3 (Stage 1+2) 완료 후
 **예상 공수**: 3-4일
 
-#### T1-5. local-server-resilience (R1, R2, R3, R5) — ⚠️ R1~R3 구현 완료, R5 미착수 (2026-03-18)
+#### T1-5. local-server-resilience (R1, R2, R3, R5) — ✅ R1~R3, R5 구현 완료 (2026-03-18)
 
 | Step | 항목 | 파일 |
 |------|------|------|
@@ -244,7 +244,7 @@
 - [x] DSL 파서가 프론트에서 규칙 검증 (2026-03-18)
 - [x] 일/주/월봉 타임프레임 전환 (2026-03-18, 분봉 로컬→KIS 연동 잔여)
 - [x] Config atomic write + SyncQueue 연동 (2026-03-18)
-- [ ] LimitChecker 재시작 시 today_executed 복원
+- [x] LimitChecker 재시작 시 today_executed 복원 (기구현 확인 2026-03-18)
 - [x] Mock/실전 자동감지 경고 동작 (2026-03-18)
 
 ---
@@ -270,10 +270,10 @@
 | 2 | 로컬 WS 클라이언트 (ws_relay_client.py 재작성, 재연결 backoff) | ✅ (2026-03-18) |
 | 3 | Heartbeat WS 전환 (HTTP 폴백 유지) | ✅ (2026-03-18) |
 | 4 | 메시지 프로토콜 + 라우팅 (state/alert/command_ack) | ✅ (2026-03-18) |
-| 5 | 클라우드 WS `/ws/remote` (디바이스 전용, SessionManager) | 🔴 미착수 |
-| 6 | E2E 암호화 (AES-256-GCM, Python + TypeScript) | 🔴 미착수 |
-| 7 | 오프라인 명령 큐 (PendingCommand DB) | 🔴 미착수 |
-| 8 | 감사 로그 + Rate Limiting | 🔴 미착수 |
+| 5 | 클라우드 WS `/ws/remote` (디바이스 전용, SessionManager) | ✅ (2026-03-18, 코드 감사 확인 + ping/pong·JWT re-auth 구현) |
+| 6 | E2E 암호화 (AES-256-GCM, Python + TypeScript) | ✅ (2026-03-18, 코드 감사 확인. encrypt_for_all 와이어링은 auth-extension 후) |
+| 7 | 오프라인 명령 큐 (PendingCommand DB) | ✅ (2026-03-18, 코드 감사 확인 — save/flush 구현됨) |
+| 8 | 감사 로그 + Rate Limiting | ✅ (2026-03-18, 코드 감사 확인 — RateLimiter + AuditLog 구현됨) |
 
 **수용 기준**: 17건 (WS 연결 4, E2E 4, 프로토콜 2, 큐 3, 세션 4)
 **예상 공수**: 2-3주
@@ -412,13 +412,12 @@ T1 (Week 4-6) ══════════════════════
 
   Week 5 (병렬 + 순차):
   ┌─ [T1-4] chart-timeframe Stage 3           ⚠️ 부분 (UI 완료, lazy load/KIS 잔여)
-  └─ [T1-5] local-server-resilience R1~R3     ✅ 완료, R5 미착수
+  └─ [T1-5] local-server-resilience R1~R3,R5   ✅ 완료
 
 T2 (Week 7-13) ═══════════════════════════════════════════════════
 
-  ┌─ [relay-infra] Step 1~4 (WS 기반)         ✅ 완료
-  ├─ [auth-extension] (병렬 착수, Step 5 전 완료)
-  │      └→ [relay-infra] Step 5~8 (디바이스 WS + E2E + 큐)
+  ┌─ [relay-infra] Step 1~8                   ✅ 완료 (E2E 와이어링은 auth-extension 후)
+  ├─ [auth-extension] (병렬 착수)
   │              ├→ [R4] Heartbeat WS Ack
   │              └→ [remote-ops] Step 1~9
 ```
