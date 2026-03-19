@@ -1,6 +1,6 @@
 # 릴레이 인프라 (Relay Infrastructure)
 
-> 작성일: 2026-03-12 | 상태: 확정 | 갱신: 2026-03-18 (Step 1~4 구현 완료, Step 5~8 미착수) | Phase C (C6-a)
+> 작성일: 2026-03-12 | 상태: 구현 완료 | 갱신: 2026-03-19 (Step 1~8 전부 구현 완료, 코드 감사 확인) | Phase C (C6-a)
 >
 > 대체: `spec/remote-control/spec.md` §5 통신 경로 부분을 대체
 
