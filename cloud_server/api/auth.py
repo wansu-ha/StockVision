@@ -11,6 +11,7 @@ POST /api/v1/auth/reset-password              새 비밀번호 설정
 GET  /api/v1/auth/oauth/{provider}/login      OAuth 인증 URL 반환
 POST /api/v1/auth/oauth/{provider}/callback   OAuth code 교환 → JWT 발급
 POST /api/v1/auth/verify-password             비밀번호 재검증 (원격 arm용)
+PATCH /api/v1/auth/profile                    프로필 수정 (닉네임)
 """
 import re
 from datetime import datetime, timedelta
@@ -386,3 +387,50 @@ def verify_password_endpoint(
         raise HTTPException(status_code=401, detail="비밀번호가 올바르지 않습니다.")
 
     return {"success": True}
+
+
+# ── 프로필 수정 ──────────────────────────────────────────────
+
+
+@router.get("/profile")
+def get_profile(
+    user: dict = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    """현재 프로필 조회."""
+    db_user = db.query(User).filter(User.id == user["sub"]).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+    return {
+        "success": True,
+        "data": {"email": db_user.email, "nickname": db_user.nickname},
+    }
+
+
+class UpdateProfileBody(BaseModel):
+    nickname: str
+
+    @field_validator("nickname")
+    @classmethod
+    def validate_nickname(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) < 2 or len(v) > 20:
+            raise ValueError("닉네임은 2~20자여야 합니다.")
+        return v
+
+
+@router.patch("/profile")
+def update_profile(
+    body: UpdateProfileBody,
+    user: dict = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    """프로필 수정 (닉네임)."""
+    db_user = db.query(User).filter(User.id == user["sub"]).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+
+    db_user.nickname = body.nickname
+    db.commit()
+
+    return {"success": True, "data": {"nickname": db_user.nickname}}
