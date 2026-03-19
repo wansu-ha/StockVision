@@ -16,6 +16,7 @@ export default function DeviceManager() {
   const { data: devices = [], isLoading } = useQuery({
     queryKey: ['devices'],
     queryFn: cloudDevices.list,
+    staleTime: 30_000,
   })
 
   const deactivateMutation = useMutation({

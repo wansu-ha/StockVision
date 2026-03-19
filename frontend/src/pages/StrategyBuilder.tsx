@@ -56,6 +56,7 @@ export default function StrategyBuilder() {
   const { data: rulesData } = useQuery({
     queryKey: ['rules'],
     queryFn:  cloudRules.list,
+    staleTime: 2 * 60_000,
   })
   const invalidate = () => qc.invalidateQueries({ queryKey: ['rules'] })
 

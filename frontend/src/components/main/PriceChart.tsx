@@ -330,6 +330,7 @@ export default function PriceChart({ symbol }: PriceChartProps) {
       : Promise.resolve([]),
     enabled: !!symbol,
     refetchInterval: 30_000,
+    staleTime: 15_000,
   })
   // 데이터 또는 차트 타입 변경 시 업데이트
   useEffect(() => {

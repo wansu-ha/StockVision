@@ -7,24 +7,28 @@ export default function AdminDashboard() {
     queryKey: ['admin', 'stats'],
     queryFn: () => adminApi.getStats().then((r) => r.data.data ?? r.data),
     refetchInterval: 10000,
+    staleTime: 5_000,
   })
 
   const { data: collector } = useQuery({
     queryKey: ['admin', 'collector'],
     queryFn: () => adminApi.getCollectorStatus().then((r) => r.data.data ?? r.data).catch(() => null),
     refetchInterval: 10000,
+    staleTime: 5_000,
   })
 
   const { data: aiStats } = useQuery({
     queryKey: ['admin', 'ai', 'stats-summary'],
     queryFn: () => adminApi.getAiStats().then((r) => r.data.data ?? r.data).catch(() => null),
     refetchInterval: 30000,
+    staleTime: 15_000,
   })
 
   const { data: errors = [] } = useQuery({
     queryKey: ['admin', 'errors-recent'],
     queryFn: () => adminApi.getErrors({ limit: 5 }).then((r) => r.data.data ?? r.data ?? []).catch(() => []),
     refetchInterval: 10000,
+    staleTime: 5_000,
   })
 
   const cards = [

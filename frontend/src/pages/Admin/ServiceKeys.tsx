@@ -22,6 +22,7 @@ export default function AdminServiceKeys() {
   const { data: keys = [] } = useQuery<ServiceKey[]>({
     queryKey: ['admin', 'service-keys'],
     queryFn: () => adminApi.getServiceKeys().then((r: { data: { data: ServiceKey[] } }) => r.data.data ?? r.data ?? []),
+    staleTime: 60_000,
   })
 
   const createMutation = useMutation({
