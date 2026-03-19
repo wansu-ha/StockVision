@@ -133,11 +133,14 @@ export default function MainDashboard() {
     }))
   }, [openOrders])
 
-  // 장 상태 — 시간 기반 추정
+  // 장 상태 — 주말/공휴일 + 시간 기반 추정
   const now = new Date()
+  const dayOfWeek = now.getDay()
+  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6
+  const isHoliday = isWeekend || context?.is_holiday === true
   const hhmm = now.getHours() * 100 + now.getMinutes()
   const marketStatus: MarketStatus = {
-    status: hhmm >= 900 && hhmm < 1530 ? '장중' : hhmm < 900 ? '장전' : '장후',
+    status: isHoliday ? '휴장' : hhmm >= 900 && hhmm < 1530 ? '장중' : hhmm < 900 ? '장전' : '장후',
     openTime: '09:00',
     closeTime: '15:30',
   }

@@ -24,4 +24,5 @@ export interface MarketContextData {
   volatility?: number
   trend?: string
   updated_at?: string
+  is_holiday?: boolean
 }
