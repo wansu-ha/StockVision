@@ -11,4 +11,19 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-query': ['@tanstack/react-query'],
+          'vendor-recharts': ['recharts'],
+          'vendor-charts': ['lightweight-charts'],
+          'vendor-heroui': ['@heroui/react'],
+          'vendor-motion': ['framer-motion'],
+          'vendor-misc': ['axios', 'zustand', 'react-hook-form', 'react-markdown'],
+        },
+      },
+    },
+  },
 })

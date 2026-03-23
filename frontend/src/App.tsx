@@ -6,15 +6,15 @@ import ExecutionLog from './pages/ExecutionLog'
 import StrategyBuilder from './pages/StrategyBuilder'
 import StrategyList from './pages/StrategyList'
 import Settings from './pages/Settings'
-import AdminLayout from './pages/Admin'
-import AdminDash from './pages/Admin/Dashboard'
-import AdminUsers from './pages/Admin/Users'
-import AdminStats from './pages/Admin/Stats'
-import AdminServiceKeys from './pages/Admin/ServiceKeys'
-import AdminTemplates from './pages/Admin/Templates'
-import AdminAiMonitor from './pages/Admin/AiMonitor'
-import AdminErrorLogs from './pages/Admin/ErrorLogs'
-import AdminLogin from './pages/Admin/Login'
+const AdminLayout = lazy(() => import('./pages/Admin'))
+const AdminDash = lazy(() => import('./pages/Admin/Dashboard'))
+const AdminUsers = lazy(() => import('./pages/Admin/Users'))
+const AdminStats = lazy(() => import('./pages/Admin/Stats'))
+const AdminServiceKeys = lazy(() => import('./pages/Admin/ServiceKeys'))
+const AdminTemplates = lazy(() => import('./pages/Admin/Templates'))
+const AdminAiMonitor = lazy(() => import('./pages/Admin/AiMonitor'))
+const AdminErrorLogs = lazy(() => import('./pages/Admin/ErrorLogs'))
+const AdminLogin = lazy(() => import('./pages/Admin/Login'))
 import Login from './pages/Login'
 import Register from './pages/Register'
 import ForgotPassword from './pages/ForgotPassword'
@@ -58,7 +58,7 @@ function AppRoutes() {
     <ErrorBoundary key={location.pathname}>
     <Routes>
       {/* 공개 라우트 */}
-      <Route path="/admin/login" element={<AdminLogin />} />
+      <Route path="/admin/login" element={<Suspense fallback={null}><AdminLogin /></Suspense>} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
@@ -105,14 +105,14 @@ function AppRoutes() {
               <Route path="/strategies/new" element={<StrategyBuilder />} />
               <Route path="/strategies/:id/edit" element={<StrategyBuilder />} />
               <Route path="/strategy" element={<StrategyBuilder />} />
-              <Route path="/admin" element={<AdminGuard><AdminLayout /></AdminGuard>}>
-                <Route index element={<AdminDash />} />
-                <Route path="users" element={<AdminUsers />} />
-                <Route path="stats" element={<AdminStats />} />
-                <Route path="service-keys" element={<AdminServiceKeys />} />
-                <Route path="templates" element={<AdminTemplates />} />
-                <Route path="ai" element={<AdminAiMonitor />} />
-                <Route path="errors" element={<AdminErrorLogs />} />
+              <Route path="/admin" element={<AdminGuard><Suspense fallback={null}><AdminLayout /></Suspense></AdminGuard>}>
+                <Route index element={<Suspense fallback={null}><AdminDash /></Suspense>} />
+                <Route path="users" element={<Suspense fallback={null}><AdminUsers /></Suspense>} />
+                <Route path="stats" element={<Suspense fallback={null}><AdminStats /></Suspense>} />
+                <Route path="service-keys" element={<Suspense fallback={null}><AdminServiceKeys /></Suspense>} />
+                <Route path="templates" element={<Suspense fallback={null}><AdminTemplates /></Suspense>} />
+                <Route path="ai" element={<Suspense fallback={null}><AdminAiMonitor /></Suspense>} />
+                <Route path="errors" element={<Suspense fallback={null}><AdminErrorLogs /></Suspense>} />
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
