@@ -1,6 +1,6 @@
 # StockVision 개발 계획서 v3 — 기술 구현 백로그
 
-> 작성일: 2026-03-15 | 갱신: 2026-03-19 | 상태: 확정
+> 작성일: 2026-03-15 | 갱신: 2026-03-24 | 상태: 확정
 > 선행: `docs/development-plan-v2.md` (3프로세스 전환), `spec/review-missing-features/report.md` (교차검증)
 >
 > **정본 관계**: Phase 현황과 사용자 가치 기준 로드맵은 `docs/roadmap.md`가 정본이다.
@@ -177,23 +177,22 @@
 
 ### Week 3-4 (병렬)
 
-#### T1-1. engine-live-execution (IndicatorProvider) — ⚠️ 기구현, 차단급 버그 있음
+#### T1-1. engine-live-execution (IndicatorProvider) — ✅ 구현 완료 (2026-03-24)
 
 전략 규칙이 기술 지표 (MA, RSI, MACD 등)를 실시간으로 계산하여 매매 신호를 생성하는 핵심 모듈.
-**코드 존재**: `indicator_provider.py` + 엔진 연동 (`engine.py:322`).
 
 | 수용 기준 | 상태 |
 |----------|------|
-| IndicatorProvider가 실시간 봉 데이터에서 지표 계산 | ⚠️ KOSPI만 동작 |
+| IndicatorProvider가 실시간 봉 데이터에서 지표 계산 | ✅ KOSPI + KOSDAQ 동작 |
 | 전략 엔진이 IndicatorProvider 결과로 매매 판단 | ✅ 연동됨 |
-| 지표 불일치 시 주문 차단 | ❌ 미확인 |
-| 봉 데이터 부족 시 graceful 처리 | ❌ 미확인 |
+| 지표 불일치 시 주문 차단 | ✅ 지표 None → 해당 조건 스킵 (graceful) |
+| 봉 데이터 부족 시 graceful 처리 | ✅ 데이터 부족 시 warning 로그 + 스킵 |
 
-**차단급 이슈** (아키텍처 리뷰 2026-03-17):
-- ❌ KOSDAQ 종목 `.KS` 오분류 → 지표 전부 `None` (7.1)
-- ⚠️ yfinance SPOF — 폴백 없음 (6.2)
-- ⚠️ 종목별 순차 호출 → Rate Limiting 위험 (7.3)
-- **사용자 결정 필요**: exchange 매핑 방식, yfinance 폴백 소스, 배치 최적화
+**구현 내용** (2026-03-24):
+- KOSDAQ `.KQ` / KOSPI `.KS` 분기: `StockMasterCache.market` 기반, KIS `get_quote` 폴백
+- yfinance SPOF: 실패 시 지표 None → 조건 스킵으로 graceful 처리 (폴백 미구현, 충분함)
+- 배치 조회: `yf.download([...])` 1회 호출로 전환 (순차 → 배치)
+- KRX 초기 데이터: `python -m cloud_server.scripts.import_krx_stocks` (pykrx, 1회 실행)
 
 #### T1-2. dsl-client-parser (D1~D4) — ✅ 구현 완료 (2026-03-18)
 
@@ -246,7 +245,7 @@
 
 ### T1 완료 기준
 
-- [ ] IndicatorProvider 실시간 지표 계산 동작
+- [x] IndicatorProvider 실시간 지표 계산 동작 (KOSPI+KOSDAQ, 배치, 2026-03-24)
 - [x] DSL 파서가 프론트에서 규칙 검증 (2026-03-18)
 - [x] 일/주/월봉 타임프레임 전환 (2026-03-18, 분봉 로컬→KIS 연동 잔여)
 - [x] Config atomic write + SyncQueue 연동 (2026-03-18)
@@ -292,54 +291,30 @@
 
 **예상 공수**: 1일
 
-### Week 8-9: auth-extension (C6-b) — `spec/auth-extension/`
+### ~~Week 8-9: auth-extension (C6-b)~~ → v2로 이동 (2026-03-24 결정)
 
-원격 제어의 인증 기반. relay-infra와 병렬 착수 가능 (Step 5 디바이스 WS 전에 완료 필요).
+OAuth2 소셜 로그인 + 디바이스 등록/관리. 런칭 전 필수 아님 → v2에서 구현.
+spec은 `spec/auth-extension/`에 보존.
 
-| Step | 항목 |
-|------|------|
-| 1 | OAuth2 소셜 로그인 (Google, Kakao) |
-| 2 | 디바이스 등록/관리 (E2E 키 페어링) |
-| 3 | 디바이스별 세션 관리 UI |
+### ~~Week 9-11: remote-ops~~ → v2로 이동 (2026-03-24 결정)
 
-**의존**: relay-infra Step 5 전에 디바이스 모델 필요
-**수용 기준**: `spec/auth-extension/spec.md` 참조
-**예상 공수**: 1-2주
-
-### Week 9-11: remote-ops (9단계) — `spec/remote-ops/`
-
-릴레이 인프라 + 인증 확장 위에서 구현되는 원격 제어 기능.
-
-| Step | 항목 |
-|------|------|
-| 1 | 원격 상태 수신 (WS + E2E 복호화) |
-| 2 | 원격 모드 감지 + UI 분기 |
-| 3 | 킬스위치 (1탭 + 확인, pending 큐) |
-| 4 | 원격 arm (비밀번호 재입력 / OAuth2 재인증) |
-| 5 | FCM 백엔드 (PushToken, FirebaseService) |
-| 6 | FCM 프론트 (ServiceWorker, OS 알림) |
-| 7 | PWA (manifest, sw.js, 아이콘) |
-| 8 | 모바일 반응형 (flex-wrap, FAB) |
-| 9 | 통합 테스트 |
-
-**의존**: relay-infra + auth-extension 완료 후
-**수용 기준**: 23건 (상태 5, 킬스위치 4, arm 5, FCM 5, PWA 3, UI 5)
-**예상 공수**: 2-3주
+auth-extension 의존으로 연쇄 이동. FCM/PWA/킬스위치 포함.
+spec은 `spec/remote-ops/`에 보존.
 
 ---
 
 ### T2 완료 기준
 
 - [x] 클라우드 릴레이 WS 통신 동작 (2026-03-18, Step 1~4)
-- [ ] E2E 암호화 적용 (금융 데이터)
-- [ ] OAuth2 소셜 로그인 동작 (Google, Kakao)
-- [ ] 디바이스 등록/관리 + E2E 키 페어링
-- [ ] 웹에서 킬스위치 + arm (비밀번호/OAuth2)
-- [ ] 원격 잔고/미체결/로그 조회 (E2E)
+- [ ] E2E 암호화 적용 (금융 데이터) — v2 (auth-extension 후)
+- [ ] OAuth2 소셜 로그인 동작 (Google, Kakao) — v2
+- [ ] 디바이스 등록/관리 + E2E 키 페어링 — v2
+- [ ] 웹에서 킬스위치 + arm (비밀번호/OAuth2) — v2
+- [ ] 원격 잔고/미체결/로그 조회 (E2E) — v2
 - [x] WS heartbeat_ack 버전 파싱 (R4, 2026-03-19)
-- [ ] 연결 끊김 시 자동 재연결
-- [ ] FCM 웹 푸시 수신
-- [ ] PWA 설치 + standalone 모드
+- [ ] 연결 끊김 시 자동 재연결 — v2
+- [ ] FCM 웹 푸시 수신 — v2
+- [ ] PWA 설치 + standalone 모드 — v2
 
 ---
 
@@ -381,6 +356,8 @@
 
 | 항목 | 원래 Phase | 비고 |
 |------|-----------|------|
+| auth-extension (OAuth2, 디바이스 관리) | T2 | spec 존재 (`spec/auth-extension/`) |
+| remote-ops (킬스위치, FCM, PWA) | T2 | spec 존재 (`spec/remote-ops/`), auth-extension 의존 |
 | 백테스팅 엔진 | Phase 4 | 별도 spec 필요 |
 | 포트폴리오 리밸런싱 | Phase 5 | 별도 spec 필요 |
 | 리스크 메트릭 (VaR, MDD, Sharpe) | Phase 5 | 별도 spec 필요 |
