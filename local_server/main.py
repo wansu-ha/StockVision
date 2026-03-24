@@ -19,6 +19,7 @@ from local_server.config import get_config
 from local_server.core.local_auth import generate_secret
 from local_server.routers import account, alerts as alerts_router, auth, config as config_router, logs, results, rules, status, trading, ws
 from local_server.routers import quote as quote_router, broker as broker_router
+from local_server.routers.bars import router as bars_router
 
 logger = logging.getLogger(__name__)
 
@@ -258,6 +259,7 @@ def create_app() -> FastAPI:
     app.include_router(logs.router, prefix="/api/logs", tags=["로그"])
     app.include_router(quote_router.router, prefix="/api/quote", tags=["시세"])
     app.include_router(broker_router.router, prefix="/api/broker", tags=["브로커"])
+    app.include_router(bars_router, tags=["분봉"])
     app.include_router(ws.router, tags=["WebSocket"])
 
     from local_server.routers import devices as devices_router

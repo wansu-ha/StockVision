@@ -18,6 +18,25 @@ from cloud_server.models.market import DailyBar
 logger = logging.getLogger(__name__)
 
 _RSI_PERIOD = 14
+
+# 한국 공휴일 (2026년). 매년 초 갱신 필요.
+KOREAN_HOLIDAYS_2026 = {
+    "2026-01-01",  # 신정
+    "2026-01-28",  # 설날 전날 (수)
+    "2026-01-29",  # 설날 (목)
+    "2026-01-30",  # 설날 다음날 (금)
+    "2026-03-01",  # 삼일절
+    "2026-05-05",  # 어린이날
+    "2026-05-24",  # 부처님 오신 날
+    "2026-06-06",  # 현충일
+    "2026-08-15",  # 광복절
+    "2026-09-24",  # 추석 전날
+    "2026-09-25",  # 추석
+    "2026-09-26",  # 추석 다음날
+    "2026-10-03",  # 개천절
+    "2026-10-09",  # 한글날
+    "2026-12-25",  # 크리스마스
+}
 _VOL_PERIOD = 20
 _LOOKBACK = 60
 
@@ -145,10 +164,12 @@ class ContextService:
         1차: cloud_server DB의 DailyBar 데이터 사용
         2차 폴백: yfinance 직접 조회 (DB 데이터 없을 때)
         """
+        today_str = datetime.now(tz=timezone.utc).date().isoformat()
         result = {
-            "date": datetime.now(tz=timezone.utc).date().isoformat(),
+            "date": today_str,
             "computed_at": datetime.now(tz=timezone.utc).isoformat(),
             "market": {},
+            "is_holiday": today_str in KOREAN_HOLIDAYS_2026,
             "version": 1,
         }
 

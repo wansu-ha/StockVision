@@ -85,6 +85,7 @@ class RateLimiter:
 login_limiter = RateLimiter(settings.RATE_LIMIT_LOGIN, 3600)
 register_limiter = RateLimiter(settings.RATE_LIMIT_REGISTER, 3600)
 forgot_pw_limiter = RateLimiter(settings.RATE_LIMIT_FORGOT_PW, 3600)
+ai_limiter = RateLimiter(settings.RATE_LIMIT_AI, 3600)
 
 
 def check_login_rate(request: Request) -> None:
@@ -97,3 +98,8 @@ def check_register_rate(request: Request) -> None:
 
 def check_forgot_pw_rate(request: Request) -> None:
     forgot_pw_limiter.check(_get_ip(request))
+
+
+def check_ai_rate(user_id: str) -> None:
+    """AI 엔드포인트 — 유저 ID 기준 (인증된 요청이므로 IP보다 정확)."""
+    ai_limiter.check(f"ai:{user_id}")

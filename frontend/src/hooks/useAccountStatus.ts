@@ -29,6 +29,7 @@ export function useAccountStatus() {
     queryKey: ['localStatus'],
     queryFn: () => localStatus.get(),
     refetchInterval: 5_000,
+    staleTime: 3_000,
     retry: 1,
     enabled: localReady,
   })

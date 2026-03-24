@@ -37,8 +37,9 @@ class WsRelayClient:
         self._backoff = _MIN_BACKOFF
         self._jwt_token: str = ""
         self._cloud_ws_url: str = ""
-        # 외부에서 등록하는 command 핸들러
+        # 외부에서 등록하는 핸들러
         self._command_handler: Callable[[dict], Coroutine] | None = None
+        self._heartbeat_ack_handler: Callable[[dict], Coroutine] | None = None
 
     @property
     def is_connected(self) -> bool:
@@ -47,6 +48,10 @@ class WsRelayClient:
     def set_command_handler(self, handler: Callable[[dict], Coroutine]) -> None:
         """command 수신 시 호출할 핸들러 등록."""
         self._command_handler = handler
+
+    def set_heartbeat_ack_handler(self, handler: Callable[[dict], Coroutine]) -> None:
+        """heartbeat_ack 수신 시 호출할 핸들러 등록."""
+        self._heartbeat_ack_handler = handler
 
     async def start(self, cloud_ws_url: str, jwt_token: str) -> None:
         """WS 연결 시작 (무한 루프)."""
@@ -178,7 +183,7 @@ class WsRelayClient:
 
             msg_type = msg.get("type")
             if msg_type == "heartbeat_ack":
-                self._handle_heartbeat_ack(msg)
+                await self._handle_heartbeat_ack(msg)
             elif msg_type == "command":
                 await self._handle_command(msg)
             elif msg_type == "error":
@@ -186,11 +191,15 @@ class WsRelayClient:
             else:
                 logger.debug("알 수 없는 메시지 타입: %s", msg_type)
 
-    def _handle_heartbeat_ack(self, msg: dict) -> None:
-        """heartbeat_ack 처리 → 버전 체크는 heartbeat 모듈에 위임."""
-        # heartbeat 모듈에서 이 데이터를 polling 대신 받을 수 있도록
-        # 이벤트나 콜백으로 전달할 수 있음. 초기에는 로깅만.
-        logger.debug("heartbeat_ack 수신")
+    async def _handle_heartbeat_ack(self, msg: dict) -> None:
+        """heartbeat_ack 처리 → payload에서 버전 정보 추출 후 heartbeat 모듈에 위임."""
+        payload = msg.get("payload", {})
+        logger.debug("heartbeat_ack 수신: %s", payload)
+        if self._heartbeat_ack_handler:
+            try:
+                await self._heartbeat_ack_handler(payload)
+            except Exception as e:
+                logger.error("heartbeat_ack 핸들러 오류: %s", e)
 
     async def _handle_command(self, msg: dict) -> None:
         """원격 명령 수신 → 핸들러 호출."""

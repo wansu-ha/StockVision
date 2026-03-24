@@ -1,3 +1,5 @@
+> SUPERSEDED — Phase 1/2 시절 청사진. 현재 아키텍처: `docs/architecture.md`, 로드맵: `docs/roadmap.md`
+
 # 🏗️ StockVision 프로젝트 완성 청사진
 
 ## 🎯 프로젝트 개요

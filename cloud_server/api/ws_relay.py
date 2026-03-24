@@ -42,7 +42,11 @@ async def _wait_auth(ws: WebSocket, require_device_id: bool = False) -> dict | N
         await ws.close(code=4001, reason="invalid_token")
         return None
 
-    result = {"user_id": payload["sub"], "email": payload.get("email", "")}
+    result = {
+        "user_id": payload["sub"],
+        "email": payload.get("email", ""),
+        "jwt_exp": payload.get("exp", 0),
+    }
 
     if require_device_id:
         device_id = msg.get("payload", {}).get("device_id")
@@ -93,9 +97,10 @@ async def ws_remote(ws: WebSocket):
 
     user_id = auth["user_id"]
     device_id = auth["device_id"]
+    jwt_exp = auth.get("jwt_exp", 0)
 
     session_mgr = get_session_manager()
-    if not session_mgr.register(user_id, device_id, ws):
+    if not session_mgr.register(user_id, device_id, ws, jwt_exp=jwt_exp):
         await ws.close(code=4003, reason="max_devices_exceeded")
         return
 
@@ -104,6 +109,23 @@ async def ws_remote(ws: WebSocket):
     try:
         while True:
             msg = await ws.receive_json()
+            msg_type = msg.get("type")
+
+            # pong 응답 — 무시 (ping_loop이 전송 실패로 감지)
+            if msg_type == "pong":
+                continue
+
+            # JWT 갱신 (클라이언트가 토큰 refresh 후 전송)
+            if msg_type == "re_auth":
+                token = msg.get("payload", {}).get("token", "")
+                try:
+                    payload = verify_jwt(token)
+                    session_mgr.refresh_jwt(user_id, device_id, payload.get("exp", 0))
+                    await ws.send_json({"type": "auth_ok"})
+                except JWTError:
+                    await ws.send_json({"type": "auth_failed"})
+                continue
+
             await relay.handle_device_message(user_id, device_id, msg)
     except WebSocketDisconnect:
         logger.info("디바이스 WS 연결 해제: user=%s, device=%s", user_id, device_id)

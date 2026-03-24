@@ -70,12 +70,14 @@ export default function ExecutionLog() {
       limit: 200,
     }),
     refetchInterval: 10_000,
+    staleTime: 5_000,
   })
 
   const { data: summary } = useQuery({
     queryKey: ['log-summary'],
     queryFn: () => logsApi.getSummary(),
     refetchInterval: 10_000,
+    staleTime: 5_000,
   })
 
   // 타임라인 데이터 (별도 쿼리)
@@ -89,6 +91,7 @@ export default function ExecutionLog() {
     }),
     enabled: viewMode === 'timeline',
     refetchInterval: 10_000,
+    staleTime: 5_000,
   })
 
   // 경고 탭 데이터
@@ -97,6 +100,7 @@ export default function ExecutionLog() {
     queryFn: () => logsApi.getLogs({ log_type: 'ALERT', date_from: dateFrom || undefined, limit: 200 }),
     enabled: viewMode === 'alerts',
     refetchInterval: 10_000,
+    staleTime: 5_000,
   })
 
   const logs: LogEntry[] = data?.data?.items ?? []

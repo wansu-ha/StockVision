@@ -6,9 +6,17 @@ Phase 3 Unit 4 — 인증, 규칙 CRUD, 시세 수집, AI 컨텍스트, 어드�
 실행: python -m uvicorn cloud_server.main:app --reload --port 4010
 """
 import logging
+import os
 import time
 import uuid
 from contextlib import asynccontextmanager
+
+# 로그 레벨 환경변수 (LOG_LEVEL=DEBUG|INFO|WARNING|ERROR, 기본 INFO)
+logging.basicConfig(
+    level=getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO),
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    datefmt="%Y-%m-%dT%H:%M:%S",
+)
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware

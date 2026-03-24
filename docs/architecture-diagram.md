@@ -1,6 +1,6 @@
 # StockVision 아키텍처 다이어그램
 
-> 최종 갱신: 2026-03-05 (v3: DEGRADED 정책/reconcile/용어 통일) | `docs/architecture.md` 기반
+> ⚠️ 마지막 갱신: 2026-03-05. `docs/architecture.md`의 보조 다이어그램이며 일부 내용이 최신 구현과 다를 수 있음.
 
 ---
 

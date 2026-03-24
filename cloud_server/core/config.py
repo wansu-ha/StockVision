@@ -92,10 +92,15 @@ class Settings:
         if origin.strip()
     ]
 
+    # 플랜 제한 (Free → Pro 전환 시 DB 기반으로 변경 예정)
+    PLAN_MAX_STRATEGIES: int = int(os.environ.get("PLAN_MAX_STRATEGIES", "3"))
+    PLAN_HISTORY_DAYS: int = int(os.environ.get("PLAN_HISTORY_DAYS", "30"))
+
     # Rate Limiting (in-memory, 프로덕션은 Redis)
-    RATE_LIMIT_LOGIN: int = 10      # 로그인: 10회/시간/IP
-    RATE_LIMIT_REGISTER: int = 5    # 가입: 5회/시간/IP
-    RATE_LIMIT_FORGOT_PW: int = 3   # 비밀번호 재설정: 3회/시간/IP
+    RATE_LIMIT_LOGIN: int = int(os.environ.get("RATE_LIMIT_LOGIN", "10"))        # 10회/시간/IP
+    RATE_LIMIT_REGISTER: int = int(os.environ.get("RATE_LIMIT_REGISTER", "5"))  # 5회/시간/IP
+    RATE_LIMIT_FORGOT_PW: int = int(os.environ.get("RATE_LIMIT_FORGOT_PW", "3"))  # 3회/시간/IP
+    RATE_LIMIT_AI: int = int(os.environ.get("RATE_LIMIT_AI", "20"))             # 20회/시간/유저
 
     # 수집 스케줄 (KST 기준)
     COLLECTOR_WS_START_HOUR: int = 9    # 09:00 WS 시작

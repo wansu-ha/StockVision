@@ -17,6 +17,7 @@ const StockList = () => {
   const { data: watchlist = [], isLoading } = useQuery({
     queryKey: ['watchlist'],
     queryFn: cloudWatchlist.list,
+    staleTime: 30_000,
   })
 
   // 관심종목에 대한 종목 상세 정보 (symbol → name/market)
@@ -31,6 +32,7 @@ const StockList = () => {
       return results
     },
     enabled: watchlist.length > 0,
+    staleTime: 5 * 60_000,
   })
 
   const addMut = useMutation({

@@ -1,6 +1,6 @@
 # 원격 제어 (Remote Operations)
 
-> 작성일: 2026-03-12 | 상태: 초안 | Phase C (C6-c)
+> 작성일: 2026-03-12 | 상태: 확정 | Phase C (C6-c)
 >
 > 대체: `spec/remote-control/spec.md` 기능 부분을 대체 (인프라는 C6-a, 인증은 C6-b)
 

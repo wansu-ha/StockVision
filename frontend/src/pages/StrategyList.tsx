@@ -33,6 +33,7 @@ export default function StrategyList() {
       return map
     },
     refetchInterval: 10000,
+    staleTime: 5_000,
   })
 
   // unique symbols → 종목명 맵 (캐시 공유: MainDashboard와 동일 queryKey)
