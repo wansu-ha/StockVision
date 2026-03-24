@@ -84,6 +84,8 @@ class TestAuthContract:
         resp = client.post("/api/v1/auth/register", json={
             "email": "new@example.com",
             "password": "test1234",
+            "terms_agreed": True,
+            "privacy_agreed": True,
         })
         assert resp.status_code == 200
         body = resp.json()

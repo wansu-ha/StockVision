@@ -524,19 +524,20 @@ class TestLossLockCancelOrders:
         broker.cancel_order.assert_any_call("ORD-2")
 
     def test_loss_lock_notifies_via_callback(self) -> None:
-        """손실 제한 발동 시 WS 콜백으로 알림이 전달된다."""
+        """손실 제한 발동 시 AlertMonitor.fire()로 알림이 전달된다."""
+        from unittest.mock import AsyncMock, patch
+        import asyncio
+
         engine, _ = self._make_engine()
 
-        received = []
-        engine.set_on_execution(lambda r: received.append(r))
+        with patch.object(engine._alert_monitor, "fire", new_callable=AsyncMock) as mock_fire:
+            engine.safeguard.check_max_loss(Decimal("-200000"), Decimal("10000000"))
+            asyncio.run(engine._notify_loss_lock(Decimal("-200000")))
 
-        # 손실 제한 발동 + 알림
-        engine.safeguard.check_max_loss(Decimal("-200000"), Decimal("10000000"))
-        engine._notify_loss_lock(Decimal("-200000"))
-
-        assert len(received) == 1
-        assert received[0].status == ExecutionStatus.REJECTED
-        assert "최대 손실 제한 발동" in received[0].message
+            mock_fire.assert_called_once()
+            call_kwargs = mock_fire.call_args.kwargs
+            assert call_kwargs.get("alert_type") == "loss_lock"
+            assert "손실" in call_kwargs.get("message", "")
 
 
 # ═══════════════════════════════════════
