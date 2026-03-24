@@ -56,6 +56,14 @@ a = Analysis(
         "packaging",
         # 토스트 알림
         "winotify",
+        # apscheduler
+        "apscheduler",
+        "apscheduler.schedulers",
+        "apscheduler.schedulers.asyncio",
+        "apscheduler.triggers",
+        "apscheduler.triggers.cron",
+        "apscheduler.executors",
+        "apscheduler.executors.asyncio",
         # 딥링크 + 뮤텍스
         "local_server.utils.deeplink",
         "local_server.utils.mutex",
