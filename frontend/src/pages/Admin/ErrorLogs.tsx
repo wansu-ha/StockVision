@@ -22,6 +22,7 @@ export default function AdminErrorLogs() {
       adminApi.getErrors({ level: level || undefined, limit: 50, offset: (page - 1) * 50 })
         .then((r: { data: { data: ErrorLog[] } }) => r.data.data ?? r.data ?? []),
     refetchInterval: 10000,
+    staleTime: 5_000,
   })
 
   const levelColors: Record<string, string> = {

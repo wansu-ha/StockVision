@@ -1,0 +1,123 @@
+"""add_t2_relay_auth_extension_tables
+
+Revision ID: abcdc0ed2bf3
+Revises: b7c8d9e0f1a2
+Create Date: 2026-03-24 09:53:44.070828
+"""
+from typing import Sequence, Union
+
+from alembic import op
+import sqlalchemy as sa
+
+
+# revision identifiers
+revision: str = 'abcdc0ed2bf3'
+down_revision: Union[str, None] = 'b7c8d9e0f1a2'
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
+
+
+def upgrade() -> None:
+    from sqlalchemy import inspect as sa_inspect
+    bind = op.get_bind()
+    inspector = sa_inspect(bind)
+    existing_tables = set(inspector.get_table_names())
+
+    # T2 테이블 4개 — 운영 DB에 create_all()로 이미 생성돼 있으면 건너뜀
+    if 'audit_logs' not in existing_tables:
+        op.create_table('audit_logs',
+        sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
+        sa.Column('user_id', sa.String(length=50), nullable=False),
+        sa.Column('device_id', sa.String(length=50), nullable=True),
+        sa.Column('action', sa.String(length=50), nullable=False),
+        sa.Column('detail', sa.JSON(), nullable=True),
+        sa.Column('ip_address', sa.String(length=45), nullable=True),
+        sa.Column('created_at', sa.DateTime(), nullable=True),
+        sa.PrimaryKeyConstraint('id')
+        )
+        op.create_index(op.f('ix_audit_logs_user_id'), 'audit_logs', ['user_id'], unique=False)
+
+    if 'pending_commands' not in existing_tables:
+        op.create_table('pending_commands',
+        sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
+        sa.Column('user_id', sa.String(length=50), nullable=False),
+        sa.Column('command_type', sa.String(length=50), nullable=True),
+        sa.Column('payload', sa.JSON(), nullable=True),
+        sa.Column('status', sa.String(length=20), nullable=True),
+        sa.Column('created_at', sa.DateTime(), nullable=True),
+        sa.Column('executed_at', sa.DateTime(), nullable=True),
+        sa.PrimaryKeyConstraint('id')
+        )
+        op.create_index(op.f('ix_pending_commands_user_id'), 'pending_commands', ['user_id'], unique=False)
+
+    if 'devices' not in existing_tables:
+        op.create_table('devices',
+        sa.Column('id', sa.String(length=50), nullable=False),
+        sa.Column('user_id', sa.String(length=36), nullable=False),
+        sa.Column('name', sa.String(length=100), nullable=True),
+        sa.Column('platform', sa.String(length=20), nullable=True),
+        sa.Column('registered_at', sa.DateTime(), nullable=True),
+        sa.Column('last_seen_at', sa.DateTime(), nullable=True),
+        sa.Column('last_ip', sa.String(length=45), nullable=True),
+        sa.Column('is_active', sa.Boolean(), nullable=True),
+        sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
+        sa.PrimaryKeyConstraint('id')
+        )
+        op.create_index(op.f('ix_devices_user_id'), 'devices', ['user_id'], unique=False)
+
+    if 'oauth_accounts' not in existing_tables:
+        op.create_table('oauth_accounts',
+        sa.Column('id', sa.String(length=36), nullable=False),
+        sa.Column('user_id', sa.String(length=36), nullable=False),
+        sa.Column('provider', sa.String(length=20), nullable=False),
+        sa.Column('provider_user_id', sa.String(length=100), nullable=False),
+        sa.Column('created_at', sa.DateTime(), nullable=True),
+        sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
+        sa.PrimaryKeyConstraint('id'),
+        sa.UniqueConstraint('provider', 'provider_user_id', name='uq_provider_user')
+        )
+        op.create_index(op.f('ix_oauth_accounts_user_id'), 'oauth_accounts', ['user_id'], unique=False)
+
+    # users.deleted_at — 이미 있으면 건너뜀
+    users_cols = {c['name'] for c in inspector.get_columns('users')}
+    if 'deleted_at' not in users_cols:
+        op.add_column('users', sa.Column('deleted_at', sa.DateTime(), nullable=True))
+
+    # token_hash 컬럼 교체 (token → token_hash)
+    evt_cols = {c['name'] for c in inspector.get_columns('email_verification_tokens')}
+    if 'token' in evt_cols and 'token_hash' not in evt_cols:
+        op.execute("DELETE FROM email_verification_tokens")
+        op.add_column('email_verification_tokens', sa.Column('token_hash', sa.String(length=64), nullable=False))
+        op.drop_index(op.f('ix_email_verification_tokens_token'), table_name='email_verification_tokens')
+        op.create_index(op.f('ix_email_verification_tokens_token_hash'), 'email_verification_tokens', ['token_hash'], unique=False)
+        op.drop_column('email_verification_tokens', 'token')
+
+    prt_cols = {c['name'] for c in inspector.get_columns('password_reset_tokens')}
+    if 'token' in prt_cols and 'token_hash' not in prt_cols:
+        op.execute("DELETE FROM password_reset_tokens")
+        op.add_column('password_reset_tokens', sa.Column('token_hash', sa.String(length=64), nullable=False))
+        op.drop_index(op.f('ix_password_reset_tokens_token'), table_name='password_reset_tokens')
+        op.create_index(op.f('ix_password_reset_tokens_token_hash'), 'password_reset_tokens', ['token_hash'], unique=False)
+        op.drop_column('password_reset_tokens', 'token')
+
+
+def downgrade() -> None:
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.drop_column('users', 'deleted_at')
+    op.add_column('password_reset_tokens', sa.Column('token', sa.VARCHAR(length=64), nullable=False))
+    op.drop_index(op.f('ix_password_reset_tokens_token_hash'), table_name='password_reset_tokens')
+    op.create_index(op.f('ix_password_reset_tokens_token'), 'password_reset_tokens', ['token'], unique=False)
+    op.drop_column('password_reset_tokens', 'token_hash')
+    op.add_column('email_verification_tokens', sa.Column('token', sa.VARCHAR(length=64), nullable=False))
+    op.drop_index(op.f('ix_email_verification_tokens_token_hash'), table_name='email_verification_tokens')
+    op.create_index(op.f('ix_email_verification_tokens_token'), 'email_verification_tokens', ['token'], unique=False)
+    op.drop_column('email_verification_tokens', 'token_hash')
+    op.drop_index(op.f('ix_oauth_accounts_user_id'), table_name='oauth_accounts')
+    op.drop_table('oauth_accounts')
+    op.drop_index(op.f('ix_devices_user_id'), table_name='devices')
+    op.drop_table('devices')
+    op.drop_index(op.f('ix_pending_commands_user_id'), table_name='pending_commands')
+    op.drop_table('pending_commands')
+    op.drop_index(op.f('ix_audit_logs_user_id'), table_name='audit_logs')
+    op.drop_table('audit_logs')
+    # ### end Alembic commands ###

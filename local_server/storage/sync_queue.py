@@ -25,6 +25,9 @@ ActionType = Literal[
 ]
 
 
+MAX_QUEUE_SIZE = 100
+
+
 class SyncQueue:
     """오프라인 변경사항 큐."""
 
@@ -51,7 +54,10 @@ class SyncQueue:
             json.dump(self._queue, f, ensure_ascii=False, indent=2)
 
     def enqueue(self, action_type: ActionType, data: dict[str, Any]) -> None:
-        """변경사항을 큐에 추가한다."""
+        """변경사항을 큐에 추가한다. 크기 초과 시 오래된 항목부터 제거."""
+        while len(self._queue) >= MAX_QUEUE_SIZE:
+            removed = self._queue.pop(0)
+            logger.warning("SyncQueue 초과 — 오래된 항목 제거: %s", removed.get("type"))
         entry = {
             "type": action_type,
             "data": data,
@@ -59,7 +65,7 @@ class SyncQueue:
         }
         self._queue.append(entry)
         self._save()
-        logger.debug("sync 큐 적재: %s", action_type)
+        logger.debug("sync 큐 적재: %s (총 %d건)", action_type, len(self._queue))
 
     def peek_all(self) -> list[dict[str, Any]]:
         """큐의 모든 항목을 반환한다 (제거하지 않음)."""

@@ -1,6 +1,6 @@
 # 로컬 서버 견고성 — Config Atomic Write · Mock 자동감지 · SyncQueue · Heartbeat 버전
 
-> 작성일: 2026-03-15 | 상태: 초안
+> 작성일: 2026-03-15 | 상태: 확정
 
 ## 1. 배경
 

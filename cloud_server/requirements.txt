@@ -28,6 +28,9 @@ httpx>=0.28.1
 # 스케줄러
 APScheduler>=3.10.4
 
+# KRX 종목 마스터 임포트 (scripts/import_krx_stocks.py)
+pykrx>=1.0.45
+
 # AI (Claude API) - v2에서 활성화
 anthropic>=0.25.0
 

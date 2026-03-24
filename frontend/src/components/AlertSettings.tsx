@@ -108,6 +108,23 @@ export default function AlertSettings() {
     <div className="space-y-4">
       {error && <p className="text-xs text-red-400">{error}</p>}
 
+      {/* 알림 채널 */}
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="text-sm font-medium text-gray-200">알림 채널</div>
+          <div className="text-xs text-gray-500 mt-0.5">경고 수신 방법</div>
+        </div>
+        <select
+          className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200"
+          defaultValue="app"
+        >
+          <option value="app">앱 내 알림</option>
+          <option value="email" disabled>이메일 (준비 중)</option>
+          <option value="telegram" disabled>텔레그램 (준비 중)</option>
+          <option value="discord" disabled>디스코드 (준비 중)</option>
+        </select>
+      </div>
+
       {/* 마스터 ON/OFF */}
       <div className="flex items-center justify-between">
         <div>

@@ -93,10 +93,28 @@ class Config:
         return result
 
     def save(self) -> None:
-        """현재 설정을 파일에 저장한다."""
+        """현재 설정을 파일에 atomic write로 저장한다.
+
+        임시 파일에 먼저 쓴 후 os.replace()로 교체하여
+        동시 호출이나 쓰기 중 프로세스 종료 시에도 파일 손상을 방지한다.
+        """
+        import contextlib
+        import tempfile
+
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        with self._path.open("w", encoding="utf-8") as f:
-            json.dump(self._data, f, ensure_ascii=False, indent=2)
+        fd, tmp_path = tempfile.mkstemp(
+            dir=str(self._path.parent),
+            suffix=".tmp",
+            prefix=".config-",
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(self._data, f, ensure_ascii=False, indent=2)
+            os.replace(tmp_path, str(self._path))
+        except Exception:
+            with contextlib.suppress(OSError):
+                os.unlink(tmp_path)
+            raise
 
     def get(self, key: str, default: Any = None) -> Any:
         """점 표기법으로 설정값을 가져온다 (예: 'server.port')."""

@@ -92,6 +92,32 @@ async def start_heartbeat() -> None:
     last_stock_master_version: str | None = None
     consecutive_failures = 0
 
+    # R4: WS heartbeat_ack에서 버전 변경을 감지하는 콜백
+    async def _on_heartbeat_ack(ack_payload: dict) -> None:
+        nonlocal last_rules_version, last_context_version
+        nonlocal last_watchlist_version, last_stock_master_version
+
+        await _check_version_changes(
+            client, ack_payload,
+            last_rules_version, last_context_version,
+            last_watchlist_version, last_stock_master_version,
+        )
+        _check_server_version(ack_payload)
+
+        if ack_payload.get("rules_version") is not None:
+            last_rules_version = str(ack_payload["rules_version"])
+        if ack_payload.get("context_version") is not None:
+            last_context_version = str(ack_payload["context_version"])
+        if ack_payload.get("watchlist_version") is not None:
+            last_watchlist_version = str(ack_payload["watchlist_version"])
+        if ack_payload.get("stock_master_version") is not None:
+            last_stock_master_version = str(ack_payload["stock_master_version"])
+
+    # WS 클라이언트에 ack 핸들러 등록
+    ws_client_init = get_ws_relay_client()
+    if ws_client_init:
+        ws_client_init.set_heartbeat_ack_handler(_on_heartbeat_ack)
+
     while True:
         try:
             payload = _build_heartbeat_payload()
@@ -101,8 +127,7 @@ async def start_heartbeat() -> None:
             if ws_client and ws_client.is_connected:
                 await ws_client.send_heartbeat(payload)
                 logger.debug("하트비트 전송 완료 (WS)")
-                # WS heartbeat_ack는 ws_relay_client._handle_heartbeat_ack에서 처리
-                # 버전 체크를 위해 HTTP 응답 형식으로 변환은 후속 개선
+                # R4: heartbeat_ack는 WS _on_heartbeat_ack 콜백에서 버전 체크 수행
                 resp = None
             else:
                 resp = await client.send_heartbeat(payload)
@@ -129,10 +154,11 @@ async def start_heartbeat() -> None:
                 if resp.get("stock_master_version") is not None:
                     last_stock_master_version = str(resp["stock_master_version"])
 
-            # 성공 → 실패 카운터 리셋 + 트레이 초록
+            # 성공 → 실패 카운터 리셋 + 트레이 초록 + SyncQueue flush
             if consecutive_failures > 0:
                 consecutive_failures = 0
                 _update_tray("ok")
+                await _flush_sync_queue(client)
 
         except CloudClientError as e:
             if e.status_code == 401:
@@ -303,3 +329,30 @@ def _send_toast(title: str, message: str) -> None:
         show_toast(title, message)
     except Exception:
         pass
+
+
+async def _flush_sync_queue(client: CloudClient) -> None:
+    """연결 복구 시 오프라인 큐를 순서대로 플러시한다."""
+    from local_server.storage.sync_queue import get_sync_queue
+    queue = get_sync_queue()
+    if queue.is_empty():
+        return
+
+    flushed = 0
+    while not queue.is_empty():
+        items = queue.peek_all()
+        if not items:
+            break
+        item = items[0]
+        try:
+            action = item.get("type", "")
+            if action.startswith("rule_"):
+                await client.fetch_rules()  # 서버 규칙으로 덮어쓰기 (last-write-wins)
+            queue.dequeue()
+            flushed += 1
+        except Exception:
+            logger.error("SyncQueue flush 실패 — 재시도 보류 (%d건 잔여)", queue.count())
+            break
+
+    if flushed:
+        logger.info("SyncQueue flush 완료: %d건 처리", flushed)

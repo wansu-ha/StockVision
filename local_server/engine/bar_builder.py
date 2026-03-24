@@ -13,6 +13,21 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
+# 분봉 저장소 (지연 임포트로 순환 참조 방지)
+_bar_store = None
+
+
+def _get_bar_store():
+    """MinuteBarStore 싱글턴 반환 (지연 초기화)."""
+    global _bar_store
+    if _bar_store is None:
+        try:
+            from local_server.storage.minute_bar import get_minute_bar_store
+            _bar_store = get_minute_bar_store()
+        except Exception as e:
+            logger.warning("MinuteBarStore 초기화 실패 (분봉 저장 비활성화): %s", e)
+    return _bar_store
+
 
 @dataclass
 class Bar:
@@ -64,7 +79,7 @@ class BarBuilder:
             bar["volume"] += volume
         else:
             # 분 경계 → 이전 분봉 완성, 새 분봉 시작
-            self._completed[symbol] = Bar(
+            completed = Bar(
                 timestamp=bar["timestamp"],
                 open=bar["open"],
                 high=bar["high"],
@@ -72,6 +87,23 @@ class BarBuilder:
                 close=bar["close"],
                 volume=bar["volume"],
             )
+            self._completed[symbol] = completed
+
+            # MinuteBarStore에 완성 분봉 저장
+            store = _get_bar_store()
+            if store is not None:
+                try:
+                    store.save_bars(symbol, [{
+                        "time": completed.timestamp.isoformat(),
+                        "open": float(completed.open),
+                        "high": float(completed.high),
+                        "low": float(completed.low),
+                        "close": float(completed.close),
+                        "volume": completed.volume,
+                    }])
+                except Exception as e:
+                    logger.warning("분봉 저장 실패 (%s): %s", symbol, e)
+
             self._current[symbol] = self._new_bar(minute_key, price, volume)
 
     def get_latest(self, symbol: str) -> Optional[dict]:

@@ -20,6 +20,7 @@ export default function AdminStats() {
     queryFn: () =>
       adminApi.getConnectionStats(period).then((r: { data: { data: DataPoint[] } }) => r.data.data ?? r.data ?? []),
     refetchInterval: 30000,
+    staleTime: 15_000,
   })
 
   return (

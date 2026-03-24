@@ -38,6 +38,7 @@ export default function DetailView({ stock, trades, rules: propRules, context, o
     queryKey: ['symbol-timeline', stock.symbol],
     queryFn: () => logsApi.getTimeline({ date_from: today, symbol: stock.symbol, limit: 10 }),
     refetchInterval: 30_000,
+    staleTime: 15_000,
   })
 
   const handleToggle = async (rule: Rule) => {

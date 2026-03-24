@@ -1,5 +1,6 @@
 # StockVision 개발 계획서 v2
 
+> SUPERSEDED — v3로 대체됨. 최신 구현 백로그: `docs/development-plan-v3.md`
 > 작성일: 2026-03-05 | 아키텍처: `docs/architecture.md` 기준 (3프로세스)
 > 상태: Phase 3 전환 시점의 7 Unit 구현 계획 (참고용)
 >

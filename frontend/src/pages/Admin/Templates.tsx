@@ -21,6 +21,7 @@ export default function AdminTemplates() {
   const { data: templates = [] } = useQuery<Template[]>({
     queryKey: ['admin', 'templates'],
     queryFn: () => adminApi.getTemplates().then((r: { data: { data: Template[] } }) => r.data.data ?? r.data ?? []),
+    staleTime: 60_000,
   })
 
   const createMutation = useMutation({

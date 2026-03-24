@@ -1,3 +1,5 @@
+> SUPERSEDED — Phase 1/2 시절 개선 목록. 현재 백로그: `docs/development-plan-v3.md`, v2 기능: `docs/roadmap.md`
+
 # 🔭 StockVision 추후 개선 사항 로드맵
 
 본 문서는 MVP 완료 이후의 기능/품질/운영 개선 항목을 우선순위별로 정리합니다. 각 항목은 간단 목적, 기대 효과, 완료 기준을 포함합니다.

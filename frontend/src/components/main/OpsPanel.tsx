@@ -91,6 +91,7 @@ export default function OpsPanel({ localConnected, brokerConnected, engineRunnin
     queryKey: ['cloudHealth'],
     queryFn: () => cloudHealth.check().then(Boolean),
     refetchInterval: 10_000,
+    staleTime: 5_000,
     retry: false,
   })
 
@@ -99,6 +100,7 @@ export default function OpsPanel({ localConnected, brokerConnected, engineRunnin
     queryKey: ['localHealth'],
     queryFn: () => localHealth.check(),
     refetchInterval: 10_000,
+    staleTime: 5_000,
     retry: false,
   })
 
@@ -108,6 +110,7 @@ export default function OpsPanel({ localConnected, brokerConnected, engineRunnin
     queryFn: () => localStatus.get(),
     enabled: localConnected,
     refetchInterval: 10_000,
+    staleTime: 5_000,
     retry: false,
   })
 
@@ -117,6 +120,7 @@ export default function OpsPanel({ localConnected, brokerConnected, engineRunnin
     queryFn: () => localLogs.summary(),
     enabled: localConnected,
     refetchInterval: 30_000,
+    staleTime: 15_000,
     retry: false,
   })
 
@@ -126,6 +130,7 @@ export default function OpsPanel({ localConnected, brokerConnected, engineRunnin
     queryFn: () => localLogs.dailyPnl(),
     enabled: localConnected,
     refetchInterval: 30_000,
+    staleTime: 15_000,
     retry: false,
   })
 

@@ -32,12 +32,14 @@ export default function AdminAiMonitor() {
     queryKey: ['admin', 'ai', 'stats'],
     queryFn: () => adminApi.getAiStats().then((r: { data: { data: AiStatsData } }) => r.data.data ?? r.data),
     refetchInterval: 30000,
+    staleTime: 15_000,
   })
 
   const { data: recent = [] } = useQuery<AiAnalysis[]>({
     queryKey: ['admin', 'ai', 'recent'],
     queryFn: () => adminApi.getAiRecent(20).then((r: { data: { data: AiAnalysis[] } }) => r.data.data ?? r.data ?? []),
     refetchInterval: 30000,
+    staleTime: 15_000,
   })
 
   const cards = [

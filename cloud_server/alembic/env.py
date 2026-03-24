@@ -14,7 +14,13 @@ from cloud_server.models.market import StockMaster, DailyBar, MinuteBar, Watchli
 from cloud_server.models.template import StrategyTemplate, BrokerServiceKey  # noqa: F401
 from cloud_server.models.fundamental import CompanyFinancial, CompanyDividend  # noqa: F401
 from cloud_server.models.ai import AIAnalysisLog  # noqa: F401
+from cloud_server.models.briefing import MarketBriefing  # noqa: F401
+from cloud_server.models.stock_briefing import StockBriefing  # noqa: F401
 from cloud_server.models.legal import LegalDocument, LegalConsent  # noqa: F401
+from cloud_server.models.pending_command import PendingCommand  # noqa: F401
+from cloud_server.models.audit_log import AuditLog  # noqa: F401
+from cloud_server.models.oauth_account import OAuthAccount  # noqa: F401
+from cloud_server.models.device import Device  # noqa: F401
 
 config = context.config
 

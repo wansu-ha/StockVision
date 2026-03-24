@@ -1,8 +1,9 @@
 /** 설정 페이지 — Bridge 상태, API Key 등록, 엔진 제어, 알림 설정, 프로필 */
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { localEngine, localBroker } from '../services/localClient'
+import { cloudAuth } from '../services/cloudClient'
 import { useAuth } from '../context/AuthContext'
 import { useAlertStore } from '../stores/alertStore'
 import { useAccountStatus } from '../hooks/useAccountStatus'
@@ -27,6 +28,36 @@ export default function Settings() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { engineRunning, brokerConnected, credentials, isMock } = useAccountStatus()
+
+  // 프로필
+  const { data: profile } = useQuery({
+    queryKey: ['profile'],
+    queryFn: cloudAuth.getProfile,
+    staleTime: 5 * 60_000,
+  })
+  const [nickname, setNickname] = useState('')
+  const [nickSaving, setNickSaving] = useState(false)
+  useEffect(() => {
+    if (profile?.nickname) setNickname(profile.nickname)
+  }, [profile?.nickname])
+
+  const handleNicknameSave = async () => {
+    const trimmed = nickname.trim()
+    if (trimmed.length < 2 || trimmed.length > 20) {
+      addAlert('닉네임은 2~20자여야 합니다.', 'warning')
+      return
+    }
+    setNickSaving(true)
+    try {
+      await cloudAuth.updateProfile(trimmed)
+      queryClient.invalidateQueries({ queryKey: ['profile'] })
+      addAlert('닉네임이 변경되었습니다.', 'success')
+    } catch {
+      addAlert('닉네임 변경 실패', 'error')
+    } finally {
+      setNickSaving(false)
+    }
+  }
 
   // Bridge 연결 상태 (localReady와 독립적으로 /health 직접 폴링)
   const [bridgeConnected, setBridgeConnected] = useState(false)
@@ -281,6 +312,26 @@ export default function Settings() {
                 disabled
                 className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-xl text-sm text-gray-400"
               />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">닉네임</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={nickname}
+                  onChange={(e) => setNickname(e.target.value)}
+                  maxLength={20}
+                  className="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-xl text-sm text-gray-100 focus:outline-none focus:border-indigo-500 transition"
+                  placeholder="닉네임 (2~20자)"
+                />
+                <button
+                  onClick={handleNicknameSave}
+                  disabled={nickSaving || nickname.trim() === (profile?.nickname ?? '')}
+                  className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition"
+                >
+                  {nickSaving ? '저장 중...' : '저장'}
+                </button>
+              </div>
             </div>
           </div>
           <div className="mt-6 pt-5 border-t border-gray-800">

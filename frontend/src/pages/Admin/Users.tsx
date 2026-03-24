@@ -25,6 +25,7 @@ export default function AdminUsers() {
       const d = r.data.data ?? r.data
       return { users: d.users ?? (Array.isArray(d) ? d : []), total: d.total ?? 0 }
     }),
+    staleTime: 30_000,
   })
 
   const toggleMutation = useMutation({

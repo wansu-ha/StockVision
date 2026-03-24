@@ -99,7 +99,8 @@ class StrategyEngine:
         symbols = list({r.get("symbol", "") for r in self._rules if r.get("is_active")})
         # 일봉 지표 계산 (yfinance)
         if symbols:
-            await self._indicator_provider.refresh(symbols)
+            market_map = await self._resolve_markets(symbols)
+            await self._indicator_provider.refresh(symbols, market_map)
         # 시세 구독
         if symbols:
             await self._broker.subscribe_quotes(symbols, self._on_quote)
@@ -403,6 +404,55 @@ class StrategyEngine:
             )
         except Exception as e:
             logger.error("손실 락 AlertMonitor.fire() 실패: %s", e)
+
+    # ── 시장 구분 조회 ──
+
+    async def _resolve_markets(self, symbols: list[str]) -> dict[str, str]:
+        """종목별 시장 구분 반환. StockMasterCache 기반, KIS get_quote 폴백.
+
+        Returns:
+            {symbol: "KOSPI"|"KOSDAQ"} — 확인된 종목만 포함 (미확인은 키 없음)
+        """
+        from local_server.storage.stock_master_cache import get_stock_master_cache
+        master_map = {
+            s["symbol"]: s.get("market", "")
+            for s in get_stock_master_cache().get_all()
+        }
+
+        market_map: dict[str, str] = {}
+        unknown: list[str] = []
+        for sym in symbols:
+            market = master_map.get(sym, "")
+            if market in ("KOSPI", "KOSDAQ"):
+                market_map[sym] = market
+            else:
+                unknown.append(sym)
+
+        for sym in unknown:
+            market = await self._lookup_market_via_broker(sym)
+            if market:
+                market_map[sym] = market
+                logger.info("KIS 폴백으로 시장 확인 [%s]: %s", sym, market)
+
+        return market_map
+
+    async def _lookup_market_via_broker(self, symbol: str) -> str:
+        """브로커 get_quote raw 응답에서 시장 구분 추출 (KIS 전용).
+
+        KIS get_quote 응답의 output.rprs_mrkt_kor_name을 파싱한다.
+        KIS 미연결, 키움, Mock 등에서는 조용히 실패하여 빈 문자열 반환.
+        """
+        try:
+            quote = await self._broker.get_quote(symbol)
+            raw_output = getattr(quote, "raw", {}).get("output", {})
+            market_name = raw_output.get("rprs_mrkt_kor_name", "")
+            if "코스닥" in market_name:
+                return "KOSDAQ"
+            if "코스피" in market_name or "유가증권" in market_name:
+                return "KOSPI"
+        except Exception:
+            pass
+        return ""
 
     # ── WS 콜백 ──
 

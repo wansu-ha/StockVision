@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from cloud_server.api.dependencies import current_user, require_admin
 from cloud_server.core.database import get_db
+from cloud_server.core.rate_limit import check_ai_rate
 from cloud_server.models.ai import AIAnalysisLog
 from cloud_server.services.ai_service import AIService
 from cloud_server.services.briefing_service import BriefingService
@@ -41,6 +42,7 @@ def analyze(
     db: Session = Depends(get_db),
 ):
     """종목 AI 분석"""
+    check_ai_rate(user["sub"])
     if type not in _VALID_TYPES:
         raise HTTPException(
             status_code=422,

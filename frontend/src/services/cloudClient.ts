@@ -84,12 +84,10 @@ export const cloudAuth = {
     client.post('/api/v1/auth/logout', { refresh_token: refreshToken }).then((r) => r.data),
   verifyEmail: (token: string) =>
     client.get('/api/v1/auth/verify-email', { params: { token } }).then((r) => r.data),
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  updateProfile: (_nickname: string) => {
-    // TODO: 서버에 /api/v1/auth/profile 엔드포인트 없음 — 클라우드 서버 구현 후 연결
-    console.warn('cloudAuth.updateProfile: 서버 엔드포인트 미구현')
-    return Promise.resolve({ success: false, message: 'not implemented' })
-  },
+  getProfile: () =>
+    client.get('/api/v1/auth/profile').then((r) => r.data.data ?? r.data),
+  updateProfile: (nickname: string) =>
+    client.patch('/api/v1/auth/profile', { nickname }).then((r) => r.data),
 }
 
 /** 규칙 CRUD — /api/v1/rules */
@@ -175,8 +173,8 @@ export interface StockQuote {
 }
 
 export const cloudBars = {
-  get: (symbol: string, start?: string, end?: string) =>
-    client.get<{ data: DailyBar[] }>(`/api/v1/stocks/${symbol}/bars`, { params: { start, end } })
+  get: (symbol: string, start?: string, end?: string, resolution?: string) =>
+    client.get<{ data: DailyBar[] }>(`/api/v1/stocks/${symbol}/bars`, { params: { start, end, resolution } })
       .then((r) => r.data.data ?? []),
 }
 
