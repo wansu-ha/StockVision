@@ -1,9 +1,11 @@
 ; StockVision Bridge — Inno Setup 스크립트
-; 빌드: iscc local_server/installer.iss
+; 빌드: iscc /DMyAppVersion={버전} local_server/installer.iss
 ; 사전 조건: PyInstaller onedir 빌드 완료 (dist/stockvision-local/)
 
 #define MyAppName "StockVision Bridge"
-#define MyAppVersion "0.1.3"
+#ifndef MyAppVersion
+  #define MyAppVersion "0.0.0"
+#endif
 #define MyAppPublisher "StockVision"
 #define MyAppExeName "stockvision-local.exe"
 #define MyAppURL "https://github.com/wansu-ha/StockVision"
