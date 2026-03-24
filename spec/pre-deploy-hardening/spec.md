@@ -132,8 +132,8 @@
 ### C3: Alembic
 
 - [x] `alembic.ini` + `cloud_server/alembic/` 디렉토리 존재
-- [ ] `alembic revision --autogenerate` 실행 가능
-- [ ] `alembic upgrade head` → 빈 DB에 전체 테이블 생성
+- [x] `alembic revision --autogenerate` 실행 가능 (DB가 head일 때 "No changes" 정상 출력)
+- [x] `alembic upgrade head` → 기존 DB에 증분 마이그레이션 적용 (Render 운영 DB 적용 완료). 신규 설치는 init_db() + stamp 방식 사용
 
 ### C4: CORS
 
