@@ -19,6 +19,8 @@ def test_register_success(mock_email, client, db):
     res = client.post("/api/v1/auth/register", json={
         "email": "new@example.com",
         "password": "securepass123",
+        "terms_agreed": True,
+        "privacy_agreed": True,
     })
     assert res.status_code == 200
     body = res.json()
@@ -32,6 +34,8 @@ def test_register_duplicate_email(mock_email, client, db):
     res = client.post("/api/v1/auth/register", json={
         "email": "dup@example.com",
         "password": "securepass123",
+        "terms_agreed": True,
+        "privacy_agreed": True,
     })
     assert res.status_code == 409
 
@@ -53,12 +57,14 @@ def test_verify_email(mock_email, client, db):
     client.post("/api/v1/auth/register", json={
         "email": "verify@example.com",
         "password": "securepass123",
+        "terms_agreed": True,
+        "privacy_agreed": True,
     })
-    # DB에서 토큰 조회
-    ev = db.query(EmailVerificationToken).first()
-    assert ev is not None
+    # 이메일 mock에서 raw 토큰 추출 (S5: DB에는 해시만 저장)
+    raw_token = mock_email.call_args[0][1]
+    assert raw_token is not None
 
-    res = client.get(f"/api/v1/auth/verify-email?token={ev.token}")
+    res = client.get(f"/api/v1/auth/verify-email?token={raw_token}")
     assert res.status_code == 200
     assert res.json()["success"] is True
 
@@ -170,13 +176,13 @@ def test_forgot_and_reset_password(mock_email, client, db):
     assert res.status_code == 200
     mock_email.assert_called_once()
 
-    # DB에서 토큰 조회
-    prt = db.query(PasswordResetToken).first()
-    assert prt is not None
+    # 이메일 mock에서 raw 토큰 추출 (S5: DB에는 해시만 저장)
+    raw_token = mock_email.call_args[0][1]
+    assert raw_token is not None
 
     # reset
     res2 = client.post("/api/v1/auth/reset-password", json={
-        "token": prt.token,
+        "token": raw_token,
         "new_password": "newpass12",
     })
     assert res2.status_code == 200
