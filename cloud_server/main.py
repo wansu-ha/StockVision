@@ -74,6 +74,8 @@ async def lifespan(app: FastAPI):
         _scheduler = CollectorScheduler()
         _scheduler.start()
         logger.info("[OK] 수집 스케줄러 시작됨")
+        # RM-2: 서버 재시작 시 누락 작업 보정
+        await _scheduler.catch_up_missed_jobs()
     except Exception as e:
         logger.error(f"수집 스케줄러 시작 실패: {e}")
 

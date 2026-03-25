@@ -52,68 +52,62 @@ class CollectorScheduler:
 
     def start(self) -> None:
         """스케줄러 시작 (FastAPI startup에서 호출)"""
+        _common = {"replace_existing": True, "coalesce": True, "max_instances": 1}
+
         # 09:00 KST — KIS WS 시작
         self.scheduler.add_job(
             self.start_kis_ws,
             trigger=CronTrigger(hour=9, minute=0, timezone="Asia/Seoul"),
-            id="kis_ws_start",
-            replace_existing=True,
+            id="kis_ws_start", **_common,
         )
 
         # 16:00 KST — 일봉 저장
         self.scheduler.add_job(
             self.save_daily_bars,
             trigger=CronTrigger(hour=16, minute=0, timezone="Asia/Seoul"),
-            id="daily_bars",
-            replace_existing=True,
+            id="daily_bars", **_common,
         )
 
         # 08:00 KST — 종목 마스터 갱신
         self.scheduler.add_job(
             self.update_stock_master,
             trigger=CronTrigger(hour=8, minute=0, timezone="Asia/Seoul"),
-            id="stock_master",
-            replace_existing=True,
+            id="stock_master", **_common,
         )
 
         # 17:00 KST — yfinance 보조 수집
         self.scheduler.add_job(
             self.collect_yfinance,
             trigger=CronTrigger(hour=17, minute=0, timezone="Asia/Seoul"),
-            id="yfinance",
-            replace_existing=True,
+            id="yfinance", **_common,
         )
 
         # 18:00 KST — 데이터 정합성 체크
         self.scheduler.add_job(
             self.check_data_integrity,
             trigger=CronTrigger(hour=18, minute=0, timezone="Asia/Seoul"),
-            id="integrity_check",
-            replace_existing=True,
+            id="integrity_check", **_common,
         )
 
         # 08:30 KST 월요일 — DART corp_code 매핑 갱신
         self.scheduler.add_job(
             self.update_corp_codes,
             trigger=CronTrigger(day_of_week="mon", hour=8, minute=30, timezone="Asia/Seoul"),
-            id="corp_code_update",
-            replace_existing=True,
+            id="corp_code_update", **_common,
         )
 
         # 06:00 KST 평일 — 시장 브리핑 생성
         self.scheduler.add_job(
             self._run_briefing,
             trigger=CronTrigger(hour=6, minute=0, day_of_week="mon-fri", timezone="Asia/Seoul"),
-            id="market_briefing",
-            replace_existing=True,
+            id="market_briefing", **_common,
         )
 
         # 07:00 KST 평일 — 종목별 AI 분석 생성
         self.scheduler.add_job(
             self._run_stock_analysis,
             trigger=CronTrigger(hour=7, minute=0, day_of_week="mon-fri", timezone="Asia/Seoul"),
-            id="stock_analysis",
-            replace_existing=True,
+            id="stock_analysis", **_common,
         )
 
         # stock_master가 비어있으면 서버 시작 직후 1회 수집
@@ -126,6 +120,89 @@ class CollectorScheduler:
 
         self.scheduler.start()
         logger.info("수집 스케줄러 시작됨")
+
+    async def catch_up_missed_jobs(self, *, _now: datetime | None = None) -> None:
+        """서버 재시작 시 누락된 일일 작업 보정.
+
+        각 작업의 스케줄 시각이 이미 지났으면서 오늘 실행 결과가 DB에 없으면
+        즉시 실행한다. 모든 작업이 멱등이므로 중복 실행 안전.
+        """
+        from zoneinfo import ZoneInfo
+        KST = ZoneInfo("Asia/Seoul")
+        now = _now or datetime.now(KST)
+        hour = now.hour
+        today = now.date()
+        is_weekday = today.weekday() < 5
+
+        logger.info("catch-up 체크 시작: %s %02d시 (weekday=%s)", today, hour, is_weekday)
+        caught_up = []
+
+        db = get_db_session()
+        try:
+            from sqlalchemy import func
+            from cloud_server.models.market import StockMaster, DailyBar
+            from cloud_server.models.briefing import MarketBriefing
+            from cloud_server.models.stock_briefing import StockBriefing
+
+            # stock_master (08:00) — updated_at이 20시간 이상 경과
+            if hour >= 8:
+                latest = db.query(func.max(StockMaster.updated_at)).scalar()
+                # updated_at은 naive UTC — naive로 비교
+                now_naive = datetime.utcnow()
+                age_hours = (now_naive - latest).total_seconds() / 3600 if latest else float('inf')
+                if age_hours > 20:
+                    caught_up.append("stock_master")
+                    await self.update_stock_master()
+
+            # daily_bars (16:00) — 오늘 bar가 하나도 없으면
+            if hour >= 16:
+                count = db.query(DailyBar).filter(DailyBar.date == today).count()
+                if count == 0:
+                    caught_up.append("daily_bars")
+                    await self.save_daily_bars()
+
+            # yfinance (17:00) — 글로벌 인덱스 bar 없으면
+            if hour >= 17:
+                idx_count = db.query(DailyBar).filter(
+                    DailyBar.date == today,
+                    DailyBar.symbol.in_(DEFAULT_SYMBOLS),
+                ).count()
+                if idx_count == 0:
+                    caught_up.append("yfinance")
+                    await self.collect_yfinance()
+
+            # integrity_check (18:00) — 항상 실행 (멱등)
+            if hour >= 18:
+                caught_up.append("integrity_check")
+                await self.check_data_integrity()
+
+            # briefing (06:00, 평일) — 오늘 브리핑 없으면
+            if is_weekday and hour >= 6:
+                has_briefing = db.query(MarketBriefing).filter(
+                    MarketBriefing.date == today,
+                ).first()
+                if not has_briefing:
+                    caught_up.append("market_briefing")
+                    await self._run_briefing()
+
+            # stock_analysis (07:00, 평일) — 오늘 분석 없으면
+            if is_weekday and hour >= 7:
+                analysis_count = db.query(StockBriefing).filter(
+                    StockBriefing.date == today,
+                ).count()
+                if analysis_count == 0:
+                    caught_up.append("stock_analysis")
+                    await self._run_stock_analysis()
+
+        except Exception as e:
+            logger.error("catch-up 실패: %s", e)
+        finally:
+            db.close()
+
+        if caught_up:
+            logger.info("catch-up 완료: %s", caught_up)
+        else:
+            logger.info("catch-up 불필요 — 모든 작업 이미 실행됨")
 
     async def _bootstrap_stock_master(self) -> None:
         """stock_master가 비어있거나 오래됐으면 즉시 수집"""
@@ -164,6 +241,11 @@ class CollectorScheduler:
 
     async def start_kis_ws(self) -> None:
         """KIS WS 시작 (서비스 키 로드 → 인증 → 구독 → 리스닝)"""
+        # RM-2: 중복 실행 guard
+        if self._listen_task and not self._listen_task.done():
+            logger.warning("KIS WS 이미 실행 중 — skip")
+            return
+
         global _collector_status
         try:
             db = get_db_session()

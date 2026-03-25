@@ -141,3 +141,4 @@ prototypes/
 # Temporary files
 *.tmp
 *.temp
+frontend/test-results/
