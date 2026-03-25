@@ -27,6 +27,12 @@ class BoolLit(Node):
 
 
 @dataclass(frozen=True, slots=True)
+class StringLit(Node):
+    """문자열 리터럴 — 타임프레임 지정자 등."""
+    value: str = ""
+
+
+@dataclass(frozen=True, slots=True)
 class FieldRef(Node):
     """내장 필드 참조 (현재가, 거래량 등)."""
     name: str = ""

@@ -7,6 +7,7 @@ from enum import Enum, auto
 class TokenType(Enum):
     # 리터럴
     NUMBER = auto()
+    STRING = auto()    # "5m", "1d" 등 타임프레임 문자열
     BOOL_LIT = auto()  # true, false
 
     # 식별자

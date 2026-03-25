@@ -22,23 +22,31 @@ BUILTIN_FIELDS: set[str] = {
 
 @dataclass(frozen=True, slots=True)
 class BuiltinFuncSpec:
-    """내장 함수 명세."""
+    """내장 함수 명세.
+
+    param_min/param_max: 인자 수 범위.
+    모든 지표 함수는 마지막 인자로 타임프레임 문자열("5m", "1d" 등)을
+    선택적으로 받을 수 있다.
+    """
     name: str
-    param_count: int  # -1 = 가변
+    param_min: int
+    param_max: int  # -1 = 가변
     return_type: str  # "number" | "boolean"
 
 
 BUILTIN_FUNCTIONS: dict[str, BuiltinFuncSpec] = {
-    "RSI": BuiltinFuncSpec("RSI", 1, "number"),
-    "MA": BuiltinFuncSpec("MA", 1, "number"),
-    "EMA": BuiltinFuncSpec("EMA", 1, "number"),
-    "MACD": BuiltinFuncSpec("MACD", 0, "number"),
-    "MACD_SIGNAL": BuiltinFuncSpec("MACD_SIGNAL", 0, "number"),
-    "볼린저_상단": BuiltinFuncSpec("볼린저_상단", 1, "number"),
-    "볼린저_하단": BuiltinFuncSpec("볼린저_하단", 1, "number"),
-    "평균거래량": BuiltinFuncSpec("평균거래량", 1, "number"),
-    "상향돌파": BuiltinFuncSpec("상향돌파", 2, "boolean"),
-    "하향돌파": BuiltinFuncSpec("하향돌파", 2, "boolean"),
+    # 지표 함수: 기존 인자 + 선택적 타임프레임
+    "RSI": BuiltinFuncSpec("RSI", 1, 2, "number"),
+    "MA": BuiltinFuncSpec("MA", 1, 2, "number"),
+    "EMA": BuiltinFuncSpec("EMA", 1, 2, "number"),
+    "MACD": BuiltinFuncSpec("MACD", 0, 1, "number"),
+    "MACD_SIGNAL": BuiltinFuncSpec("MACD_SIGNAL", 0, 1, "number"),
+    "볼린저_상단": BuiltinFuncSpec("볼린저_상단", 1, 2, "number"),
+    "볼린저_하단": BuiltinFuncSpec("볼린저_하단", 1, 2, "number"),
+    "평균거래량": BuiltinFuncSpec("평균거래량", 1, 2, "number"),
+    # 크로스오버: 인자 고정
+    "상향돌파": BuiltinFuncSpec("상향돌파", 2, 2, "boolean"),
+    "하향돌파": BuiltinFuncSpec("하향돌파", 2, 2, "boolean"),
 }
 
 # ── 내장 패턴 함수 (괄호 필수, 인자 없음 — spec §3) ──
