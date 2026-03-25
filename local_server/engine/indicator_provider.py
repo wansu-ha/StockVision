@@ -14,9 +14,10 @@ import logging
 from datetime import date
 from typing import Any
 
-import numpy as np
 import pandas as pd
 import yfinance as yf
+
+from sv_core.indicators import calc_all_indicators
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +116,7 @@ class IndicatorProvider:
             try:
                 closes = df["Close"].squeeze()
                 volumes = df["Volume"].squeeze()
-                indicators = _calc_all_indicators(closes, volumes)
+                indicators = calc_all_indicators(closes, volumes)
                 if indicators:
                     results[sym] = indicators
             except Exception:
@@ -167,92 +168,4 @@ def _download_batch(tickers: list[str]) -> dict[str, pd.DataFrame]:
     return result
 
 
-# ── 지표 계산 순수 함수 ──
-
-
-def _calc_all_indicators(closes: pd.Series, volumes: pd.Series) -> dict:
-    """evaluator가 기대하는 전체 indicators dict를 생성한다."""
-    macd, macd_signal = _calc_macd(closes)
-    bb_upper_20, bb_lower_20 = _calc_bollinger(closes, 20)
-
-    return {
-        # RSI
-        "rsi_14": _calc_rsi(closes, 14),
-        "rsi_21": _calc_rsi(closes, 21),
-        # SMA
-        "ma_5": _calc_sma(closes, 5),
-        "ma_10": _calc_sma(closes, 10),
-        "ma_20": _calc_sma(closes, 20),
-        "ma_60": _calc_sma(closes, 60),
-        # EMA
-        "ema_12": _calc_ema(closes, 12),
-        "ema_20": _calc_ema(closes, 20),
-        "ema_26": _calc_ema(closes, 26),
-        # MACD
-        "macd": macd,
-        "macd_signal": macd_signal,
-        # 볼린저
-        "bb_upper_20": bb_upper_20,
-        "bb_lower_20": bb_lower_20,
-        # 평균 거래량
-        "avg_volume_20": _calc_avg_volume(volumes, 20),
-    }
-
-
-def _calc_rsi(prices: pd.Series, period: int = 14) -> float | None:
-    if len(prices) < period + 1:
-        return None
-    delta = prices.diff()
-    gain = delta.where(delta > 0, 0).rolling(period).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(period).mean()
-    rs = gain / loss.replace(0, np.nan)
-    rsi = 100 - (100 / (1 + rs))
-    val = rsi.iloc[-1]
-    return round(float(val), 2) if not np.isnan(val) else None
-
-
-def _calc_sma(prices: pd.Series, period: int) -> float | None:
-    if len(prices) < period:
-        return None
-    val = prices.rolling(period).mean().iloc[-1]
-    return round(float(val), 2) if not np.isnan(val) else None
-
-
-def _calc_ema(prices: pd.Series, period: int) -> float | None:
-    if len(prices) < period:
-        return None
-    val = prices.ewm(span=period).mean().iloc[-1]
-    return round(float(val), 2) if not np.isnan(val) else None
-
-
-def _calc_macd(prices: pd.Series) -> tuple[float | None, float | None]:
-    if len(prices) < 35:
-        return None, None
-    ema12 = prices.ewm(span=12).mean()
-    ema26 = prices.ewm(span=26).mean()
-    macd_line = ema12 - ema26
-    signal = macd_line.ewm(span=9).mean()
-    m, s = macd_line.iloc[-1], signal.iloc[-1]
-    if np.isnan(m) or np.isnan(s):
-        return None, None
-    return round(float(m), 2), round(float(s), 2)
-
-
-def _calc_bollinger(prices: pd.Series, period: int = 20) -> tuple[float | None, float | None]:
-    if len(prices) < period:
-        return None, None
-    sma = prices.rolling(period).mean()
-    std = prices.rolling(period).std()
-    upper = sma + 2 * std
-    lower = sma - 2 * std
-    u, l = upper.iloc[-1], lower.iloc[-1]
-    if np.isnan(u) or np.isnan(l):
-        return None, None
-    return round(float(u), 2), round(float(l), 2)
-
-
-def _calc_avg_volume(volumes: pd.Series, period: int = 20) -> float | None:
-    if len(volumes) < period:
-        return None
-    val = volumes.rolling(period).mean().iloc[-1]
-    return round(float(val), 2) if not np.isnan(val) else None
+# 지표 계산 함수는 sv_core.indicators.calculator로 이동됨
