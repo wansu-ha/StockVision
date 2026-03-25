@@ -15,7 +15,7 @@ import pandas as pd
 from sqlalchemy.orm import Session
 
 from sv_core.indicators.calculator import calc_all_indicators
-from sv_core.parsing.evaluator import RuleEvaluator
+from sv_core.parsing.evaluator import evaluate as dsl_evaluate
 from sv_core.parsing.parser import parse
 
 logger = logging.getLogger(__name__)
@@ -73,7 +73,6 @@ class BacktestRunner:
 
     def __init__(self, db: Session):
         self._db = db
-        self._evaluator = RuleEvaluator()
 
     async def run(
         self,
@@ -238,7 +237,6 @@ class BacktestRunner:
         trades: list[Trade] = []
         equity_curve: list[float] = []
 
-        evaluator = self._evaluator
         eval_state: dict[str, Any] = {}
 
         for i, bar in enumerate(bars):
@@ -276,7 +274,7 @@ class BacktestRunner:
 
             # DSL 평가
             try:
-                buy_signal, sell_signal = evaluator.evaluate(ast, context, eval_state)
+                buy_signal, sell_signal = dsl_evaluate(ast, context, eval_state)
             except Exception:
                 continue
 
