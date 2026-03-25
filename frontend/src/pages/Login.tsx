@@ -47,6 +47,7 @@ export default function Login() {
           <div>
             <label className="block text-sm font-medium mb-1 text-gray-400">이메일</label>
             <input
+              data-testid="login-email"
               type="email"
               autoComplete="username"
               value={email}
@@ -58,6 +59,7 @@ export default function Login() {
           <div>
             <label className="block text-sm font-medium mb-1 text-gray-400">비밀번호</label>
             <input
+              data-testid="login-password"
               type="password"
               autoComplete="current-password"
               value={password}
@@ -76,6 +78,7 @@ export default function Login() {
             로그인 유지
           </label>
           <button
+            data-testid="login-submit"
             type="submit"
             disabled={loading}
             className="w-full py-2 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition"
