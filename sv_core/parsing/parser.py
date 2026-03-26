@@ -17,6 +17,7 @@ from .ast_nodes import (
     NumberLit,
     Script,
     SellBlock,
+    StringLit,
     UnaryOp,
 )
 from .builtins import (
@@ -43,6 +44,8 @@ def _infer_type(node: Node, custom_funcs: dict[str, str]) -> str:
         return _NUMBER
     if isinstance(node, BoolLit):
         return _BOOLEAN
+    if isinstance(node, StringLit):
+        return "string"
     if isinstance(node, FieldRef):
         return _NUMBER  # 내장 필드는 모두 숫자
     if isinstance(node, Comparison):
@@ -321,6 +324,11 @@ class Parser:
             self._advance()
             return NumberLit(value=float(tok.value), line=tok.line, col=tok.col)
 
+        # 문자열 리터럴 (타임프레임 등)
+        if tok.type == TokenType.STRING:
+            self._advance()
+            return StringLit(value=tok.value, line=tok.line, col=tok.col)
+
         # 불리언 리터럴
         if tok.type == TokenType.BOOL_LIT:
             self._advance()
@@ -387,11 +395,12 @@ class Parser:
             # 3. 내장 함수
             spec = get_builtin_func(name)
             if spec is not None:
-                if spec.param_count >= 0 and len(args) != spec.param_count:
-                    raise DSLSyntaxError(
-                        f"'{name}'은 {spec.param_count}개 인자가 필요하지만 {len(args)}개가 전달되었습니다",
-                        name_tok.line, name_tok.col,
-                    )
+                if spec.param_max >= 0 and not (spec.param_min <= len(args) <= spec.param_max):
+                    if spec.param_min == spec.param_max:
+                        msg = f"'{name}'은 {spec.param_min}개 인자가 필요하지만 {len(args)}개가 전달되었습니다"
+                    else:
+                        msg = f"'{name}'은 {spec.param_min}~{spec.param_max}개 인자가 필요하지만 {len(args)}개가 전달되었습니다"
+                    raise DSLSyntaxError(msg, name_tok.line, name_tok.col)
                 return FuncCall(name=name, args=tuple(args), line=name_tok.line, col=name_tok.col)
 
             # 4. 미정의 함수

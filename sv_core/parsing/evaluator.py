@@ -20,6 +20,7 @@ from .ast_nodes import (
     NumberLit,
     Script,
     SellBlock,
+    StringLit,
     UnaryOp,
 )
 from .builtins import (
@@ -85,6 +86,9 @@ class _Evaluator:
             return node.value
 
         if isinstance(node, BoolLit):
+            return node.value
+
+        if isinstance(node, StringLit):
             return node.value
 
         if isinstance(node, FieldRef):

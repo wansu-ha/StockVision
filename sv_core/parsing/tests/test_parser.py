@@ -143,8 +143,14 @@ class TestSemanticErrors:
             parse("f() = true\n매수: f(1)\n매도: true")
 
     def test_builtin_func_wrong_args(self):
-        with pytest.raises(DSLSyntaxError, match="1개 인자가 필요하지만"):
-            parse("매수: RSI(14, 20) > 30\n매도: true")
+        # RSI는 1~2개 인자 허용 (2번째는 타임프레임). 3개는 에러.
+        with pytest.raises(DSLSyntaxError, match="1~2개 인자가 필요하지만"):
+            parse('매수: RSI(14, "5m", 99) > 30\n매도: true')
+
+    def test_builtin_func_timeframe_arg(self):
+        """RSI(14, "5m") — 타임프레임 인자 허용."""
+        ast = parse('매수: RSI(14, "5m") > 30\n매도: true')
+        assert ast.buy_block is not None
 
 
 class TestTypeErrors:

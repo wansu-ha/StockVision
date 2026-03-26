@@ -48,6 +48,26 @@ def tokenize(source: str) -> list[Token]:
                 pos += 1
             continue
 
+        # 문자열 리터럴 — "..." (타임프레임 등)
+        if ch == '"':
+            start = pos
+            start_col = col
+            pos += 1
+            col += 1
+            while pos < length and source[pos] != '"':
+                if source[pos] in ("\n", "\r"):
+                    raise DSLSyntaxError("닫히지 않은 문자열", line, start_col)
+                pos += 1
+                col += 1
+            if pos >= length:
+                raise DSLSyntaxError("닫히지 않은 문자열", line, start_col)
+            # 닫는 따옴표 건너뛰기
+            pos += 1
+            col += 1
+            value = source[start + 1 : pos - 1]  # 따옴표 제외
+            tokens.append(Token(TokenType.STRING, value, line, start_col))
+            continue
+
         # 숫자 리터럴
         if ch.isdigit():
             start = pos
