@@ -5,6 +5,7 @@ import StockList from './pages/StockList'
 import ExecutionLog from './pages/ExecutionLog'
 import StrategyBuilder from './pages/StrategyBuilder'
 import StrategyList from './pages/StrategyList'
+const Backtest = lazy(() => import('./pages/Backtest'))
 import Settings from './pages/Settings'
 const AdminLayout = lazy(() => import('./pages/Admin'))
 const AdminDash = lazy(() => import('./pages/Admin/Dashboard'))
@@ -105,6 +106,7 @@ function AppRoutes() {
               <Route path="/strategies/new" element={<StrategyBuilder />} />
               <Route path="/strategies/:id/edit" element={<StrategyBuilder />} />
               <Route path="/strategy" element={<StrategyBuilder />} />
+              <Route path="/backtest" element={<Suspense fallback={null}><Backtest /></Suspense>} />
               <Route path="/admin" element={<AdminGuard><Suspense fallback={null}><AdminLayout /></Suspense></AdminGuard>}>
                 <Route index element={<Suspense fallback={null}><AdminDash /></Suspense>} />
                 <Route path="users" element={<Suspense fallback={null}><AdminUsers /></Suspense>} />

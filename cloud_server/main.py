@@ -40,6 +40,7 @@ from cloud_server.api.ai import router as ai_router
 from cloud_server.api.ws_relay import router as ws_relay_router
 from cloud_server.api.devices import router as devices_router
 from cloud_server.api.legal import router as legal_router
+from cloud_server.api.backtest import router as backtest_router
 
 logger = logging.getLogger(__name__)
 
@@ -144,6 +145,7 @@ app.include_router(ai_router)
 app.include_router(ws_relay_router)
 app.include_router(devices_router)
 app.include_router(legal_router)
+app.include_router(backtest_router)
 
 
 # ── 기본 엔드포인트 ──────────────────────────────────────────────────

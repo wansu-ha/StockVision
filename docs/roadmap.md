@@ -1,6 +1,6 @@
 # StockVision 로드맵
 
-> 최종 갱신: 2026-03-12 (레포 분리 마일스톤 추가)
+> 최종 갱신: 2026-03-26 (risk-mitigation 완료, 테스트 현황 갱신)
 > 역할: 개발 우선순위와 Phase 간 의존성을 요약하는 최상위 방향 문서.
 > 상세 제품 방향: `docs/product/product-direction-log.md`
 
@@ -123,6 +123,21 @@ Step 4
 > 벤치마크: `docs/research/phase-c-dashboard-benchmark.md` §7.
 
 **끝나면**: 밖에서 폰으로 상태 확인 + 긴급 정지 가능. 재개는 추가 확인을 거쳐야만 가능.
+
+### 테스트 및 안정성 현황 (2026-03-26)
+
+| 레이어 | 테스트 수 | 비고 |
+|--------|----------|------|
+| cloud_server | 70 | WS relay 8개, scheduler catch-up 3개 포함 |
+| local_server | 123 | 브로커 + 엔진 + 라우터 + 스토리지 |
+| sv_core (DSL) | 69 | 파서/평가기/렉서 |
+| frontend E2E | 9 | Playwright (스모크 수준, 비즈니스 로직 미검증) |
+| **합계** | **271** | |
+
+**risk-mitigation 완료 (2026-03-26)**: `spec/risk-mitigation/`
+- WS relay kill-switch 경로 테스트
+- APScheduler catch-up (서버 재시작 시 누락 작업 보정)
+- Playwright E2E 기반 구축
 
 ### Phase D — "먼저 찾아온다" ← 현재
 

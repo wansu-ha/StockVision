@@ -59,9 +59,10 @@ async def test_catchup_skips_already_done(db, scheduler):
 
     today = date(2026, 3, 25)
 
-    # stock_master: 최근 갱신 (1시간 전)
+    # stock_master: 최근 갱신 (utcnow 기준 1시간 전)
+    from datetime import timedelta
     sm = StockMaster(symbol="005930", name="삼성전자", market="KOSPI",
-                     updated_at=datetime(2026, 3, 25, 9, 30))
+                     updated_at=datetime.utcnow() - timedelta(hours=1))
     db.add(sm)
 
     # daily_bars: 오늘 데이터 존재
@@ -69,9 +70,9 @@ async def test_catchup_skips_already_done(db, scheduler):
                    low=69000, close=70500, volume=1000000)
     db.add(bar)
 
-    # yfinance 인덱스 bar 존재
+    # yfinance 인덱스 bar 존재 (전체)
     from cloud_server.services.yfinance_service import DEFAULT_SYMBOLS
-    for sym in DEFAULT_SYMBOLS[:2]:
+    for sym in DEFAULT_SYMBOLS:
         db.add(DailyBar(symbol=sym, date=today, open=100, high=101,
                         low=99, close=100, volume=5000))
 
