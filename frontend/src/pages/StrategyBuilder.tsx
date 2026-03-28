@@ -222,6 +222,7 @@ export default function StrategyBuilder() {
             <div>
               <label className="block text-sm font-medium mb-1">전략 이름</label>
               <input
+                data-testid="strategy-name-input"
                 value={form.name}
                 onChange={e => setForm({ ...form, name: e.target.value })}
                 className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-indigo-500 transition"
@@ -233,6 +234,7 @@ export default function StrategyBuilder() {
               <div>
                 <label className="block text-sm font-medium mb-1">종목 코드</label>
                 <input
+                  data-testid="strategy-symbol-input"
                   value={form.symbol}
                   onChange={e => setForm({ ...form, symbol: e.target.value })}
                   className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-indigo-500 transition"
@@ -327,6 +329,7 @@ export default function StrategyBuilder() {
 
           <div className="flex gap-3 mt-6">
             <button
+              data-testid="save-strategy-btn"
               onClick={() => saveMut.mutate()}
               disabled={saveMut.isPending || !form.name || !form.symbol}
               className="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700 disabled:opacity-50 text-sm"
@@ -334,7 +337,7 @@ export default function StrategyBuilder() {
               {saveMut.isPending ? '저장 중...' : '저장'}
             </button>
             <button
-              data-testid="strategy-backtest"
+              data-testid="backtest-btn"
               onClick={handleBacktest}
               disabled={btLoading || !form.symbol}
               className="flex-1 bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700 disabled:opacity-50 text-sm"
