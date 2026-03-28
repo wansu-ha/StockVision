@@ -1,6 +1,6 @@
 # 리서치: 추세선 기반 자동매매 플랫폼
 
-> 작성일: 2026-03-28 | 목적: StockVision 차트 조건 매매 기능 설계 참고
+> 작성일: 2026-03-28 | 목적: StockVision 차트 조건 매매 기능 설계 참고 | 업데이트: 2026-03-28 (2차 심층 조사)
 
 ---
 
@@ -160,14 +160,58 @@
 
 ---
 
+## TrendSpider 자동 추세선 알고리즘 (심층)
+
+2차 조사에서 확인된 세부 동작 방식:
+
+- 전체 가능한 추세선을 수학적으로 스캔 → 각 선의 바운스/돌파 횟수로 **점수 산정**
+- 상위 1% 선만 "Most Relevant" 뷰에 표시 (노이즈 제거)
+- 멀티타임프레임(일봉+4시간봉+1시간봉) 동시 오버레이 → **컨플루언스 구간** 탐지
+- 돌파 판정: 해당 타임프레임 캔들 1개가 추세선 반대편에서 **완전히 종가 마감**되어야 유효
+- 2026년 Sidekick AI 추가: 텍스트 프롬프트로 스캐너/알림/전략 설정 가능
+
+## 다항식 회귀 상세 (Polynomial Regression)
+
+### 플랫폼별 차수 지원
+
+| 플랫폼 | 지원 차수 | 스캐너 연동 | 자동 실행 |
+|--------|----------|------------|---------|
+| ThinkorSwim | 1~6차 선택 | ✅ (2차만) | ThinkScript |
+| TradingView (alexgrover) | 2차 고정 | 알림만 | 웹훅 필요 |
+| TradingView (ChartPrime) | 가변 (행렬) | 알림만 | 웹훅 필요 |
+| cTrader (ClickAlgo) | 가변 | ✅ | cBot 자동 실행 |
+
+### 학술 연구 결과 (MDPI 2024)
+- Nasdaq100 대상 다항식 이동 회귀 밴드(MRB) 시스템 실험 (2017~2024.3)
+- 4차 다항식 MRB가 평균 순이익 **$162.73**으로 최고 성과
+- ±2 표준편차 밴드로 거래신호 생성 → 완전 자동화 시스템으로 수익성 확인
+
+## 키움증권 HTS 추가 확인 사항
+
+2차 조사로 확인된 내용:
+- **자동추세선** 기능: 단기/중기/장기 버튼 → 알고리즘이 파동전향수 기반으로 자동 작도
+- **직선회귀채널**: Insert > Drawing > Regression Channel, 상단(저항)/중앙(추세)/하단(지지) 3선
+- **자동패턴분석**: Head & Shoulders, Double Top/Bottom, Triangle 등 자동 탐지
+- **시스템트레이딩**: HTS 좌측 [시스템트레이딩] 메뉴 → 실제 매매 실행 가능
+- 단, 추세선을 직접 조건으로 연결하는 UI는 없음 — 지표값 기반 조건만 GUI에서 가능
+
+---
+
 ## 참고 링크
 
 - [TrendSpider Automated Trendline Detection](https://help.trendspider.com/kb/automated-technical-analysis/automated-trendline-detection)
 - [TrendSpider Breakout Detection](https://help.trendspider.com/kb/automated-technical-analysis/breakout-detection)
-- [TradingView Auto Trendline & Breakout Alert](https://www.tradingview.com/script/TmcfwWKU-Auto-Trendline-Breakout-Alert-Linear-Log-Full-Version/)
+- [TrendSpider 2026 Review (Liberated Stock Trader)](https://www.liberatedstocktrader.com/trendspider-review-automated-stock-trend-analysis/)
+- [TradingView Auto Trendline & Breakout Alert (BobRivera990)](https://www.tradingview.com/script/TmcfwWKU-Auto-Trendline-Breakout-Alert-Linear-Log-Full-Version/)
+- [TradingView Auto Trend Lines Breakouts & Bounces](https://www.tradingview.com/script/ZLkGksyn-Auto-Trend-Lines-Breakouts-and-Bounces-Signals-and-Alerts/)
+- [TradingView Quadratic Regression (alexgrover)](https://www.tradingview.com/script/uuDEajsI-Quadratic-Regression/)
+- [TradingView Polynomial Regression Channel (ChartPrime)](https://www.tradingview.com/script/F7duegmG-Polynomial-Regression-Channel-ChartPrime/)
 - [ProRealTime ProRealTrend](https://www.prorealtime.com/en/automatic-support-resistance-trendlines)
-- [cTrader Polynomial Regression Channel](https://clickalgo.com/polynomial-regression-channels)
-- [cTrader PRC cBot](https://ctrader.com/algos/cbots/show/1940/)
+- [ClickAlgo — Polynomial Regression Channel Automated Trading](https://clickalgo.com/polynomial-regression-channels)
+- [MultiCharts — Regression Channel](https://www.multicharts.com/trading-software/index.php?title=Regression_Channel)
+- [MQL5 — Adaptive Linear Regression Channel Strategy](https://www.mql5.com/en/articles/20347)
+- [ThinkorSwim — Polynomial Regression Channel](https://thinkindicators.com/product/polynomial-regression-channel/)
 - [키움증권 종합차트 도움말](https://download.kiwoom.com/hero4_help_new/0600.htm)
-- [키움증권 시그널 메이커](https://www.kiwoom.com/m/invest/premium/VSignalMakerInfoView)
-- [PickMyTrade TradingView 자동화](https://blog.pickmytrade.trade/tradovate-auto-trendline-trade-automation/)
+- [키움 OpenAPI 자동매매 예시](https://github.com/dongzooo/KiwoomAPI-AutoTrade)
+- [MDPI — Polynomial Moving Regression Band Stocks Trading System](https://www.mdpi.com/2227-9091/12/10/166)
+- [PickMyTrade TradingView 자동화](https://blog.pickmytrade.trade/introduction-to-tradingview-alerts-2025-updated-guide/)
