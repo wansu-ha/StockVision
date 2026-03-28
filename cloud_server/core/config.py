@@ -102,7 +102,11 @@ class Settings:
     RATE_LIMIT_FORGOT_PW: int = int(os.environ.get("RATE_LIMIT_FORGOT_PW", "3"))  # 3회/시간/IP
     RATE_LIMIT_AI: int = int(os.environ.get("RATE_LIMIT_AI", "20"))             # 20회/시간/유저
 
-    # 수집 스케줄 (KST 기준)
+    # 데이터 서버 / 백테스트 서버 URL (같은 VM에서 Docker 네트워크)
+    DATA_SERVER_URL: str = os.environ.get("DATA_SERVER_URL", "http://localhost:4030")
+    BACKTEST_SERVER_URL: str = os.environ.get("BACKTEST_SERVER_URL", "http://localhost:4040")
+
+    # 수집 스케줄 (KST 기준) — 데이터 서버 이관 후 미사용
     COLLECTOR_WS_START_HOUR: int = 9    # 09:00 WS 시작
     COLLECTOR_DAILY_SAVE_HOUR: int = 16  # 16:00 일봉 저장
     COLLECTOR_MASTER_UPDATE_HOUR: int = 8   # 08:00 종목마스터 갱신

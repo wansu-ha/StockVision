@@ -1,0 +1,84 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: sv-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: stockvision
+      POSTGRES_USER: stockvision
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-stockvision_pass}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stockvision"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  cloud-server:
+    build:
+      context: .
+      dockerfile: cloud_server/Dockerfile
+    container_name: sv-cloud
+    restart: unless-stopped
+    ports:
+      - "4010:4010"
+    environment:
+      ENV: production
+      DATABASE_URL: postgresql://stockvision:${DB_PASSWORD:-stockvision_pass}@postgres:5432/stockvision
+      SECRET_KEY: ${SECRET_KEY}
+      CONFIG_ENCRYPTION_KEY: ${CONFIG_ENCRYPTION_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      DART_API_KEY: ${DART_API_KEY:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://stock-vision-two.vercel.app}
+      DATA_SERVER_URL: http://data-server:4030
+      BACKTEST_SERVER_URL: http://backtest-server:4040
+      FRONTEND_URL: ${FRONTEND_URL:-https://stock-vision-two.vercel.app}
+      CLOUD_URL: ${CLOUD_URL:-http://localhost:4010}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  data-server:
+    build:
+      context: .
+      dockerfile: data_server/Dockerfile
+    container_name: sv-data
+    restart: unless-stopped
+    ports:
+      - "4030:4030"
+    environment:
+      ENV: production
+      DATA_DATABASE_URL: postgresql://stockvision:${DB_PASSWORD:-stockvision_pass}@postgres:5432/stockvision
+      DATA_API_SECRET: ${DATA_API_SECRET:-}
+      DART_API_KEY: ${DART_API_KEY:-}
+      KIWOOM_APP_KEY: ${KIWOOM_APP_KEY:-}
+      KIWOOM_SECRET_KEY: ${KIWOOM_SECRET_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  backtest-server:
+    build:
+      context: .
+      dockerfile: backtest_server/Dockerfile
+    container_name: sv-backtest
+    restart: unless-stopped
+    ports:
+      - "4040:4040"
+    environment:
+      ENV: production
+      DATA_SERVER_URL: http://data-server:4030
+      CLOUD_SERVER_URL: http://cloud-server:4010
+      BACKTEST_API_SECRET: ${BACKTEST_API_SECRET:-}
+      BACKTEST_MAX_WORKERS: "3"
+      BACKTEST_MAX_QUEUE: "20"
+    depends_on:
+      - data-server
+
+volumes:
+  pg_data:

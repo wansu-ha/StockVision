@@ -414,46 +414,49 @@ class IngestRequest(BaseModel):
 async def ingest_minute_bars(
     payload: IngestRequest,
     user: dict = Depends(current_user),
-    db: Session = Depends(get_db),
 ):
-    """로컬 서버에서 수집한 분봉을 클라우드 DB에 ingest.
+    """로컬 서버 분봉 ingest → 데이터 서버로 프록시."""
+    import httpx
+    from cloud_server.core.config import settings
 
-    중복 시 upsert (기존 OHLCV 갱신).
-    """
-    from datetime import datetime as dt
-
-    count = 0
-    for item in payload.bars:
-        ts = _parse_bar_timestamp(item.timestamp)
-        if ts is None:
-            continue
-        ts = ts.replace(second=0, microsecond=0)
-
-        existing = db.query(MinuteBar).filter(
-            MinuteBar.symbol == item.symbol,
-            MinuteBar.timestamp == ts,
-        ).first()
-
-        if existing:
-            existing.open = item.open or existing.open
-            existing.high = max(existing.high or 0, item.high)
-            existing.low = min(existing.low or 999999999, item.low)
-            existing.close = item.close or existing.close
-            existing.volume = item.volume or existing.volume
-        else:
-            db.add(MinuteBar(
-                symbol=item.symbol,
-                timestamp=ts,
-                open=item.open,
-                high=item.high,
-                low=item.low,
-                close=item.close,
-                volume=item.volume,
-            ))
-        count += 1
-
-    db.commit()
-    return {"success": True, "count": count}
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                f"{settings.DATA_SERVER_URL}/api/v1/bars/ingest",
+                json={"bars": [b.model_dump() for b in payload.bars]},
+            )
+        return resp.json()
+    except httpx.ConnectError:
+        # 데이터 서버 미연결 시 로컬 DB에 직접 저장 (폴백)
+        from cloud_server.core.database import get_db as _get_db
+        db = next(_get_db())
+        try:
+            from datetime import datetime as dt
+            count = 0
+            for item in payload.bars:
+                ts = _parse_bar_timestamp(item.timestamp)
+                if ts is None:
+                    continue
+                ts = ts.replace(second=0, microsecond=0)
+                existing = db.query(MinuteBar).filter(
+                    MinuteBar.symbol == item.symbol, MinuteBar.timestamp == ts,
+                ).first()
+                if existing:
+                    existing.high = max(existing.high or 0, item.high)
+                    existing.low = min(existing.low or 999999999, item.low)
+                    existing.close = item.close or existing.close
+                    existing.volume = item.volume or existing.volume
+                else:
+                    db.add(MinuteBar(
+                        symbol=item.symbol, timestamp=ts,
+                        open=item.open, high=item.high,
+                        low=item.low, close=item.close, volume=item.volume,
+                    ))
+                count += 1
+            db.commit()
+            return {"success": True, "count": count, "fallback": True}
+        finally:
+            db.close()
 
 
 def _parse_bar_timestamp(ts_str: str):

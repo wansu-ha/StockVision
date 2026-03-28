@@ -42,7 +42,7 @@ async def run_backtest(
     user: dict = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    """DSL 규칙 백테스트 실행 + 결과 DB 저장."""
+    """백테스트 요청 → 백테스트 서버로 프록시."""
     script = req.script
     if req.rule_id is not None and not script:
         from cloud_server.models.rule import TradingRule
@@ -62,44 +62,36 @@ async def run_backtest(
     end_date = req.end_date or date.today()
     start_date = req.start_date or (end_date - timedelta(days=365))
 
-    from cloud_server.services.backtest_runner import BacktestRunner, BacktestConfig
+    # 백테스트 서버로 프록시
+    import httpx
+    from cloud_server.core.config import settings
 
-    config = BacktestConfig(
-        initial_cash=req.initial_cash,
-        commission_rate=req.commission_rate,
-        tax_rate=req.tax_rate,
-        slippage_rate=req.slippage_rate,
-    )
-
-    runner = BacktestRunner(db)
     try:
-        result = await runner.run(
-            script=script,
-            symbol=req.symbol,
-            start_date=start_date,
-            end_date=end_date,
-            timeframe=req.timeframe,
-            config=config,
-        )
-    except Exception as e:
-        logger.error("백테스트 실패: %s", e)
-        raise HTTPException(status_code=500, detail=f"백테스트 실행 실패: {e}")
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                f"{settings.BACKTEST_SERVER_URL}/api/v1/backtest/run",
+                json={
+                    "symbol": req.symbol,
+                    "timeframe": req.timeframe,
+                    "start_date": str(start_date),
+                    "end_date": str(end_date),
+                    "script": script,
+                    "initial_cash": req.initial_cash,
+                    "commission_rate": req.commission_rate,
+                    "tax_rate": req.tax_rate,
+                    "slippage_rate": req.slippage_rate,
+                },
+            )
+    except httpx.ConnectError:
+        raise HTTPException(status_code=503, detail="백테스트 서버 오프라인")
 
-    # DB 저장
-    summary_dict = {
-        "total_return_pct": result.total_return_pct,
-        "cagr": result.cagr,
-        "max_drawdown_pct": result.max_drawdown_pct,
-        "win_rate": result.win_rate,
-        "profit_factor": result.profit_factor,
-        "sharpe_ratio": result.sharpe_ratio,
-        "avg_hold_bars": result.avg_hold_bars,
-        "trade_count": result.trade_count,
-        "total_commission": result.total_commission,
-        "total_tax": result.total_tax,
-        "total_slippage": result.total_slippage,
-    }
+    if resp.status_code == 503:
+        raise HTTPException(status_code=503, detail="백테스트 서버 바쁨")
 
+    data = resp.json()
+    job_id = data.get("job_id")
+
+    # job 정보를 DB에 저장 (프론트 폴링용)
     execution = BacktestExecution(
         user_id=user["sub"],
         rule_id=req.rule_id,
@@ -108,42 +100,42 @@ async def run_backtest(
         end_date=end_date,
         timeframe=req.timeframe,
         initial_cash=req.initial_cash,
-        summary=summary_dict,
-        trade_count=result.trade_count,
+        summary={"job_id": job_id, "status": "queued"},
+        trade_count=0,
     )
     db.add(execution)
     db.commit()
     db.refresh(execution)
 
-    # 응답
-    equity = result.equity_curve
-    if len(equity) > 500:
-        step = len(equity) // 500
-        equity = equity[::step]
-
     return {
         "success": True,
         "data": {
             "id": execution.id,
-            "summary": summary_dict,
-            "equity_curve": equity,
-            "trades": [
-                {
-                    "entry_date": t.entry_date,
-                    "entry_price": t.entry_price,
-                    "exit_date": t.exit_date,
-                    "exit_price": t.exit_price,
-                    "qty": t.qty,
-                    "pnl": t.pnl,
-                    "pnl_pct": t.pnl_pct,
-                    "commission": t.commission,
-                    "tax": t.tax,
-                    "hold_bars": t.hold_bars,
-                }
-                for t in result.trades
-            ],
+            "job_id": job_id,
+            "status": data.get("status", "queued"),
+            "queue_position": data.get("queue_position", 0),
         },
     }
+
+
+@router.get("/jobs/{job_id}")
+async def get_job_status(
+    job_id: str,
+    user: dict = Depends(current_user),
+):
+    """백테스트 작업 상태 조회 → 백테스트 서버 프록시."""
+    import httpx
+    from cloud_server.core.config import settings
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                f"{settings.BACKTEST_SERVER_URL}/api/v1/backtest/jobs/{job_id}",
+            )
+    except httpx.ConnectError:
+        raise HTTPException(status_code=503, detail="백테스트 서버 오프라인")
+
+    return resp.json()
 
 
 @router.get("/history")
