@@ -1,4 +1,4 @@
-> 작성일: 2026-03-28 | 상태: 초안
+> 작성일: 2026-03-28 | 상태: 구현 완료
 
 # e2eCrypto 유닛 테스트
 
@@ -22,12 +22,12 @@ Web Crypto API + IndexedDB를 사용하며 현재 테스트 0개.
 
 ## 수용 기준
 
-- [ ] saveDeviceKey → loadDeviceKey 왕복 검증
-- [ ] deleteDeviceKey 후 loadDeviceKey === null
-- [ ] getStoredDeviceId: 키 없으면 null, 있으면 첫 번째 ID
-- [ ] decrypt: 알려진 key + ciphertext → 원본 복원
-- [ ] decrypt: 잘못된 키 → 에러 throw
-- [ ] base64ToArrayBuffer: decrypt 경유로 간접 검증 (내부 함수, export 없음)
+- [x] saveDeviceKey → loadDeviceKey 왕복 검증
+- [x] deleteDeviceKey 후 loadDeviceKey === null
+- [x] getStoredDeviceId: 키 없으면 null, 있으면 첫 번째 ID
+- [x] decrypt: 알려진 key + ciphertext → 원본 복원
+- [x] decrypt: 잘못된 키 → 에러 throw
+- [x] base64ToArrayBuffer: decrypt 경유로 간접 검증 (내부 함수, export 없음)
 
 ## 기술적 도전
 
