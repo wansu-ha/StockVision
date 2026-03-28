@@ -14,7 +14,14 @@ import numpy as np
 import pandas as pd
 from sqlalchemy.orm import Session
 
-from sv_core.indicators.calculator import calc_all_indicators
+from sv_core.indicators.calculator import (
+    calc_all_indicators,
+    calc_rsi,
+    calc_sma,
+    calc_ema,
+    calc_bollinger,
+    calc_avg_volume,
+)
 from sv_core.parsing.evaluator import evaluate as dsl_evaluate
 from sv_core.parsing.parser import parse
 
@@ -112,7 +119,7 @@ class BacktestRunner:
         all_indicators = self._precompute_indicators(closes, volumes)
 
         # 4. 시뮬레이션 루프
-        return self._simulate(ast, bars, all_indicators, cfg)
+        return self._simulate(ast, bars, all_indicators, cfg, closes, volumes)
 
     def _load_bars(
         self, symbol: str, start: date, end: date, timeframe: str,
@@ -230,6 +237,8 @@ class BacktestRunner:
         bars: list[dict],
         indicators: list[dict],
         cfg: BacktestConfig,
+        closes: pd.Series | None = None,
+        volumes: pd.Series | None = None,
     ) -> BacktestResult:
         """바 루프 시뮬레이션."""
         cash = cfg.initial_cash
@@ -261,26 +270,17 @@ class BacktestRunner:
                 "수익률": ((price / position["entry_price"]) - 1) * 100 if position else 0.0,
                 "보유수량": position["qty"] if position else 0,
             }
-            # 지표 함수를 context에 주입
-            # tf 인자가 지정되면 해당 TF의 지표를 조회 (현재는 메인 TF만)
-            # 다른 TF 참조 시 None 반환 (데이터 없음)
-            ind = indicators[i]
-            main_tf = cfg.__dict__.get("_timeframe", timeframe) if hasattr(cfg, "_timeframe") else "default"
-
-            def _make_indicator_fn(key_pattern: str, _ind=ind):
-                def fn(period, tf=None):
-                    # tf가 None이거나 메인 TF와 같으면 현재 지표 사용
-                    return _ind.get(key_pattern.format(int(period)))
-                return fn
-
-            context["RSI"] = _make_indicator_fn("rsi_{}")
-            context["MA"] = _make_indicator_fn("ma_{}")
-            context["EMA"] = _make_indicator_fn("ema_{}")
-            context["MACD"] = lambda tf=None, _i=ind: _i.get("macd")
-            context["MACD_SIGNAL"] = lambda tf=None, _i=ind: _i.get("macd_signal")
-            context["볼린저_상단"] = _make_indicator_fn("bb_upper_{}")
-            context["볼린저_하단"] = _make_indicator_fn("bb_lower_{}")
-            context["평균거래량"] = _make_indicator_fn("avg_volume_{}")
+            # 지표 함수 — 임의 기간 지원 (closes[:i+1] 윈도우에서 직접 계산)
+            _c = closes.iloc[: i + 1] if closes is not None else pd.Series(dtype=float)
+            _v = volumes.iloc[: i + 1] if volumes is not None else pd.Series(dtype=float)
+            context["RSI"] = lambda p, tf=None, _w=_c: calc_rsi(_w, int(p))
+            context["MA"] = lambda p, tf=None, _w=_c: calc_sma(_w, int(p))
+            context["EMA"] = lambda p, tf=None, _w=_c: calc_ema(_w, int(p))
+            context["MACD"] = lambda tf=None, _i=indicators[i]: _i.get("macd")
+            context["MACD_SIGNAL"] = lambda tf=None, _i=indicators[i]: _i.get("macd_signal")
+            context["볼린저_상단"] = lambda p, tf=None, _w=_c: calc_bollinger(_w, int(p))[0]
+            context["볼린저_하단"] = lambda p, tf=None, _w=_c: calc_bollinger(_w, int(p))[1]
+            context["평균거래량"] = lambda p, tf=None, _w=_v: calc_avg_volume(_w, int(p))
 
             # DSL 평가
             try:
