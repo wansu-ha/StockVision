@@ -6,6 +6,7 @@ EngineScheduler가 1분마다 evaluate_all()을 호출하면
 from __future__ import annotations
 
 import logging
+import re as _re
 import uuid
 from datetime import datetime
 from decimal import Decimal
@@ -217,6 +218,17 @@ class StrategyEngine:
             trading_enabled = self._safeguard.is_trading_enabled()
             if not trading_enabled:
                 return
+
+            # ── 분봉 지표 갱신 ──
+            active_tfs: dict[str, set[str]] = {}
+            for rule in active_rules:
+                sym = rule.get("symbol", "")
+                for tf in _extract_rule_tfs(rule):
+                    active_tfs.setdefault(sym, set()).add(tf)
+
+            for sym, tfs in active_tfs.items():
+                for tf in tfs:
+                    await self._indicator_provider.refresh_minute(sym, tf)
 
             # ── 후보 수집 ──
             cycle_id = uuid.uuid4().hex[:12]
@@ -474,8 +486,6 @@ class StrategyEngine:
 
 
 # ── 모듈 레벨 헬퍼 ──
-
-import re as _re
 
 _TF_PATTERN = _re.compile(r'"(1m|5m|15m|1h)"')
 

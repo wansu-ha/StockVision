@@ -3,6 +3,7 @@
 일봉: yfinance에서 80일 일봉을 배치 조회, 캐시 1일 유효.
 분봉: cloud_server MinuteBar API에서 조회, 캐시 1분 유효.
       캐시 만료 시 None 반환 (평가 건너뜀).
+      엔진 루프(evaluate_all)가 매 사이클마다 refresh_minute()를 호출하여 갱신.
 
 종목 시장 구분:
     market_map을 통해 KOSPI(.KS) / KOSDAQ(.KQ)를 구분한다.
@@ -91,8 +92,9 @@ class IndicatorProvider:
             return
 
         try:
-            closes = pd.Series([float(b["close"]) for b in data if b.get("close") is not None])
-            volumes = pd.Series([float(b.get("volume") or 0) for b in data])
+            valid = [b for b in data if b.get("close") is not None]
+            closes = pd.Series([float(b["close"]) for b in valid])
+            volumes = pd.Series([float(b.get("volume") or 0) for b in valid])
             if len(closes) < 15:
                 return
             indicators = calc_all_indicators(closes, volumes)
