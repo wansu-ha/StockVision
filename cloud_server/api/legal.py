@@ -11,7 +11,6 @@ from sqlalchemy.orm import Session
 
 from cloud_server.core.database import get_db
 from cloud_server.models.legal import LegalConsent, LegalDocument
-from cloud_server.models.user import User
 from cloud_server.api.dependencies import current_user
 
 router = APIRouter(prefix="/api/v1/legal", tags=["legal"])
@@ -63,11 +62,11 @@ def get_document(doc_type: str, db: Session = Depends(get_db)):
 
 
 @router.get("/consent/status")
-def consent_status(user: User = Depends(current_user), db: Session = Depends(get_db)):
+def consent_status(user: dict = Depends(current_user), db: Session = Depends(get_db)):
     """현재 사용자의 동의 현황"""
     consents = (
         db.query(LegalConsent)
-        .filter(LegalConsent.user_id == user.id)
+        .filter(LegalConsent.user_id == user["sub"])
         .all()
     )
 
@@ -99,7 +98,7 @@ class ConsentBody(BaseModel):
 @router.post("/consent")
 def record_consent(
     body: ConsentBody,
-    user: User = Depends(current_user),
+    user: dict = Depends(current_user),
     db: Session = Depends(get_db),
 ):
     """동의 기록 저장"""
@@ -107,7 +106,7 @@ def record_consent(
         raise HTTPException(400, "잘못된 문서 유형입니다.")
 
     consent = LegalConsent(
-        user_id=user.id,
+        user_id=user["sub"],
         doc_type=body.doc_type,
         doc_version=body.doc_version,
     )
