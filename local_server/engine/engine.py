@@ -6,6 +6,7 @@ EngineScheduler가 1분마다 evaluate_all()을 호출하면
 from __future__ import annotations
 
 import logging
+import re as _re
 import uuid
 from datetime import datetime
 from decimal import Decimal
@@ -218,6 +219,17 @@ class StrategyEngine:
             if not trading_enabled:
                 return
 
+            # ── 분봉 지표 갱신 ──
+            active_tfs: dict[str, set[str]] = {}
+            for rule in active_rules:
+                sym = rule.get("symbol", "")
+                for tf in _extract_rule_tfs(rule):
+                    active_tfs.setdefault(sym, set()).add(tf)
+
+            for sym, tfs in active_tfs.items():
+                for tf in tfs:
+                    await self._indicator_provider.refresh_minute(sym, tf)
+
             # ── 후보 수집 ──
             cycle_id = uuid.uuid4().hex[:12]
             candidates: list[CandidateSignal] = []
@@ -319,8 +331,15 @@ class StrategyEngine:
                 logger.debug("Rule %d (%s): 시세 미수신", rule_id, symbol)
                 return results
 
-            # 일봉 기반 기술적 지표 주입
-            latest["indicators"] = self._indicator_provider.get(symbol)
+            # TF별 기술적 지표 주입: {tf: indicators_dict}
+            indicators_by_tf: dict[str, dict] = {}
+            daily_ind = self._indicator_provider.get(symbol, "1d")
+            indicators_by_tf["1d"] = daily_ind
+            for tf in _extract_rule_tfs(rule):
+                minute_ind = self._indicator_provider.get(symbol, tf)
+                if minute_ind is not None:
+                    indicators_by_tf[tf] = minute_ind
+            latest["indicators"] = indicators_by_tf
 
             context = self._context_cache.get()
 
@@ -464,3 +483,20 @@ class StrategyEngine:
             volume=event.volume,
             timestamp=event.timestamp,
         )
+
+
+# ── 모듈 레벨 헬퍼 ──
+
+_TF_PATTERN = _re.compile(r'"(1m|5m|15m|1h)"')
+
+
+def _extract_rule_tfs(rule: dict) -> list[str]:
+    """규칙 script에서 사용된 분봉 TF 목록을 추출한다.
+
+    DSL script에서 "5m" 형태 문자열을 파싱하여 중복 없이 반환.
+    script가 없거나 파싱 실패 시 빈 리스트 반환.
+    """
+    script = rule.get("script") or ""
+    if not script:
+        return []
+    return list(dict.fromkeys(_TF_PATTERN.findall(script)))
