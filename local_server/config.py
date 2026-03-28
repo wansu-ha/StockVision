@@ -59,6 +59,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "loss_lock":            {"enabled": True},
         },
     },
+    "update": {
+        "auto_enabled": True,
+        "no_update_start": "08:00",
+        "no_update_end": "17:00",
+    },
 }
 
 
