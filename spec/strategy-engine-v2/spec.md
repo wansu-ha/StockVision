@@ -596,7 +596,7 @@ v1 스크립트는 v2 파서가 자동 변환. 기존 규칙이 깨지지 않는
 | `lexer.py` | 새 토큰 렉싱 |
 | `ast_nodes.py` | `Rule(condition, action)`, `Action(side, quantity)`, `ConstDecl`, `IndexAccess` 노드 추가. 기존 `BuyBlock`/`SellBlock`/`Script` 유지 (v1 호환). 상수는 `FieldRef`로 resolve, `ParamRef` 불필요. 상태 함수는 일반 `FuncCall`로 파싱 |
 | `parser.py` | v2 문법 파싱 + v1 `매수:/매도:` 폴백 |
-| `evaluator.py` | 규칙 리스트 순차 평가, 수식어 상태 관리, 충돌 해소 |
+| `evaluator.py` | 규칙 리스트 순차 평가, 상태 함수(횟수/연속) 평가, §5.1 우선순위 충돌 해소 |
 | `builtins.py` | ATR, 최고가, 최저가, 횟수, 연속, 이격도 추가. 시간/보유 필드 추가 |
 
 ### 6.2 local_server (엔진)
@@ -622,11 +622,11 @@ v1 스크립트는 v2 파서가 자동 변환. 기존 규칙이 깨지지 않는
 | 파일 | 변경 |
 |------|------|
 | `pages/StrategyBuilder.tsx` | 카드 UI 빌더 (규칙 카드 추가/편집/순서 변경) |
-| `components/StrategyCard.tsx` | 신규 — 실시간 조건 상태 표시 카드 |
-| `components/ConditionRow.tsx` | 조건 행 확장 (수식어, 시간 필드) |
+| `components/StrategyMonitorCard.tsx` | 신규 — 실시간 조건 상태 모니터링 카드 |
+| `components/ConditionStatusRow.tsx` | 신규 — 조건 행 (상태 표시 + 현재 값) |
 | `components/TriggerTimeline.tsx` | 신규 — 트리거 이력 타임라인 |
 | `utils/dslParser.ts` | v2 DSL ↔ 카드 UI 변환 |
-| `hooks/useStrategyStatus.ts` | 신규 — 조건 상태 API 폴링 |
+| `hooks/useConditionStatus.ts` | 신규 — 조건 상태 API 폴링 |
 
 ---
 
