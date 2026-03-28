@@ -91,7 +91,7 @@ async def fetch_minute_bars(
         body: dict = {
             "stk_cd": symbol,
             "tic_scope": str(tick_unit),
-            "upd_stkpc_tp": "0",  # 수정주가
+            "upd_stkpc_tp": "1",  # 수정주가 적용
         }
         if next_key:
             headers["next-key"] = next_key
