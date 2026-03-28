@@ -262,15 +262,25 @@ class BacktestRunner:
                 "보유수량": position["qty"] if position else 0,
             }
             # 지표 함수를 context에 주입
+            # tf 인자가 지정되면 해당 TF의 지표를 조회 (현재는 메인 TF만)
+            # 다른 TF 참조 시 None 반환 (데이터 없음)
             ind = indicators[i]
-            context["RSI"] = lambda p, tf=None, _i=ind: _i.get(f"rsi_{int(p)}")
-            context["MA"] = lambda p, tf=None, _i=ind: _i.get(f"ma_{int(p)}")
-            context["EMA"] = lambda p, tf=None, _i=ind: _i.get(f"ema_{int(p)}")
+            main_tf = cfg.__dict__.get("_timeframe", timeframe) if hasattr(cfg, "_timeframe") else "default"
+
+            def _make_indicator_fn(key_pattern: str, _ind=ind):
+                def fn(period, tf=None):
+                    # tf가 None이거나 메인 TF와 같으면 현재 지표 사용
+                    return _ind.get(key_pattern.format(int(period)))
+                return fn
+
+            context["RSI"] = _make_indicator_fn("rsi_{}")
+            context["MA"] = _make_indicator_fn("ma_{}")
+            context["EMA"] = _make_indicator_fn("ema_{}")
             context["MACD"] = lambda tf=None, _i=ind: _i.get("macd")
             context["MACD_SIGNAL"] = lambda tf=None, _i=ind: _i.get("macd_signal")
-            context["볼린저_상단"] = lambda p, tf=None, _i=ind: _i.get(f"bb_upper_{int(p)}")
-            context["볼린저_하단"] = lambda p, tf=None, _i=ind: _i.get(f"bb_lower_{int(p)}")
-            context["평균거래량"] = lambda p, tf=None, _i=ind: _i.get(f"avg_volume_{int(p)}")
+            context["볼린저_상단"] = _make_indicator_fn("bb_upper_{}")
+            context["볼린저_하단"] = _make_indicator_fn("bb_lower_{}")
+            context["평균거래량"] = _make_indicator_fn("avg_volume_{}")
 
             # DSL 평가
             try:
