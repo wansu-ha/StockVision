@@ -12,6 +12,7 @@ interface LayoutProps {
 const navItems = [
   { path: '/', label: '대시보드' },
   { path: '/strategies', label: '전략' },
+  { path: '/backtest', label: '백테스트' },
   { path: '/stocks', label: '관심종목' },
   { path: '/logs', label: '실행 로그' },
 ]

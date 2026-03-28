@@ -8,6 +8,7 @@ import { useAccountStatus } from '../hooks/useAccountStatus'
 import RuleCard from '../components/RuleCard'
 import type { Rule } from '../types/strategy'
 import type { LastRuleResult } from '../types/rule-result'
+import { getBacktestHistory, type BacktestSummary } from '../services/backtest'
 
 export default function StrategyList() {
   const navigate = useNavigate()
@@ -22,6 +23,22 @@ export default function StrategyList() {
   })
 
   const { engineRunning } = useAccountStatus()
+
+  // 규칙별 최근 백테스트 요약
+  const { data: btMap = new Map<number, BacktestSummary>() } = useQuery<Map<number, BacktestSummary>>({
+    queryKey: ['backtestSummaries'],
+    queryFn: async () => {
+      const items = await getBacktestHistory()
+      const map = new Map<number, BacktestSummary>()
+      for (const item of items) {
+        if (item.rule_id && !map.has(item.rule_id)) {
+          map.set(item.rule_id, item.summary)
+        }
+      }
+      return map
+    },
+    staleTime: 5 * 60_000,
+  })
 
   // 규칙별 최근 실행 결과
   const { data: lastResultsMap = new Map<number, LastRuleResult>() } = useQuery<Map<number, LastRuleResult>>({
@@ -114,8 +131,10 @@ export default function StrategyList() {
               symbolName={namesMap.get(rule.symbol)}
               engineRunning={engineRunning}
               lastResult={lastResultsMap.get(rule.id)}
+              backtestSummary={btMap.get(rule.id)}
               onToggle={(id, enabled) => toggleMutation.mutate({ id, enabled })}
               onEdit={(id) => navigate(`/strategies/${id}/edit`)}
+              onBacktest={(id) => navigate(`/backtest?rule_id=${id}`)}
               onDelete={(id) => {
                 if (confirm('이 전략을 삭제하시겠습니까?')) deleteMutation.mutate(id)
               }}

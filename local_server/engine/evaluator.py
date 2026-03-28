@@ -91,9 +91,11 @@ class RuleEvaluator:
         ctx["보유수량"] = context.get("보유수량", 0)
 
         # 내장 함수 — 지표 데이터에서 resolve
+        # tf(타임프레임) 인자는 선택적. 현재 일봉 지표만 캐시.
+        # 분봉 지표 확장 시 indicators를 {tf: {key: val}} 구조로 변경.
         def make_indicator_func(name: str):
-            def func(*args):
-                key = f"{name}_{int(args[0])}" if args else name
+            def func(period, tf=None):
+                key = f"{name}_{int(period)}"
                 val = indicators.get(key)
                 return float(val) if val is not None else None
             return func
@@ -104,8 +106,8 @@ class RuleEvaluator:
         ctx["평균거래량"] = make_indicator_func("avg_volume")
         ctx["볼린저_상단"] = make_indicator_func("bb_upper")
         ctx["볼린저_하단"] = make_indicator_func("bb_lower")
-        ctx["MACD"] = lambda: float(v) if (v := indicators.get("macd")) is not None else None
-        ctx["MACD_SIGNAL"] = lambda: float(v) if (v := indicators.get("macd_signal")) is not None else None
+        ctx["MACD"] = lambda tf=None: float(v) if (v := indicators.get("macd")) is not None else None
+        ctx["MACD_SIGNAL"] = lambda tf=None: float(v) if (v := indicators.get("macd_signal")) is not None else None
 
         return ctx
 

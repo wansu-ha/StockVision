@@ -10,6 +10,8 @@ import ConditionRow from '../components/ConditionRow'
 import RuleList from '../components/RuleList'
 import DslEditor from '../components/DslEditor'
 import { dslToConditions } from '../utils/dslConverter'
+import { runBacktest, type BacktestResponse } from '../services/backtest'
+import BacktestResultView from '../components/BacktestResult'
 
 interface FormState {
   name: string
@@ -52,6 +54,22 @@ export default function StrategyBuilder() {
   // 조건 편집 모드: 'form' = 폼 UI, 'script' = DSL 텍스트 편집
   const [condMode, setCondMode] = useState<'form' | 'script'>('form')
   const [dslText, setDslText]  = useState<string>('')
+
+  // 백테스트 상태
+  const [btLoading, setBtLoading] = useState(false)
+  const [btResult, setBtResult] = useState<BacktestResponse['data'] | null>(null)
+
+  const handleBacktest = async () => {
+    const script = condMode === 'script' ? dslText : conditionsToDsl(form.buyConditions, form.sellConditions)
+    if (!script || !form.symbol) return
+    setBtLoading(true)
+    setBtResult(null)
+    try {
+      const resp = await runBacktest({ script, symbol: form.symbol, timeframe: '1d' })
+      if (resp.success) setBtResult(resp.data)
+    } catch { /* 에러 무시 — UI에 결과 없음으로 표시 */ }
+    setBtLoading(false)
+  }
 
   const { data: rulesData } = useQuery({
     queryKey: ['rules'],
@@ -316,12 +334,31 @@ export default function StrategyBuilder() {
               {saveMut.isPending ? '저장 중...' : '저장'}
             </button>
             <button
-              onClick={() => { setShowForm(false); setEditId(null); setError(null); setCondMode('form'); setDslText('') }}
+              data-testid="strategy-backtest"
+              onClick={handleBacktest}
+              disabled={btLoading || !form.symbol}
+              className="flex-1 bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700 disabled:opacity-50 text-sm"
+            >
+              {btLoading ? '실행 중...' : '백테스트'}
+            </button>
+            <button
+              onClick={() => { setShowForm(false); setEditId(null); setError(null); setCondMode('form'); setDslText(''); setBtResult(null) }}
               className="px-4 py-2 border border-gray-700 rounded-xl text-sm text-gray-300 hover:bg-gray-800 transition"
             >
               취소
             </button>
           </div>
+
+          {/* 백테스트 결과 패널 */}
+          {btResult && (
+            <div className="mt-6 border-t border-gray-700 pt-4">
+              <BacktestResultView
+                summary={btResult.summary}
+                equityCurve={btResult.equity_curve}
+                trades={btResult.trades}
+              />
+            </div>
+          )}
         </div>
       )}
     </div>
