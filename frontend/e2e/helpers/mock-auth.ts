@@ -4,10 +4,11 @@
  * 전역 AUTH_BYPASS 없이 개별 spec 파일에서 인증 및 API를 mock한다.
  * 기존 auth E2E(미인증 리다이렉트 테스트)가 깨지지 않도록
  * 이 헬퍼는 명시적으로 호출하는 spec에서만 동작한다.
+ *
+ * .env의 VITE_CLOUD_API_URL이 Render URL일 수 있으므로
+ * page.route()에 regex를 사용하여 호스트와 무관하게 경로를 매칭한다.
  */
 import type { Page, Route } from '@playwright/test'
-
-const CLOUD_URL = 'http://localhost:4010'
 
 /** 가짜 Rule fixture */
 export const MOCK_RULES = [
@@ -57,12 +58,12 @@ export const MOCK_BACKTEST_RESULT = {
 
 /**
  * 인증 mock 설정.
- * sessionStorage에 가짜 JWT를 주입해 isAuthenticated = true로 만들고,
+ * sessionStorage에 가짜 JWT + RT를 주입해 isAuthenticated = true로 만들고,
  * ConsentGate를 통과하도록 consent/status도 mock한다.
  */
 export async function setupAuthMock(page: Page): Promise<void> {
-  // ConsentGate API mock (모든 동의 최신 상태로 응답)
-  await page.route(`${CLOUD_URL}/api/v1/legal/consent/status`, (route: Route) => {
+  // ConsentGate API mock
+  await page.route(/\/api\/v1\/legal\/consent\/status/, (route: Route) => {
     route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -77,25 +78,23 @@ export async function setupAuthMock(page: Page): Promise<void> {
     })
   })
 
-  // 페이지 이동 전 sessionStorage에 가짜 JWT 주입 (addInitScript는 다음 navigation에 적용)
+  // JWT + RT 주입 (AuthContext: jwt && rt → localAuth.setAuthToken → localReady: true)
   await page.addInitScript(() => {
     sessionStorage.setItem('sv_jwt', 'mock-jwt-token-for-e2e')
+    sessionStorage.setItem('sv_rt', 'mock-refresh-token-for-e2e')
+    localStorage.setItem('sv_keep', '0')
   })
 }
 
 /**
  * Rules API mock 설정.
- * CRUD 전 엔드포인트를 가로채 고정된 fixture를 반환한다.
- * 생성/수정 후 목록이 갱신되는 흐름을 시뮬레이션하기 위해
- * 내부 상태를 클로저로 관리한다.
  */
 export async function setupRulesMock(page: Page): Promise<void> {
-  // 내부 상태 (클로저)
   let rules = [...MOCK_RULES]
   let nextId = 2
 
-  // GET /api/v1/rules, POST /api/v1/rules
-  await page.route(`${CLOUD_URL}/api/v1/rules`, async (route: Route) => {
+  // GET/POST /api/v1/rules (정확히 /rules로 끝나는 경로)
+  await page.route(/\/api\/v1\/rules$/, async (route: Route) => {
     if (route.request().method() === 'GET') {
       route.fulfill({
         status: 200,
@@ -116,8 +115,8 @@ export async function setupRulesMock(page: Page): Promise<void> {
     }
   })
 
-  // PUT /api/v1/rules/:id, DELETE /api/v1/rules/:id
-  await page.route(`${CLOUD_URL}/api/v1/rules/**`, async (route: Route) => {
+  // PUT/DELETE /api/v1/rules/:id
+  await page.route(/\/api\/v1\/rules\/\d+/, async (route: Route) => {
     const method = route.request().method()
     const url = route.request().url()
     const idMatch = url.match(/\/api\/v1\/rules\/(\d+)/)
@@ -149,7 +148,7 @@ export async function setupRulesMock(page: Page): Promise<void> {
  * 백테스트 API mock 설정.
  */
 export async function setupBacktestMock(page: Page): Promise<void> {
-  await page.route(`${CLOUD_URL}/api/v1/backtest/run`, (route: Route) => {
+  await page.route(/\/api\/v1\/backtest\/run/, (route: Route) => {
     route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -168,7 +167,7 @@ export async function setupAllMocks(page: Page): Promise<void> {
   await setupBacktestMock(page)
 
   // 로컬 서버 요청 차단 (flaky 방지)
-  await page.route('http://localhost:4020/**', (route) => {
+  await page.route(/localhost:4020/, (route) => {
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true }) })
   })
 }
