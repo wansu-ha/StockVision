@@ -191,6 +191,19 @@ export default function OpsPanel({ localConnected, brokerConnected, engineRunnin
 
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 sm:p-4 mb-4 sm:mb-5">
+      {/* 업데이트 배너 */}
+      {localHp?.update_status?.available && (
+        <div className={`mb-3 px-3 py-2 rounded-lg text-xs ${
+          localHp.update_status.major_mismatch
+            ? 'bg-red-900/40 border border-red-800 text-red-300'
+            : 'bg-yellow-900/40 border border-yellow-800 text-yellow-300'
+        }`}>
+          {localHp.update_status.major_mismatch
+            ? '⚠ 로컬 서버 버전이 호환되지 않습니다. 업데이트가 필요합니다.'
+            : `로컬 서버 업데이트 가능 (v${localHp?.version} → v${localHp.update_status.latest})`}
+          {localHp.update_status.ready_to_install && ' — 다음 허용 시간에 자동 설치됩니다'}
+        </div>
+      )}
       {/* 상태 + 요약 */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4 sm:gap-5 flex-wrap">

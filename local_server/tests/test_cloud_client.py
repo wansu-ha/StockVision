@@ -240,9 +240,8 @@ class TestCheckServerVersion:
         # 이전 알림 기록 초기화
         hb_mod._version_notified = None
 
-        with patch("local_server.cloud.heartbeat.get_config") as mock_cfg, \
+        with patch("local_server.cloud.heartbeat._VERSION", current_version), \
              patch("local_server.cloud.heartbeat._send_toast") as self._mock_toast:
-            mock_cfg.return_value.get.return_value = current_version
             hb_mod._check_server_version(resp)
 
     def test_no_notification_when_up_to_date(self) -> None:
@@ -283,9 +282,8 @@ class TestCheckServerVersion:
         hb_mod._version_notified = None
         resp = {"latest_version": "1.1.0", "min_version": "1.0.0", "download_url": ""}
 
-        with patch("local_server.cloud.heartbeat.get_config") as mock_cfg, \
+        with patch("local_server.cloud.heartbeat._VERSION", "1.0.0"), \
              patch("local_server.cloud.heartbeat._send_toast") as mock_toast:
-            mock_cfg.return_value.get.return_value = "1.0.0"
             hb_mod._check_server_version(resp)
             hb_mod._check_server_version(resp)  # 두 번째 호출
 

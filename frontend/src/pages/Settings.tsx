@@ -10,6 +10,7 @@ import { useAccountStatus } from '../hooks/useAccountStatus'
 import BrokerKeyForm from '../components/onboarding/BrokerKeyForm'
 import AlertSettings from '../components/AlertSettings'
 import DeviceManager from '../components/DeviceManager'
+import { localConfig } from '../services/localClient'
 
 const LOCAL_URL = import.meta.env.VITE_LOCAL_API_URL || 'http://localhost:4020'
 const DOWNLOAD_URL = 'https://github.com/wansu-ha/StockVision/releases/latest/download/StockVision-Bridge-Setup.exe'
@@ -348,7 +349,75 @@ export default function Settings() {
           <DeviceManager />
         </section>
 
+        {/* 자동 업데이트 */}
+        {bridgeConnected && (
+          <UpdateSettings />
+        )}
+
       </main>
     </div>
+  )
+}
+
+/** 자동 업데이트 설정 섹션 */
+function UpdateSettings() {
+  const [autoEnabled, setAutoEnabled] = useState(true)
+  const [noUpdateStart, setNoUpdateStart] = useState('08:00')
+  const [noUpdateEnd, setNoUpdateEnd] = useState('17:00')
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    localConfig.get().then((cfg) => {
+      if (cfg?.update) {
+        setAutoEnabled(cfg.update.auto_enabled ?? true)
+        setNoUpdateStart(cfg.update.no_update_start ?? '08:00')
+        setNoUpdateEnd(cfg.update.no_update_end ?? '17:00')
+      }
+      setLoaded(true)
+    })
+  }, [])
+
+  const save = (patch: Partial<import('../types/settings').UpdateConfig>) => {
+    localConfig.update({ update: { auto_enabled: autoEnabled, no_update_start: noUpdateStart, no_update_end: noUpdateEnd, ...patch } })
+  }
+
+  if (!loaded) return null
+
+  return (
+    <section className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+      <h2 className="text-base font-semibold mb-4">자동 업데이트</h2>
+
+      <label className="flex items-center gap-3 mb-4 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={autoEnabled}
+          onChange={(e) => { setAutoEnabled(e.target.checked); save({ auto_enabled: e.target.checked }) }}
+          className="accent-blue-500 w-4 h-4"
+        />
+        <span className="text-sm text-gray-300">자동 업데이트 사용</span>
+      </label>
+
+      {autoEnabled && (
+        <div className="space-y-3">
+          <p className="text-xs text-gray-500">업데이트 차단 시간 (이 구간에는 설치하지 않음)</p>
+          <div className="flex items-center gap-2">
+            <input
+              type="time"
+              value={noUpdateStart}
+              onChange={(e) => { setNoUpdateStart(e.target.value); save({ no_update_start: e.target.value }) }}
+              className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-gray-300"
+            />
+            <span className="text-gray-500 text-sm">~</span>
+            <input
+              type="time"
+              value={noUpdateEnd}
+              onChange={(e) => { setNoUpdateEnd(e.target.value); save({ no_update_end: e.target.value }) }}
+              className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-gray-300"
+            />
+          </div>
+          <p className="text-xs text-gray-600">기본: 08:00 ~ 17:00 (장중 업데이트 방지)</p>
+        </div>
+      )}
+    </section>
   )
 }

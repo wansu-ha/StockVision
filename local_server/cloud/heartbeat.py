@@ -60,7 +60,7 @@ def _build_heartbeat_payload() -> dict[str, Any]:
         "uuid": uuid,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "engine_running": _engine_running,
-        "version": cfg.get("server.version", _VERSION),
+        "version": _VERSION,
         "os": platform.system(),
     }
 
@@ -194,8 +194,7 @@ def _check_server_version(resp: dict[str, Any]) -> None:
     if not latest:
         return
 
-    from local_server.config import get_config
-    current = get_config().get("server.version", "1.0.0")
+    current = _VERSION
 
     if current == latest or _version_notified == latest:
         return

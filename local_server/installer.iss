@@ -24,6 +24,7 @@ OutputBaseFilename=StockVision-Bridge-Setup
 Compression=lzma2
 SolidCompression=yes
 PrivilegesRequired=lowest
+CloseApplications=yes
 UninstallDisplayName={#MyAppName}
 WizardStyle=modern
 
@@ -48,4 +49,4 @@ Root: HKCU; Subkey: "Software\Classes\stockvision"; ValueType: string; ValueName
 Root: HKCU; Subkey: "Software\Classes\stockvision\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "StockVision Bridge 실행"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Description: "StockVision Bridge 실행"; Flags: nowait postinstall
