@@ -216,6 +216,7 @@ RSI(기간) < 30 AND 골든크로스 AND 보유수량 == 0  → 매수 100%
 entry_price: float          # 평균 진입가 (DCA 시 가중평균)
 entry_time: datetime        # 최초 진입 시각
 highest_price: float        # 보유 중 최고가 (트레일링용, 매 사이클 갱신)
+pnl_high: float             # 보유 중 최고 수익률% (수익률고점 필드용, 매 사이클 갱신)
 remaining_ratio: float      # 잔여 비율 (1.0 시작, 다단계 청산용)
 bars_held: int              # 보유 봉 수 (매 사이클 +1)
 days_held: int              # 보유 영업일 수
