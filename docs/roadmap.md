@@ -1,6 +1,6 @@
 # StockVision 로드맵
 
-> 최종 갱신: 2026-03-26 (risk-mitigation 완료, 테스트 현황 갱신)
+> 최종 갱신: 2026-03-28 (Phase E Wave 1~3 완료, 테스트 364개)
 > 역할: 개발 우선순위와 Phase 간 의존성을 요약하는 최상위 방향 문서.
 > 상세 제품 방향: `docs/product/product-direction-log.md`
 
@@ -124,22 +124,29 @@ Step 4
 
 **끝나면**: 밖에서 폰으로 상태 확인 + 긴급 정지 가능. 재개는 추가 확인을 거쳐야만 가능.
 
-### 테스트 및 안정성 현황 (2026-03-26)
+### 테스트 및 안정성 현황 (2026-03-28)
 
 | 레이어 | 테스트 수 | 비고 |
 |--------|----------|------|
-| cloud_server | 70 | WS relay 8개, scheduler catch-up 3개 포함 |
-| local_server | 123 | 브로커 + 엔진 + 라우터 + 스토리지 |
-| sv_core (DSL) | 69 | 파서/평가기/렉서 |
-| frontend E2E | 9 | Playwright (스모크 수준, 비즈니스 로직 미검증) |
-| **합계** | **271** | |
+| cloud_server | 79 | WS relay 8, scheduler 3, backtest 9 포함 |
+| local_server | 140 | 브로커 + 엔진 + 라우터 + 분봉 지표 17 |
+| sv_core (DSL + indicators) | 87 | 파서/평가기/렉서 + 지표 계산기 |
+| frontend Vitest | 42 | dslParser 26 + dslConverter 8 + e2eCrypto 8 |
+| frontend Playwright | 16 | auth 4, admin 2, onboarding 1, strategy 2, backtest 2, Builder E2E 5 |
+| **합계** | **364** | |
 
 **risk-mitigation 완료 (2026-03-26)**: `spec/risk-mitigation/`
-- WS relay kill-switch 경로 테스트
-- APScheduler catch-up (서버 재시작 시 누락 작업 보정)
-- Playwright E2E 기반 구축
+- WS relay kill-switch 경로 테스트, APScheduler catch-up, Playwright E2E 기반 구축
 
-### Phase D — "먼저 찾아온다" ← 현재
+**Phase E 구현 (2026-03-28)**: `spec/` 하위 6개 spec
+- 분봉 수집 파이프라인 (키움 배치 + 로컬→클라우드 sync)
+- 백테스트 엔진 + API + UI (멀티 타임프레임, 수수료/세금/슬리피지)
+- DSL 타임프레임 확장 `RSI(14, "5m")`
+- 라이브 엔진 분봉 IndicatorProvider
+- 전략 수명주기 (Builder→백테스트→결과 DB→RuleCard 요약)
+- e2eCrypto 유닛 + StrategyBuilder E2E
+
+### Phase D — "먼저 찾아온다"
 
 **목표**: 내가 안 열어도 비서가 먼저 챙긴다.
 
@@ -154,18 +161,22 @@ Step 4
 
 **끝나면**: 장중에 손실/급변동/미체결 경고가 실시간으로 오고, 매일 아침 시장 브리핑이 온다.
 
-### Phase E — "나를 안다"
+### Phase E — "나를 안다" ← 현재
 
 **목표**: 투자 성향, 원칙, 과거 기록을 바탕으로 개인화.
 
-| 항목 | 의존 |
-|------|------|
-| 사용자 프로필/메모리 모델 (성향, 금지 규칙, 관심종목) | - |
-| 전략 수명주기 (생성→백테스트→드라이런→실전→복기) | System Trader |
-| BYO LLM 연결 + 전략 DSL 코파일럿 | 프로필 모델 |
-| 전략 빌더 위저드 (문장형 편집 → DSL) | UX PRD 중요도 P1 · 출시 Phase 3 |
-| 기본 복구/최근 이력 (최근 30일 이력, 기기 교체 복구) | 무료 범위 |
-| 장기 보관/다기기 연속성 (장기 이력·메모리·롤백, 원격 맥락 연속) | Pro 과금 핵심 |
+| 항목 | 의존 | 상태 |
+|------|------|------|
+| 분봉 수집 파이프라인 | 키움 REST API | 구현 완료 (수집은 수동) |
+| 백테스트 엔진 (멀티 TF, 비용 시뮬) | 분봉/일봉 데이터 | 구현 완료 |
+| DSL 타임프레임 확장 | sv_core 파서 | 구현 완료 |
+| 전략 수명주기 (Builder→백테스트→결과→RuleCard) | 백테스트 | 구현 완료 |
+| 라이브 분봉 IndicatorProvider | 분봉 수집 | 구현 완료 |
+| 사용자 프로필/메모리 모델 | - | 미착수 |
+| BYO LLM 연결 + 전략 DSL 코파일럿 | 프로필 모델 | 미착수 |
+| 전략 빌더 위저드 (문장형 편집 → DSL) | UX PRD P1 | 미착수 |
+| 기본 복구/최근 이력 | 무료 범위 | 미착수 |
+| 장기 보관/다기기 연속성 | Pro 과금 핵심 | 미착수 |
 
 > 무료: 로컬 메모리, 최근 30일 이력/롤백, 기기 교체 복구 기본, 전략 import/export.
 > Pro: 장기 이력·장기 메모리·장기 복구, 다기기 연속성, 원격 비서 맥락 이어짐.
