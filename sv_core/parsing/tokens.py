@@ -35,11 +35,20 @@ class TokenType(Enum):
     SLASH = auto()  # /
 
     # 구두점
-    LPAREN = auto()  # (
-    RPAREN = auto()  # )
-    COMMA = auto()   # ,
-    COLON = auto()   # :
-    ASSIGN = auto()  # = (커스텀 함수 정의)
+    LPAREN = auto()   # (
+    RPAREN = auto()   # )
+    COMMA = auto()    # ,
+    COLON = auto()    # :
+    ASSIGN = auto()   # = (커스텀 함수 정의)
+    ARROW = auto()    # → or ->
+    PERCENT = auto()  # %
+    LBRACKET = auto() # [
+    RBRACKET = auto() # ]
+
+    # v2 키워드
+    KW_ALL = auto()     # 전량
+    KW_REST = auto()    # 나머지
+    KW_BETWEEN = auto() # BETWEEN
 
     # 구조
     NEWLINE = auto()
@@ -53,6 +62,9 @@ KEYWORDS: dict[str, TokenType] = {
     "AND": TokenType.AND,
     "OR": TokenType.OR,
     "NOT": TokenType.NOT,
+    "전량": TokenType.KW_ALL,
+    "나머지": TokenType.KW_REST,
+    "BETWEEN": TokenType.KW_BETWEEN,
 }
 
 # 예약어 (IDENT로 사용 불가)

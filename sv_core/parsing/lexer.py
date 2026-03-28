@@ -42,6 +42,13 @@ def tokenize(source: str) -> list[Token]:
             col = 1
             continue
 
+        # → (U+2192) 유니코드 화살표
+        if ch == "\u2192":
+            tokens.append(Token(TokenType.ARROW, "→", line, col))
+            pos += 1
+            col += 1
+            continue
+
         # 주석 — `--` 행 끝까지 무시
         if ch == "-" and pos + 1 < length and source[pos + 1] == "-":
             while pos < length and source[pos] not in ("\n", "\r"):
@@ -139,6 +146,7 @@ _TWO_CHAR_OPS: dict[str, TokenType] = {
     "<=": TokenType.LE,
     "==": TokenType.EQ,
     "!=": TokenType.NE,
+    "->": TokenType.ARROW,
 }
 
 _ONE_CHAR_OPS: dict[str, TokenType] = {
@@ -153,6 +161,9 @@ _ONE_CHAR_OPS: dict[str, TokenType] = {
     ",": TokenType.COMMA,
     ":": TokenType.COLON,
     "=": TokenType.ASSIGN,
+    "%": TokenType.PERCENT,
+    "[": TokenType.LBRACKET,
+    "]": TokenType.RBRACKET,
 }
 
 
