@@ -71,6 +71,37 @@ class RuleUpdateBody(BaseModel):
     is_active: bool | None = None
 
 
+# ── 헬퍼 ─────────────────────────────────────────────────────────────
+
+
+def _extract_parameters(script: str | None) -> dict | None:
+    """DSL script에서 상수 선언을 추출하여 파라미터 메타데이터 생성."""
+    if not script:
+        return None
+    try:
+        from sv_core.parsing import parse_v2
+        ast = parse_v2(script)
+        if not ast.consts:
+            return None
+        params = {}
+        for const in ast.consts:
+            from sv_core.parsing.ast_nodes import NumberLit, StringLit
+            if isinstance(const.value, NumberLit):
+                params[const.name] = {"type": "number", "default": const.value.value}
+            elif isinstance(const.value, StringLit):
+                params[const.name] = {"type": "string", "default": const.value.value}
+            else:
+                # float/str directly on value
+                val = const.value
+                if isinstance(val, (int, float)):
+                    params[const.name] = {"type": "number", "default": val}
+                elif isinstance(val, str):
+                    params[const.name] = {"type": "string", "default": val}
+        return params if params else None
+    except Exception:
+        return None
+
+
 # ── 엔드포인트 ────────────────────────────────────────────────────────
 
 
@@ -99,6 +130,7 @@ def create_rule(
 ):
     """규칙 생성"""
     data = body.model_dump(exclude_unset=False)
+    data["parameters"] = _extract_parameters(data.get("script"))
     rule = rule_service.create_rule(user["sub"], data, db)
     return {"success": True, "data": rule}
 
@@ -123,6 +155,8 @@ def update_rule(
 ):
     """규칙 수정 (version 증가)"""
     data = body.model_dump(exclude_unset=True)
+    if "script" in data:
+        data["parameters"] = _extract_parameters(data.get("script"))
     rule = rule_service.update_rule(rule_id, user["sub"], data, db)
     return {"success": True, "data": rule}
 
