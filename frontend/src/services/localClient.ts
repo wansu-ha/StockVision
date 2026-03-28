@@ -182,10 +182,24 @@ export const localBroker = {
   reconnect: () => client.post('/broker/reconnect', null, { timeout: 15_000 }).then((r) => r.data).catch(() => null),
 }
 
-/** 헬스 체크 (버전 포함) */
+/** 헬스 체크 (버전 + 업데이트 상태 포함) */
+export interface UpdateStatus {
+  available: boolean
+  latest: string
+  major_mismatch: boolean
+  download_progress: number
+  ready_to_install: boolean
+}
+
+export interface HealthResponse {
+  status: string
+  version: string
+  update_status?: UpdateStatus
+}
+
 export const localHealth = {
   check: () =>
-    axios.get<{ status: string; version: string }>(`${LOCAL_URL}/health`, { timeout: 3000 })
+    axios.get<HealthResponse>(`${LOCAL_URL}/health`, { timeout: 3000 })
       .then((r) => r.data)
       .catch(() => null),
 }
