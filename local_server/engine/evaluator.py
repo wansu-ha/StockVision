@@ -11,7 +11,8 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from sv_core.parsing import parse, evaluate as dsl_evaluate
-from sv_core.parsing.ast_nodes import Script
+from sv_core.parsing import parse_v2, evaluate_v2 as _eval_v2, EvalV2Result
+from sv_core.parsing.ast_nodes import Script, ScriptV2
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +23,12 @@ class RuleEvaluator:
     def __init__(self) -> None:
         # AST 캐시: {rule_id: (script_hash, ast)}
         self._ast_cache: dict[int, tuple[str, Script]] = {}
+        # v2 AST 캐시: {rule_id: (script_hash, ast)}
+        self._v2_ast_cache: dict[int, tuple[str, ScriptV2]] = {}
         # 상향돌파/하향돌파 state: {rule_id: state_dict}
         self._cross_states: dict[int, dict] = {}
+        # v2 평가 state: {rule_id: state_dict}
+        self._v2_states: dict[int, dict] = {}
 
     def evaluate(self, rule: dict, market_data: dict, context: dict) -> tuple[bool, bool]:
         """규칙 평가 → (매수 결과, 매도 결과).
@@ -35,15 +40,39 @@ class RuleEvaluator:
             return self._eval_dsl(rule, market_data, context)
         return self._eval_json(rule, market_data, context)
 
+    def evaluate_v2(
+        self, rule: dict, market_data: dict, context: dict,
+    ) -> EvalV2Result:
+        """v2 DSL 평가 → EvalV2Result.
+
+        v2 script를 파싱하고 evaluate_v2를 호출한다.
+        v1 스크립트(매수:/매도:)도 parse_v2가 호환 처리한다.
+        """
+        rule_id = rule.get("id", 0)
+        script = rule.get("script", "")
+
+        try:
+            ast = self._get_or_parse_v2(rule_id, script)
+            eval_ctx = self._build_dsl_context(market_data, context)
+            state = self._v2_states.setdefault(rule_id, {})
+            return _eval_v2(ast, eval_ctx, state)
+        except Exception:
+            logger.exception("Rule %d v2 평가 오류", rule_id)
+            return EvalV2Result(action=None)
+
     def invalidate_cache(self, rule_id: int) -> None:
         """규칙 업데이트 시 AST 캐시 무효화."""
         self._ast_cache.pop(rule_id, None)
+        self._v2_ast_cache.pop(rule_id, None)
         self._cross_states.pop(rule_id, None)
+        self._v2_states.pop(rule_id, None)
 
     def clear_cache(self) -> None:
         """전체 캐시 초기화."""
         self._ast_cache.clear()
+        self._v2_ast_cache.clear()
         self._cross_states.clear()
+        self._v2_states.clear()
 
     # ── DSL 경로 ──
 
@@ -72,6 +101,34 @@ class RuleEvaluator:
         self._ast_cache[rule_id] = (script_hash, ast)
         return ast
 
+    def _get_or_parse_v2(self, rule_id: int, script: str) -> ScriptV2:
+        """v2 AST 캐시 조회, 미스 시 파싱."""
+        script_hash = hashlib.md5(script.encode()).hexdigest()
+        cached = self._v2_ast_cache.get(rule_id)
+        if cached and cached[0] == script_hash:
+            return cached[1]
+
+        ast = parse_v2(script)
+        self._v2_ast_cache[rule_id] = (script_hash, ast)
+        return ast
+
+    @staticmethod
+    def is_v2_script(script: str) -> bool:
+        """v2 스크립트 여부 판별.
+
+        → 또는 -> 가 포함되면 v2. 매수:/매도: 만 있는 v1도
+        parse_v2가 호환 처리하므로 True 반환.
+        """
+        if not script:
+            return False
+        # v2 화살표 문법
+        if "→" in script or "->" in script:
+            return True
+        # v1 형식도 parse_v2가 호환 처리
+        if "매수:" in script or "매도:" in script:
+            return True
+        return False
+
     @staticmethod
     def _build_dsl_context(market_data: dict, context: dict) -> dict[str, Any]:
         """market_data + context → DSL evaluator context dict.
@@ -89,6 +146,11 @@ class RuleEvaluator:
         ctx["거래량"] = int(volume) if volume is not None else None
         ctx["수익률"] = context.get("수익률")
         ctx["보유수량"] = context.get("보유수량", 0)
+
+        # v2 포지션 필드 (PositionState.to_context() 호환)
+        for key in ("고점 대비", "수익률고점", "진입가", "보유일", "보유봉"):
+            if key in context:
+                ctx[key] = context[key]
 
         # 내장 함수 — 지표 데이터에서 resolve
         # indicators는 {tf: {key: val}} 구조.
