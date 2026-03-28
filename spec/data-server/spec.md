@@ -1,310 +1,164 @@
-# 데이터 서버 명세서 (data-server)
-
-> **⚠️ SUPERSEDED** — `spec/cloud-server/spec.md`에 병합됨 (2026-03-05).
-> API 서버 + 데이터 서버 → 클라우드 서버로 통합.
+> 작성일: 2026-03-28 | 상태: 초안 | v3 (Oracle Cloud)
 >
-> 작성일: 2026-03-04 | 상태: ~~초안~~ SUPERSEDED | Unit 5 (Phase 3-B)
->
-> **참고**: `spec/data-source/` (데이터 소스 전략) 참조.
-> **의존**: Unit 1의 키움 REST 클라이언트 재사용.
+> v1: 클라우드 통합 (SUPERSEDED)
+> v2: PC 온프레미스 (SUPERSEDED → Oracle Cloud로 변경)
 
----
+# 데이터 서버 (Data Server) v3
 
-## 1. 목표
+## 목표
 
-클라우드에서 운영되는 시세 수집/저장 서비스를 구현한다.
-**서비스 키움 키**로 시세를 수신하여 내부 DB에 저장하고,
-API 서버가 접근하여 컨텍스트 계산 등에 활용한다.
+시장 데이터(시세, 재무, 종목 메타)를 전담 저장·수집·제공하는 독립 서버.
+Oracle Cloud Always Free VM에서 클라우드 서버, 백테스트 서버와 함께 운영.
+Render/Neon 무료 플랜의 용량·sleep 제약을 완전히 해소한다.
 
-**핵심 원칙:**
-- 외부 직접 접근 차단 (API 서버 뒤에 위치)
-- 수집된 시세는 **내부 분석용** (유저 재배포 아님)
-- 유저 시세는 각자 키움 키로 로컬에서 직접 수신
-- 키움 제5조③ 시세 중계 금지 준수
+## 배경
 
----
+- Render Free: 512MB 메모리, 15분 sleep, PostgreSQL 30일 만료
+- Neon Free: 500MB 스토리지 제한
+- Oracle Cloud Always Free: ARM 4코어/24GB RAM/200GB 스토리지, 만료 없음
+- 전종목 시세 데이터는 전용 인프라 필요 (일봉 수GB, 분봉 수십GB)
+- 시장 데이터(객관적 사실)와 서비스 데이터(유저/규칙/결과)를 논리적 분리
 
-## 2. 요구사항
+## 인프라 구성
 
-### 2.1 기능적 요구사항
+```
+[Vercel 프론트] ──→ [Oracle Cloud VM (공인 IP)]
+                      ├── :4010 클라우드 서버 (메인 API)
+                      ├── :4030 데이터 서버 (시세 API)
+                      ├── :4040 백테스트 서버 (연산)
+                      └── PostgreSQL :5432 (단일 DB, 스키마 분리)
+```
+
+- 모든 서버가 같은 VM → localhost 통신, 터널 불필요
+- 공인 IP → Vercel에서 직접 접근
+- Render, Neon, UptimeRobot 전부 불필요
+
+## 요구사항
+
+### 기능적 요구사항
 
 | ID | 요구사항 | 우선순위 |
 |----|---------|---------|
-| F1 | 서비스 키움 키로 실시간 시세 수신 (WebSocket) | P0 |
-| F2 | 시세 데이터를 DB에 저장 (일봉, 분봉) | P0 |
-| F3 | API 서버에서 접근 가능한 내부 API 제공 | P0 |
-| F4 | 외부 직접 접근 차단 | P0 |
-| F5 | 히스토리컬 데이터 축적 (과거 데이터 보관) | P1 |
-| F6 | 서비스 키움 토큰 자동 갱신 | P1 |
-| F7 | 기존 yfinance 데이터 소스 병행 (한국 외 시장) | P2 |
-| F8 | 데이터 수집 상태 모니터링 API | P2 |
+| F1 | 전종목 일봉, 관심 종목 분봉을 PostgreSQL에 저장 | P0 |
+| F2 | REST API로 봉 데이터 조회 (종목, 기간, 타임프레임 필터) | P0 |
+| F3 | 종목 마스터(거래소 목록, 업종, 시가총액) 관리 | P0 |
+| F4 | 일봉 초기 적재 (yfinance) + 매일 장 마감 후 갱신 | P0 |
+| F5 | 분봉 초기 적재 (키움 REST API, 1년치) | P1 |
+| F6 | 분봉 실시간 누적 (로컬 서버 Bridge 수집분 동기화 수신) | P1 |
+| F7 | 요청 데이터 미존재 시 동적 수집 + 진행 상태 반환 | P1 |
+| F8 | 재무제표, 배당 정보 저장·조회 | P2 |
+| F9 | 하트비트/상태 API | P1 |
 
-### 2.2 비기능적 요구사항
+### 비기능적 요구사항
 
 | 항목 | 목표 |
 |------|------|
-| 시세 수신 지연 | < 500ms (키움 WS) |
-| 일봉 데이터 저장 | 장 마감 후 30분 이내 |
-| 데이터 보관 기간 | 5년+ (일봉), 1년 (분봉) |
-| 가동률 | > 99% (장 시간) |
-| 동시 구독 종목 | 코스피/코스닥 주요 200종목 |
+| 가용성 | Docker restart policy로 자동 복구 |
+| 접근 제어 | 클라우드 서버(localhost)와 외부 인증된 요청만 |
+| 로깅 | Docker 볼륨에 저장 |
+| 데이터 보관 | 일봉 무제한, 분봉 보관 정책 운영 후 결정 |
 
----
+## 수용 기준
 
-## 3. 아키텍처
+- [ ] Oracle VM에서 FastAPI 서버 기동 (:4030)
+- [ ] PostgreSQL에 시장 데이터 테이블 생성
+- [ ] 봉 데이터 조회 REST API 동작
+- [ ] yfinance 일봉 초기 적재 동작
+- [ ] 키움 REST API 분봉 초기 적재 동작
+- [ ] 데이터 미존재 시 동적 수집 → 진행 상태 반환
+- [ ] 클라우드 서버에서 localhost:4030 접근 가능
+- [ ] Docker Compose로 자동 시작
 
-### 3.1 위치
-
-```
-[외부] → ✗ (직접 접근 불가)
-
-[API 서버] → HTTP → [데이터 서버] → WS → [키움 openapi]
-                                     ↓
-                              [PostgreSQL]
-                              (시세 데이터)
-```
-
-### 3.2 모듈 구조
-
-```
-data_server/
-├── main.py                    # FastAPI 앱 (내부 전용)
-├── collector/
-│   ├── kiwoom_collector.py    # 키움 WS 시세 수신 (서비스 키)
-│   ├── yfinance_collector.py  # yfinance 보조 수집
-│   └── scheduler.py           # 수집 스케줄 관리
-├── storage/
-│   ├── models.py              # DB 모델 (일봉, 분봉, 종목 마스터)
-│   ├── repository.py          # DB CRUD
-│   └── migrations/            # Alembic 마이그레이션
-├── api/
-│   ├── quotes.py              # 시세 조회 API (내부용)
-│   ├── status.py              # 수집 상태 API
-│   └── admin.py               # 서비스 키 관리 API
-├── core/
-│   ├── config.py              # 환경 변수
-│   └── database.py            # DB 연결
-└── requirements.txt
-```
-
-### 3.3 키움 클라이언트 재사용
-
-Unit 1(`local_server/kiwoom/`)의 REST/WS 클라이언트를 **패키지로 분리**하거나
-**코드 복사**하여 데이터 서버에서 사용.
-
-```
-# 옵션 A: 공유 패키지
-stockvision-kiwoom/
-├── auth.py
-├── websocket.py
-├── quote.py
-└── rate_limiter.py
-
-# 옵션 B: 데이터 서버에 복사
-data_server/kiwoom/
-├── auth.py
-├── websocket.py
-└── ...
-```
-
----
-
-## 4. 데이터 모델
-
-### 4.1 종목 마스터
-
-```python
-class StockMaster(Base):
-    __tablename__ = "stock_master"
-    symbol = Column(String(10), primary_key=True)  # 종목코드
-    name = Column(String(100), nullable=False)
-    market = Column(String(10))     # KOSPI | KOSDAQ
-    sector = Column(String(50))
-    is_active = Column(Boolean, default=True)
-    updated_at = Column(DateTime)
-```
-
-### 4.2 일봉 데이터
-
-```python
-class DailyBar(Base):
-    __tablename__ = "daily_bars"
-    id = Column(Integer, primary_key=True)
-    symbol = Column(String(10), nullable=False, index=True)
-    date = Column(Date, nullable=False)
-    open = Column(Integer)
-    high = Column(Integer)
-    low = Column(Integer)
-    close = Column(Integer)
-    volume = Column(BigInteger)
-    change_pct = Column(Float)       # 전일 대비 변동률
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-    __table_args__ = (
-        UniqueConstraint("symbol", "date"),
-        Index("idx_daily_symbol_date", "symbol", "date"),
-    )
-```
-
-### 4.3 분봉 데이터
-
-```python
-class MinuteBar(Base):
-    __tablename__ = "minute_bars"
-    id = Column(Integer, primary_key=True)
-    symbol = Column(String(10), nullable=False, index=True)
-    timestamp = Column(DateTime, nullable=False)
-    open = Column(Integer)
-    high = Column(Integer)
-    low = Column(Integer)
-    close = Column(Integer)
-    volume = Column(BigInteger)
-
-    __table_args__ = (
-        UniqueConstraint("symbol", "timestamp"),
-        Index("idx_minute_symbol_ts", "symbol", "timestamp"),
-    )
-```
-
----
-
-## 5. 내부 API
-
-```
-# 시세 조회 (API 서버만 접근)
-GET /internal/quotes/:symbol/daily?start=2025-01-01&end=2026-03-04
-    → 일봉 데이터 배열
-
-GET /internal/quotes/:symbol/latest
-    → 최신 시세
-
-GET /internal/quotes/market-summary
-    → 코스피/코스닥 지수, 전체 시장 요약
-
-# 컨텍스트 계산용
-GET /internal/context/indicators?symbols=005930,000660
-    → RSI, MACD, 볼린저 등 기술적 지표
-
-# 상태
-GET /internal/status
-    → 수집 상태, 마지막 수신 시각, 에러 수
-
-# 서비스 키 관리 (어드민 경유)
-POST /internal/admin/service-key
-    → 서비스 키움 키 등록
-```
-
-> `internal` 프리픽스: API 서버의 내부 네트워크에서만 접근 가능.
-> 외부에서 데이터 서버 포트에 직접 접근 불가 (방화벽/네트워크 정책).
-
----
-
-## 6. 수집 스케줄
-
-| 작업 | 주기 | 시간 | 비고 |
-|------|------|------|------|
-| 실시간 체결가 WS 수신 | 장 시간 | 09:00~15:30 | 서비스 키 |
-| 일봉 저장 | 매일 1회 | 16:00 (장 마감 후) | 당일 종가 확정 후 |
-| 종목 마스터 갱신 | 매일 1회 | 08:00 (장 시작 전) | 상장/폐지 반영 |
-| yfinance 보조 수집 | 매일 1회 | 17:00 | 한국 외 지수, 환율 등 |
-| 데이터 정합성 체크 | 매일 1회 | 18:00 | 누락 데이터 감지 + 재수집 |
-
----
-
-## 7. 키움 제5조③ 준수
-
-```
-키움증권 제5조③: 시세 중계 금지
-→ 서비스 키로 수집한 시세를 유저에게 직접 제공하지 않음
-
-우리 설계:
-- 서비스 키 시세 → DB 저장 → 내부 분석 (컨텍스트 계산, 백테스팅)
-- 유저에게 보여주는 시세 → 유저 본인의 키움 키로 로컬에서 직접 수신
-- API 서버가 컨텍스트(가공된 지표)만 제공 → 원시 시세 미제공
-```
-
----
-
-## 8. 수용 기준
-
-### 8.1 시세 수집
-
-- [ ] 서비스 키로 키움 WS 연결 → 실시간 체결가 수신
-- [ ] 수신된 시세가 DB에 저장됨
-- [ ] 장 마감 후 일봉 데이터 정상 저장
-
-### 8.2 내부 API
-
-- [ ] API 서버에서 `/internal/quotes/005930/daily` 호출 → 일봉 배열 반환
-- [ ] 외부에서 직접 접근 시 → 차단 (connection refused)
-
-### 8.3 데이터 품질
-
-- [ ] 결측 거래일 감지 + 재수집
-- [ ] 5년 일봉 데이터 보관 확인
-
-### 8.4 서비스 키 관리
-
-- [ ] 어드민 경유 키 등록 → 토큰 발급 → WS 연결 성공
-
----
-
-## 9. 범위
+## 범위
 
 ### 포함
 
-- 키움 WS 시세 수집 (서비스 키)
-- DB 저장 (일봉, 분봉, 종목 마스터)
-- 내부 API (시세 조회, 상태, 지표)
-- yfinance 보조 수집
-- 수집 스케줄러
+- 시세 데이터 저장·조회·수집 REST API
+- PostgreSQL 스키마 (기존 클라우드 시세 테이블 이관)
+- yfinance / 키움 REST 수집기
+- 동적 수집 + 상태 반환
 
 ### 미포함
 
-- 유저에게 시세 직접 제공 (유저는 로컬에서 자체 수신)
-- LLM 분석 (v3+ LLM 서버)
-- 백테스팅 엔진 (v2)
-- 코스콤 정식 연동 (v3+)
+- 백테스트 연산 (`backtest-server` spec 범위)
+- 유저/규칙/인증 등 서비스 데이터 (클라우드 서버가 관리)
+- 대신증권 API 연동 (향후 확장)
 
----
+## API 설계
 
-## 10. 기존 spec과의 관계
+### 봉 데이터 조회
 
-| 기존 | 상태 |
+```
+GET /api/v1/bars/{symbol}
+  ?timeframe=1d|1m|5m|15m|1h
+  &start=2025-01-01
+  &end=2026-03-28
+  &limit=1000
+
+200: { success: true, data: [ {date, open, high, low, close, volume}, ... ], count: N }
+404: { success: false, message: "데이터 없음", collection_task_id: "task-xxx" }
+```
+
+### 동적 수집 상태
+
+```
+GET /api/v1/collection/{task_id}
+
+200: { status: "collecting", message: "005930 분봉 수집중...", progress: 57 }
+200: { status: "done", message: "수집 완료", data_count: 24500 }
+```
+
+### 종목 마스터
+
+```
+GET /api/v1/stocks?market=KOSPI|KOSDAQ&search=삼성
+GET /api/v1/stocks/{symbol}
+```
+
+### 재무 데이터
+
+```
+GET /api/v1/stocks/{symbol}/financials
+GET /api/v1/stocks/{symbol}/dividends
+```
+
+### 분봉 ingest (로컬 서버 → 데이터 서버)
+
+```
+POST /api/v1/bars/ingest
+Body: { bars: [ {symbol, timestamp, open, high, low, close, volume}, ... ] }
+```
+
+### 서버 상태
+
+```
+GET /health
+```
+
+## DB 스키마
+
+기존 클라우드 테이블을 이관 (같은 PostgreSQL 인스턴스, 별도 스키마 또는 동일 DB):
+
+| 테이블 | 원본 모델 |
+|--------|----------|
+| stock_master | cloud_server/models/market.py |
+| daily_bars | cloud_server/models/market.py |
+| minute_bars | cloud_server/models/market.py |
+| company_financials | cloud_server/models/fundamental.py |
+| company_dividends | cloud_server/models/fundamental.py |
+
+## 클라우드 서버 변경사항
+
+| 항목 | 변경 |
 |------|------|
-| `spec/data-source/` | **참고** — 데이터 소스 전략은 여전히 유효, 본 spec이 구현 |
-
----
-
-## 11. 기술 요구사항
-
-| 항목 | 선택 |
-|------|------|
-| Python | 3.13 |
-| 프레임워크 | FastAPI |
-| DB | PostgreSQL |
-| ORM | SQLAlchemy + Alembic |
-| 스케줄러 | APScheduler |
-| WS 클라이언트 | websockets (Unit 1 재사용) |
-
----
-
-## 12. 미결 사항
-
-- [ ] Unit 1 키움 클라이언트 공유 방식 (패키지 분리 vs 복사)
-- [ ] 분봉 데이터 보관 정책 (1년? 디스크 사용량 추정)
-- [ ] 데이터 서버 → API 서버 통신 방식 (REST vs gRPC)
-- [ ] 서비스 키 IP 화이트리스트 관리 (클라우드 IP)
-- [ ] 기존 yfinance 코드(`backend/app/services/data_collector.py`) 재사용 범위
-
----
+| 시세 조회 API | localhost:4030 프록시로 변경 |
+| AI 브리핑 시세 참조 | localhost:4030 API 호출 |
+| KIS collector | 데이터 서버로 이관, 클라우드에서 제거 |
+| DATABASE_URL | Oracle PostgreSQL로 변경 |
 
 ## 참고
 
-- `spec/data-source/spec.md` (데이터 소스 전략)
-- `docs/architecture.md` §4.3 (데이터 서버), §5.2 (키 분리)
-- `docs/development-plan-v2.md` Unit 5
-
----
-
-**마지막 갱신**: 2026-03-04
+- 기존 클라우드 시세 모델: `cloud_server/models/market.py`
+- 기존 수집기: `cloud_server/collector/scheduler.py`, `cloud_server/collector/kis_collector.py`
+- 로컬 분봉 저장: `local_server/storage/minute_bar.py`
+- 로컬 분봉 동기화: `local_server/cloud/bar_sync.py`
