@@ -47,21 +47,50 @@ export interface BacktestSummary {
 export interface BacktestResponse {
   success: boolean
   data: {
+    id: number
     summary: BacktestSummary
     equity_curve: number[]
     trades: BacktestTrade[]
   }
 }
 
-export async function runBacktest(req: BacktestRequest): Promise<BacktestResponse> {
+export interface BacktestHistoryItem {
+  id: number
+  rule_id: number | null
+  symbol: string
+  start_date: string
+  end_date: string
+  timeframe: string
+  summary: BacktestSummary
+  trade_count: number
+  executed_at: string
+}
+
+function authHeaders() {
   const jwt = sessionStorage.getItem(JWT_KEY)
+  return { Authorization: `Bearer ${jwt}` }
+}
+
+export async function runBacktest(req: BacktestRequest): Promise<BacktestResponse> {
   const resp = await axios.post<BacktestResponse>(
     `${CLOUD_URL}/api/v1/backtest/run`,
     req,
-    {
-      headers: { Authorization: `Bearer ${jwt}` },
-      timeout: 60_000,
-    },
+    { headers: authHeaders(), timeout: 60_000 },
   )
   return resp.data
+}
+
+export async function getBacktestHistory(ruleId?: number): Promise<BacktestHistoryItem[]> {
+  const params: Record<string, string> = {}
+  if (ruleId !== undefined) params.rule_id = String(ruleId)
+  const resp = await axios.get<{ success: boolean; data: BacktestHistoryItem[] }>(
+    `${CLOUD_URL}/api/v1/backtest/history`,
+    { headers: authHeaders(), params },
+  )
+  return resp.data.data
+}
+
+export async function getLatestBacktest(ruleId: number): Promise<BacktestHistoryItem | null> {
+  const items = await getBacktestHistory(ruleId)
+  return items.length > 0 ? items[0] : null
 }

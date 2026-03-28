@@ -139,9 +139,28 @@ async def fetch_minute_bars(
         if page % 10 == 0:
             logger.info("[%s] 수집 중: %d건 (%d pages)", symbol, len(all_bars), page)
 
+    # 동일 timestamp 중복 집계 (모의서버: 같은 분에 여러 체결건 반환)
+    all_bars = _deduplicate_bars(all_bars)
+
     # 오래된 순 정렬
     all_bars.sort(key=lambda b: b.get("timestamp", ""))
     return all_bars
+
+
+def _deduplicate_bars(bars: list[dict]) -> list[dict]:
+    """동일 timestamp 봉을 OHLCV로 집계."""
+    agg: dict[str, dict] = {}
+    for b in bars:
+        ts = b["timestamp"]
+        if ts not in agg:
+            agg[ts] = {**b}
+        else:
+            a = agg[ts]
+            a["high"] = max(a["high"], b["high"])
+            a["low"] = min(a["low"], b["low"])
+            a["close"] = b["close"]
+            a["volume"] += b["volume"]
+    return list(agg.values())
 
 
 def _extract_bars(data: dict) -> list[dict]:
@@ -229,14 +248,15 @@ async def main():
     secret_key = os.environ.get("KIWOOM_SECRET_KEY", "")
 
     if not app_key or not secret_key:
-        # keyring에서 로드 시도
+        # keyring에서 로드 — credential.py와 동일한 서비스명 패턴
         try:
             import keyring
-            creds = keyring.get_password("stockvision", "test@stockvision.dev")
-            if creds:
-                parts = json.loads(creds)
-                app_key = parts.get("kiwoom_app_key", parts.get("app_key", ""))
-                secret_key = parts.get("kiwoom_secret_key", parts.get("secret_key", ""))
+            for svc in ("stockvision:test@stockvision.dev", "stockvision:default"):
+                ak = keyring.get_password(svc, "kiwoom_app_key")
+                sk = keyring.get_password(svc, "kiwoom_secret_key")
+                if ak and sk:
+                    app_key, secret_key = ak, sk
+                    break
         except Exception:
             pass
 
