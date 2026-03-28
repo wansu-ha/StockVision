@@ -22,8 +22,11 @@ export default function BacktestResult({ summary, equityCurve, trades }: Props) 
         <MetricCard label="MDD" value={`-${summary.max_drawdown_pct}%`} color="text-red-400" />
         <MetricCard label="승률" value={`${summary.win_rate}%`} color="text-gray-200" />
         <MetricCard label="손익비" value={`${summary.profit_factor}`} color="text-gray-200" />
+        <MetricCard label="CAGR" value={`${summary.cagr}%`}
+          color={summary.cagr >= 0 ? 'text-green-400' : 'text-red-400'} />
         <MetricCard label="거래 횟수" value={`${summary.trade_count}`} color="text-gray-200" />
         <MetricCard label="샤프 비율" value={`${summary.sharpe_ratio}`} color="text-gray-200" />
+        <MetricCard label="평균 보유" value={`${summary.avg_hold_bars}봉`} color="text-gray-200" />
         <MetricCard label="총 수수료" value={`₩${summary.total_commission.toLocaleString()}`} color="text-gray-400" />
         <MetricCard label="총 세금" value={`₩${summary.total_tax.toLocaleString()}`} color="text-gray-400" />
       </div>

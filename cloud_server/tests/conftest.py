@@ -57,6 +57,7 @@ def _setup_db():
     from cloud_server.models.audit_log import AuditLog  # noqa: F401
     from cloud_server.models.oauth_account import OAuthAccount  # noqa: F401
     from cloud_server.models.device import Device  # noqa: F401
+    from cloud_server.models.backtest import BacktestExecution  # noqa: F401
 
     Base.metadata.create_all(bind=_engine)
     yield
