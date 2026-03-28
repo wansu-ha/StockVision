@@ -64,9 +64,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (jwt && rt) {
       // JWT 있음 → 로컬 서버에 토큰 전달 (set_active_user 트리거)
-      localAuth.setAuthToken(jwt, rt).then(() => {
-        setState(prev => ({ ...prev, localReady: true }))
-      })
+      // 로컬 서버 미실행 시에도 localReady=true로 전환 (원격 접속 허용)
+      localAuth.setAuthToken(jwt, rt)
+        .then(() => setState(prev => ({ ...prev, localReady: true })))
+        .catch(() => setState(prev => ({ ...prev, localReady: true })))
     } else if (rt) {
       // JWT 만료, RT 있음 → 클라우드에서 갱신
       cloudAuth.refresh(rt)
