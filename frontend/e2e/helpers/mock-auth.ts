@@ -21,6 +21,14 @@ export const MOCK_RULES = [
     qty: 10,
     is_active: true,
     priority: 0,
+    version: 1,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: null,
+    buy_conditions: null,
+    sell_conditions: null,
+    order_type: 'MARKET',
+    max_position_count: 1,
+    budget_ratio: 0.1,
   },
 ]
 
@@ -92,7 +100,7 @@ export async function setupRulesMock(page: Page): Promise<void> {
       route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ success: true, data: rules }),
+        body: JSON.stringify({ success: true, data: rules, count: rules.length }),
       })
     } else if (route.request().method() === 'POST') {
       const body = JSON.parse(route.request().postData() ?? '{}')
@@ -158,4 +166,9 @@ export async function setupAllMocks(page: Page): Promise<void> {
   await setupAuthMock(page)
   await setupRulesMock(page)
   await setupBacktestMock(page)
+
+  // 로컬 서버 요청 차단 (flaky 방지)
+  await page.route('http://localhost:4020/**', (route) => {
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true }) })
+  })
 }

@@ -36,14 +36,15 @@ test.describe('StrategyBuilder E2E', () => {
     // 저장 후 폼 닫힘 (저장 버튼 사라짐)
     await expect(saveBtn).not.toBeVisible({ timeout: 5_000 })
 
-    // 목록에 전략 카드 표시
-    await expect(page.getByTestId('strategy-card').first()).toBeVisible()
+    // 목록에 전략 카드 2개 (기존 1 + 신규 1)
+    await expect(page.getByTestId('strategy-card')).toHaveCount(2, { timeout: 5_000 })
+    await expect(page.getByText('신규 테스트 전략')).toBeVisible()
   })
 
   // ------------------------------------------------------------------ S2
   test('S2: 전략 편집 — 카드 수정 버튼 → 폼 열림 → 이름 수정 → 저장', async ({ page }) => {
     // 기존 전략 카드 수정 버튼 클릭
-    await page.getByText('수정').first().click()
+    await page.getByTestId('edit-strategy-btn').first().click()
 
     // 폼이 열리고 기존 값이 입력돼 있어야 함
     await expect(page.getByTestId('strategy-name-input')).toBeVisible()
@@ -97,7 +98,7 @@ test.describe('StrategyBuilder E2E', () => {
   // ------------------------------------------------------------------ S5
   test('S5: 백테스트 버튼 — 클릭 시 인라인 결과 표시', async ({ page }) => {
     // 기존 전략 수정 폼 열기
-    await page.getByText('수정').first().click()
+    await page.getByTestId('edit-strategy-btn').first().click()
     await expect(page.getByTestId('backtest-btn')).toBeVisible()
 
     // 백테스트 실행

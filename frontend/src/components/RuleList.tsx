@@ -90,7 +90,7 @@ export default function RuleList({ rules, namesMap, engineRunning, lastResults, 
               </div>
             </div>
 
-            <button onClick={() => onEdit(rule)} className="text-sm text-blue-600 hover:underline">수정</button>
+            <button data-testid="edit-strategy-btn" onClick={() => onEdit(rule)} className="text-sm text-blue-600 hover:underline">수정</button>
             <button data-testid="delete-strategy-btn" onClick={() => onDelete(rule.id)} className="text-sm text-red-500 hover:underline">삭제</button>
           </li>
         )
