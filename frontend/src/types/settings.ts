@@ -6,6 +6,12 @@ export interface BrokerConfig {
   status: 'ok' | 'error' | 'not_configured'
 }
 
+export interface UpdateConfig {
+  auto_enabled: boolean
+  no_update_start: string
+  no_update_end: string
+}
+
 export interface LocalConfig {
   mode: 'paper' | 'live'
   engine_running: boolean
@@ -13,6 +19,7 @@ export interface LocalConfig {
   max_positions: number
   max_loss_pct: number
   max_orders_per_minute: number
+  update?: UpdateConfig
 }
 
 export interface UserProfile {

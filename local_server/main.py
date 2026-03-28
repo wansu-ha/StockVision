@@ -117,6 +117,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         heartbeat_task = asyncio.create_task(start_heartbeat())
         logger.info("클라우드 하트비트 시작: %s", cloud_url)
 
+    # 자동 업데이트 체크
+    try:
+        from local_server.updater.manager import get_update_manager
+        update_mgr = get_update_manager()
+        await update_mgr.startup()
+        if update_mgr.state.info and update_mgr.state.info.available:
+            logger.info("업데이트 가능: %s → %s", update_mgr.state.info.current, update_mgr.state.info.latest)
+            # 자동 다운로드
+            if cfg.get("update.auto_enabled", True):
+                asyncio.create_task(update_mgr.start_download())
+    except Exception as e:
+        logger.warning("업데이트 체크 실패 (서버 시작은 계속): %s", e)
+
     # 브로커 자동 연결 (키 있으면 서버 시작 시 자동 연결)
     app.state.broker = None
     app.state.broker_reason = "disconnected"
@@ -271,7 +284,13 @@ def create_app() -> FastAPI:
     @app.get("/health", tags=["헬스체크"])
     async def health_check() -> dict:
         """서버 헬스체크 엔드포인트."""
-        return {"status": "ok", "version": app.version, "app": "stockvision", "uptime": int(_time.monotonic() - _start_time)}
+        from local_server.updater.manager import get_update_manager
+        mgr = get_update_manager()
+        return {
+            "status": "ok", "version": app.version, "app": "stockvision",
+            "uptime": int(_time.monotonic() - _start_time),
+            "update_status": mgr.state.to_dict(),
+        }
 
     return app
 
