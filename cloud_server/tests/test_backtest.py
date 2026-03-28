@@ -106,3 +106,101 @@ def test_backtest_api_no_script(client, db):
     }, headers=headers)
 
     assert resp.status_code == 400
+
+
+def test_backtest_saves_to_db(client, db, _seed_daily_bars):
+    """백테스트 실행 시 결과가 DB에 저장."""
+    user = _make_user(db)
+    headers = _auth_header(user)
+
+    resp = client.post("/api/v1/backtest/run", json={
+        "script": "매수: RSI(14) <= 40\n매도: RSI(14) >= 60",
+        "symbol": "005930",
+        "start_date": "2025-06-01",
+        "end_date": "2025-10-01",
+    }, headers=headers)
+
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert "id" in data  # execution_id 반환
+    execution_id = data["id"]
+    assert execution_id > 0
+
+    # DB에 실제 저장 확인
+    from cloud_server.models.backtest import BacktestExecution
+    row = db.query(BacktestExecution).filter(BacktestExecution.id == execution_id).first()
+    assert row is not None
+    assert row.symbol == "005930"
+    assert row.user_id == str(user.id)
+    assert row.summary["total_return_pct"] is not None
+
+
+def test_backtest_history_api(client, db, _seed_daily_bars):
+    """GET /api/v1/backtest/history — 이력 조회."""
+    user = _make_user(db)
+    headers = _auth_header(user)
+
+    # 먼저 백테스트 실행
+    client.post("/api/v1/backtest/run", json={
+        "script": "매수: RSI(14) <= 40\n매도: RSI(14) >= 60",
+        "symbol": "005930",
+        "start_date": "2025-06-01",
+        "end_date": "2025-10-01",
+    }, headers=headers)
+
+    # history 조회
+    resp = client.get("/api/v1/backtest/history", headers=headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["success"] is True
+    assert data["count"] >= 1
+    assert data["data"][0]["symbol"] == "005930"
+
+
+def test_backtest_detail_api(client, db, _seed_daily_bars):
+    """GET /api/v1/backtest/{id} — 상세 조회."""
+    user = _make_user(db)
+    headers = _auth_header(user)
+
+    # 백테스트 실행
+    run_resp = client.post("/api/v1/backtest/run", json={
+        "script": "매수: RSI(14) <= 40\n매도: RSI(14) >= 60",
+        "symbol": "005930",
+        "start_date": "2025-06-01",
+        "end_date": "2025-10-01",
+    }, headers=headers)
+    execution_id = run_resp.json()["data"]["id"]
+
+    # detail 조회
+    resp = client.get(f"/api/v1/backtest/{execution_id}", headers=headers)
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data["id"] == execution_id
+    assert data["symbol"] == "005930"
+    assert "summary" in data
+
+
+def test_backtest_detail_not_found(client, db):
+    """존재하지 않는 execution_id → 404."""
+    user = _make_user(db)
+    headers = _auth_header(user)
+
+    resp = client.get("/api/v1/backtest/99999", headers=headers)
+    assert resp.status_code == 404
+
+
+def test_backtest_tf_arg_in_dsl(client, db, _seed_daily_bars):
+    """RSI(14, "5m") 문법이 에러 없이 실행."""
+    user = _make_user(db)
+    headers = _auth_header(user)
+
+    resp = client.post("/api/v1/backtest/run", json={
+        "script": '매수: RSI(14, "5m") <= 40\n매도: RSI(14) >= 60',
+        "symbol": "005930",
+        "start_date": "2025-06-01",
+        "end_date": "2025-10-01",
+        "timeframe": "1d",
+    }, headers=headers)
+
+    # TF 데이터 없어도 에러 없이 실행 (None 폴백)
+    assert resp.status_code == 200
