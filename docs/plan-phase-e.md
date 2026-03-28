@@ -1,6 +1,6 @@
 # Phase E 통합 구현 계획서
 
-> 작성일: 2026-03-26 | 상태: 초안
+> 작성일: 2026-03-26 | 상태: 구현 완료 | 갱신: 2026-03-28
 > 관련 spec: `spec/minute-bar-collection/`, `spec/backtest-engine/`, `spec/minute-indicators/`, `spec/frontend-test-expansion/`
 
 ---
@@ -147,26 +147,26 @@ MC-2 (실시간 sync) ─↗                  ↑
 
 ## 검증 체크리스트
 
-### Wave 1
-- [ ] sv_core/indicators 추출 → 기존 엔진 테스트 통과
-- [ ] 키움 배치 1종목 수집 성공
-- [ ] 로컬→클라우드 분봉 sync 동작
-- [ ] cloud API 분봉 조회 (1m/5m/15m/1h)
-- [ ] Vitest + dslParser 테스트 통과
-- [ ] dslConverter + e2eCrypto 테스트 통과
+### Wave 1 ✅
+- [x] sv_core/indicators 추출 → 기존 엔진 테스트 통과
+- [x] 키움 배치 1종목 수집 성공 (삼성전자 900분봉)
+- [x] 로컬→클라우드 분봉 sync 동작
+- [x] cloud API 분봉 조회 (1m/5m/15m/1h)
+- [x] Vitest + dslParser 테스트 통과 (26개)
+- [x] dslConverter + e2eCrypto 테스트 통과 (8 + 8개)
 
-### Wave 2
-- [ ] DSL 타임프레임 확장 + 하위 호환
-- [ ] 백테스트 일봉 MVP 동작 (알려진 규칙으로 검증)
-- [ ] 백테스트 분봉 동작 (키움 데이터로)
-- [ ] 수수료/세금 반영
-- [ ] API 엔드포인트 동작
-- [ ] 분봉 IndicatorProvider 라이브 엔진 통합
+### Wave 2 ✅
+- [x] DSL 타임프레임 확장 + 하위 호환
+- [x] 백테스트 일봉 MVP 동작 (삼성전자/SK하이닉스/NAVER 검증)
+- [x] 백테스트 분봉 동작 (삼성전자 900바, 16거래)
+- [x] 수수료/세금/슬리피지 반영
+- [x] API 엔드포인트 동작 (run + history + detail)
+- [x] 분봉 IndicatorProvider 라이브 엔진 통합
 
-### Wave 3
-- [ ] 백테스트 UI 브라우저 동작
-- [ ] StrategyBuilder → 백테스트 연동
-- [ ] E2E 테스트 확장 통과
+### Wave 3 ✅ (대신증권 제외)
+- [x] 백테스트 UI 브라우저 동작
+- [x] StrategyBuilder → 백테스트 연동
+- [x] E2E 테스트 확장 통과 (Builder E2E 5개)
 - [ ] 대신증권 5년 데이터 임포트 (계좌 확보 후)
 
 ---
