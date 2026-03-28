@@ -75,6 +75,9 @@ function StatusPopover({
         <div className="text-xs text-gray-300 space-y-1">
           <div>상태: {engine.running ? '실행 중' : '정지'}</div>
           <div>활성 규칙: {(engine.active_rules as number) ?? 'N/A'}</div>
+          <div className="border-t border-gray-700 mt-1 pt-1 text-[10px] text-gray-500">
+            백테스트 현황은 전략 목록에서 확인
+          </div>
         </div>
       )
     default:

@@ -1,16 +1,19 @@
-/** 규칙 카드 — 4블록 구조 (조건/실행/리스크/최근결과) */
+/** 규칙 카드 — 5블록 구조 (조건/실행/리스크/최근결과/백테스트) */
 import type { Rule } from '../types/strategy'
 import { parseDirection } from '../types/strategy'
 import type { LastRuleResult } from '../types/rule-result'
+import type { BacktestSummary } from '../services/backtest'
 
 interface Props {
   rule: Rule
   symbolName?: string
   engineRunning?: boolean
   lastResult?: LastRuleResult | null
+  backtestSummary?: BacktestSummary | null
   onToggle: (id: number, enabled: boolean) => void
   onEdit: (id: number) => void
   onDelete: (id: number) => void
+  onBacktest?: (id: number) => void
 }
 
 const DIRECTION_STYLE: Record<string, string> = {
@@ -54,7 +57,7 @@ function triggerLabel(rule: Rule): string {
   return '일 1회'
 }
 
-export default function RuleCard({ rule, symbolName, engineRunning, lastResult, onToggle, onEdit, onDelete }: Props) {
+export default function RuleCard({ rule, symbolName, engineRunning, lastResult, backtestSummary, onToggle, onEdit, onDelete, onBacktest }: Props) {
   const direction = parseDirection(rule)
   const isRunning = engineRunning && rule.is_active
   const orderType = rule.execution?.order_type ?? rule.order_type ?? 'MARKET'
@@ -138,11 +141,32 @@ export default function RuleCard({ rule, symbolName, engineRunning, lastResult, 
         )}
       </div>
 
-      {/* 수정/삭제 */}
+      {/* 블록 5: 백테스트 */}
+      <div className="mb-3">
+        <p className="text-[11px] font-medium text-gray-400 uppercase mb-0.5">백테스트</p>
+        {backtestSummary ? (
+          <div className="flex items-center gap-3 text-xs">
+            <span className={backtestSummary.total_return_pct >= 0 ? 'text-green-400' : 'text-red-400'}>
+              수익 {backtestSummary.total_return_pct}%
+            </span>
+            <span className="text-red-400">MDD -{backtestSummary.max_drawdown_pct}%</span>
+            <span className="text-gray-300">승률 {backtestSummary.win_rate}%</span>
+          </div>
+        ) : (
+          <span className="text-xs text-gray-500">미검증</span>
+        )}
+      </div>
+
+      {/* 수정/삭제/백테스트 */}
       <div className="flex items-center gap-2">
         <button onClick={() => onEdit(rule.id)} className="text-xs text-indigo-600 hover:text-indigo-800 font-medium">
           수정
         </button>
+        {onBacktest && (
+          <button onClick={() => onBacktest(rule.id)} className="text-xs text-indigo-400 hover:text-indigo-300 font-medium">
+            백테스트
+          </button>
+        )}
         <button onClick={() => onDelete(rule.id)} className="text-xs text-red-500 hover:text-red-700 font-medium">
           삭제
         </button>
