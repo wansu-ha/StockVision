@@ -1,7 +1,8 @@
-"""IndicatorProvider — 종목별 일봉 기반 기술적 지표 제공.
+"""IndicatorProvider — 종목별 일봉/분봉 기반 기술적 지표 제공.
 
-yfinance에서 80일 일봉을 배치 조회하여 RSI, SMA, EMA, MACD, 볼린저, 평균거래량을 계산.
-캐시는 1일 유효 — 일봉 지표는 장중 변하지 않음.
+일봉: yfinance에서 80일 일봉을 배치 조회, 캐시 1일 유효.
+분봉: cloud_server MinuteBar API에서 조회, 캐시 1분 유효.
+      캐시 만료 시 None 반환 (평가 건너뜀).
 
 종목 시장 구분:
     market_map을 통해 KOSPI(.KS) / KOSDAQ(.KQ)를 구분한다.
@@ -11,7 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import date
+from datetime import date, datetime, timedelta
 from typing import Any
 
 import pandas as pd
@@ -22,15 +23,19 @@ from sv_core.indicators import calc_all_indicators
 logger = logging.getLogger(__name__)
 
 _LOOKBACK_DAYS = 80  # 60일 + 여유
+_MINUTE_LOOKBACK = 200  # 분봉 최대 조회 건수
+_MINUTE_CACHE_TTL = timedelta(minutes=1)  # 분봉 캐시 유효기간
 _EMPTY: dict[str, Any] = {}
 
 
 class IndicatorProvider:
-    """종목별 일봉 기반 기술적 지표 제공."""
+    """종목별 일봉/분봉 기반 기술적 지표 제공."""
 
     def __init__(self) -> None:
-        # {symbol: {"date": date, "indicators": dict}}
-        self._cache: dict[str, dict] = {}
+        # 일봉 캐시: {symbol: {"date": date, "indicators": dict}}
+        self._daily_cache: dict[str, dict] = {}
+        # 분봉 캐시: {symbol: {tf: {"expires": datetime, "indicators": dict}}}
+        self._minute_cache: dict[str, dict[str, dict]] = {}
 
     async def refresh(
         self,
@@ -44,7 +49,7 @@ class IndicatorProvider:
             market_map: {symbol: "KOSPI"|"KOSDAQ"} — 없으면 KOSPI(.KS) 기본
         """
         today = date.today()
-        stale = [s for s in symbols if self._is_stale(s, today)]
+        stale = [s for s in symbols if self._is_daily_stale(s, today)]
         if not stale:
             logger.debug("지표 캐시 유효 — 갱신 불필요 (%d종목)", len(symbols))
             return
@@ -53,21 +58,87 @@ class IndicatorProvider:
         logger.info("지표 계산 시작: %s", stale)
         results = await asyncio.to_thread(self._fetch_and_calc_batch, stale, _market_map)
         for sym, indicators in results.items():
-            self._cache[sym] = {"date": today, "indicators": indicators}
+            self._daily_cache[sym] = {"date": today, "indicators": indicators}
         logger.info("지표 계산 완료: %d종목 성공", len(results))
 
-    def get(self, symbol: str) -> dict:
-        """evaluator가 기대하는 indicators dict 반환."""
-        entry = self._cache.get(symbol)
-        if not entry:
-            return _EMPTY
+    async def refresh_minute(self, symbol: str, tf: str) -> None:
+        """분봉 지표를 계산하여 캐시.
+
+        cloud_server MinuteBar API에서 분봉을 조회하고
+        calc_all_indicators로 지표를 계산한다.
+        CloudClient가 없거나 조회 실패 시 캐시를 갱신하지 않는다.
+
+        Args:
+            symbol: 종목코드
+            tf: 타임프레임 ("1m", "5m", "15m", "1h")
+        """
+        from local_server.cloud.heartbeat import get_cloud_client
+        client = get_cloud_client()
+        if client is None:
+            logger.debug("CloudClient 없음 — 분봉 지표 갱신 생략 [%s %s]", symbol, tf)
+            return
+
+        try:
+            path = f"/api/v1/stocks/{symbol}/bars?resolution={tf}&limit={_MINUTE_LOOKBACK}"
+            resp = await client._get(path)
+            data: list[dict] = resp.get("data", []) if isinstance(resp, dict) else []
+        except Exception:
+            logger.warning("분봉 조회 실패 [%s %s]", symbol, tf)
+            return
+
+        if len(data) < 15:
+            logger.debug("분봉 데이터 부족 [%s %s]: %d건", symbol, tf, len(data))
+            return
+
+        try:
+            closes = pd.Series([float(b["close"]) for b in data if b.get("close") is not None])
+            volumes = pd.Series([float(b.get("volume") or 0) for b in data])
+            if len(closes) < 15:
+                return
+            indicators = calc_all_indicators(closes, volumes)
+        except Exception:
+            logger.exception("분봉 지표 계산 실패 [%s %s]", symbol, tf)
+            return
+
+        if symbol not in self._minute_cache:
+            self._minute_cache[symbol] = {}
+        self._minute_cache[symbol][tf] = {
+            "expires": datetime.now() + _MINUTE_CACHE_TTL,
+            "indicators": indicators,
+        }
+        logger.debug("분봉 지표 캐시 갱신 [%s %s]", symbol, tf)
+
+    def get(self, symbol: str, tf: str = "1d") -> dict | None:
+        """evaluator가 기대하는 indicators dict 반환.
+
+        Args:
+            symbol: 종목코드
+            tf: 타임프레임. "1d"=일봉, "1m"/"5m" 등=분봉.
+
+        Returns:
+            지표 dict. 분봉 캐시 만료/미존재 시 None 반환.
+            일봉 캐시 미존재 시 빈 dict 반환 (기존 동작 유지).
+        """
+        if tf == "1d":
+            entry = self._daily_cache.get(symbol)
+            return entry["indicators"] if entry else _EMPTY
+
+        # 분봉
+        sym_cache = self._minute_cache.get(symbol, {})
+        entry = sym_cache.get(tf)
+        if entry is None:
+            return None
+        if datetime.now() > entry["expires"]:
+            # 만료 — 캐시 항목 제거 후 None 반환
+            sym_cache.pop(tf, None)
+            return None
         return entry["indicators"]
 
-    def _is_stale(self, symbol: str, today: date) -> bool:
-        entry = self._cache.get(symbol)
+    def _is_daily_stale(self, symbol: str, today: date) -> bool:
+        entry = self._daily_cache.get(symbol)
         return entry is None or entry["date"] != today
 
-    # ── 데이터 조회 + 계산 (blocking, thread pool에서 호출) ──
+    # ── 일봉 데이터 조회 + 계산 (blocking, thread pool에서 호출) ──
 
     def _fetch_and_calc_batch(
         self,

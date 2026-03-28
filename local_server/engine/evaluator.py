@@ -91,12 +91,17 @@ class RuleEvaluator:
         ctx["보유수량"] = context.get("보유수량", 0)
 
         # 내장 함수 — 지표 데이터에서 resolve
-        # tf(타임프레임) 인자는 선택적. 현재 일봉 지표만 캐시.
-        # 분봉 지표 확장 시 indicators를 {tf: {key: val}} 구조로 변경.
+        # indicators는 {tf: {key: val}} 구조.
+        # tf=None → "1d" (일봉), tf="5m" 등 → 해당 분봉 dict.
+        # 해당 tf 캐시가 없으면 None 반환.
         def make_indicator_func(name: str):
             def func(period, tf=None):
+                resolved_tf = tf or "1d"
+                tf_dict = indicators.get(resolved_tf)
+                if tf_dict is None:
+                    return None
                 key = f"{name}_{int(period)}"
-                val = indicators.get(key)
+                val = tf_dict.get(key)
                 return float(val) if val is not None else None
             return func
 
@@ -106,8 +111,25 @@ class RuleEvaluator:
         ctx["평균거래량"] = make_indicator_func("avg_volume")
         ctx["볼린저_상단"] = make_indicator_func("bb_upper")
         ctx["볼린저_하단"] = make_indicator_func("bb_lower")
-        ctx["MACD"] = lambda tf=None: float(v) if (v := indicators.get("macd")) is not None else None
-        ctx["MACD_SIGNAL"] = lambda tf=None: float(v) if (v := indicators.get("macd_signal")) is not None else None
+
+        def _macd(tf=None):
+            resolved_tf = tf or "1d"
+            tf_dict = indicators.get(resolved_tf)
+            if tf_dict is None:
+                return None
+            v = tf_dict.get("macd")
+            return float(v) if v is not None else None
+
+        def _macd_signal(tf=None):
+            resolved_tf = tf or "1d"
+            tf_dict = indicators.get(resolved_tf)
+            if tf_dict is None:
+                return None
+            v = tf_dict.get("macd_signal")
+            return float(v) if v is not None else None
+
+        ctx["MACD"] = _macd
+        ctx["MACD_SIGNAL"] = _macd_signal
 
         return ctx
 
