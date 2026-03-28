@@ -39,7 +39,7 @@ export default function RuleList({ rules, namesMap, engineRunning, lastResults, 
         const badge = result ? RESULT_BADGE[result.status] : null
 
         return (
-          <li key={rule.id} className="flex items-center gap-3 py-3">
+          <li key={rule.id} data-testid="strategy-card" className="flex items-center gap-3 py-3">
             {/* ON/OFF 토글 */}
             <button
               onClick={() => onToggle(rule)}
@@ -90,8 +90,8 @@ export default function RuleList({ rules, namesMap, engineRunning, lastResults, 
               </div>
             </div>
 
-            <button onClick={() => onEdit(rule)} className="text-sm text-blue-600 hover:underline">수정</button>
-            <button onClick={() => onDelete(rule.id)} className="text-sm text-red-500 hover:underline">삭제</button>
+            <button data-testid="edit-strategy-btn" onClick={() => onEdit(rule)} className="text-sm text-blue-600 hover:underline">수정</button>
+            <button data-testid="delete-strategy-btn" onClick={() => onDelete(rule.id)} className="text-sm text-red-500 hover:underline">삭제</button>
           </li>
         )
       })}
