@@ -123,11 +123,9 @@ export default function DslEditor({ value, onChange, errors: externalErrors }: D
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
       setSelectedIdx(i => Math.max(i - 1, 0))
-    } else if (e.key === 'Tab' || e.key === 'Enter') {
-      if (suggestions.length > 0) {
-        e.preventDefault()
-        applySuggestion(suggestions[selectedIdx])
-      }
+    } else if (e.key === 'Tab') {
+      e.preventDefault()
+      applySuggestion(suggestions[selectedIdx])
     } else if (e.key === 'Escape') {
       setSuggestions([])
     }

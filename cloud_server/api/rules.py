@@ -108,11 +108,14 @@ def _extract_dsl_metadata(script: str | None) -> tuple[dict | None, dict]:
         dsl_meta: dict = {
             "parse_status": "ok",
             "is_v2": bool(ast.rules),
-            "constants": [{"name": c.name, "value": c.value.value if hasattr(c.value, 'value') else c.value}
+            "constants": [{"name": c.name,
+                          "value": c.value.value if hasattr(c.value, 'value') else
+                                   (c.value if isinstance(c.value, (int, float, str)) else str(c.value))}
                           for c in ast.consts],
-            "custom_functions": [{"name": f.name, "body": repr(f.body)}
+            "custom_functions": [{"name": f.name, "body": str(f.body)}
                                  for f in ast.custom_funcs],
-            "rules": [{"index": i, "side": r.action.side, "qty": f"{r.action.qty_value}{'%' if r.action.qty_type == 'percent' else ''}"}
+            "rules": [{"index": i, "condition": str(r.condition), "side": r.action.side,
+                        "qty": f"{r.action.qty_value}{'%' if r.action.qty_type == 'percent' else ''}"}
                       for i, r in enumerate(ast.rules)],
             "errors": [],
         }

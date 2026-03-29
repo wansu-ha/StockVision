@@ -49,6 +49,8 @@ export interface Rule {
   qty: number
   max_position_count: number
   budget_ratio: number
+  parameters: Record<string, { type: string; default: number | string }> | null
+  dsl_meta: DslMeta | null
 }
 
 export type CreateRulePayload = Pick<Rule, 'name' | 'symbol'> & {
