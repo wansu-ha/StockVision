@@ -42,12 +42,33 @@ export function useAIChat(mode: 'builder' | 'assistant' = 'builder'): UseAIChatR
     const assistantMsg: Message = { role: 'assistant', content: '', timestamp: new Date().toISOString() }
     setMessages(prev => [...prev, assistantMsg])
 
+    // assistant 모드: 로컬 데이터 컨텍스트 수집
+    let context: Record<string, unknown> | null = null
+    if (mode === 'assistant') {
+      try {
+        const { localLogs, localHealth } = await import('../services/localClient')
+        const [summary, pnl, health] = await Promise.all([
+          localLogs.summary().catch(() => null),
+          localLogs.dailyPnl().catch(() => null),
+          localHealth.check().catch(() => null),
+        ])
+        context = {
+          execution_logs: summary || {},
+          daily_pnl: pnl || {},
+          positions: health || {},
+        }
+      } catch {
+        // 로컬 서버 미연결 — context 없이 진행
+      }
+    }
+
     const params: AIChatRequest = {
       conversation_id: conversationId,
       message,
       current_dsl: currentDsl,
       mode,
       thinking: false,
+      context,
     }
 
     try {

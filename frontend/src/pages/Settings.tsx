@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { localEngine, localBroker, localUpdate } from '../services/localClient'
 import type { UpdateStatus } from '../services/localClient'
-import { cloudAuth } from '../services/cloudClient'
+import { cloudAuth, cloudAI as cloudAi } from '../services/cloudClient'
 import { useAuth } from '../context/AuthContext'
 import { useAlertStore } from '../stores/alertStore'
 import { useAccountStatus } from '../hooks/useAccountStatus'
@@ -357,6 +357,9 @@ export default function Settings() {
           <DeviceManager />
         </section>
 
+        {/* AI LLM 설정 */}
+        <AiLlmSettings />
+
         {/* 자동 업데이트 */}
         {bridgeConnected && (
           <UpdateSettings />
@@ -364,6 +367,87 @@ export default function Settings() {
 
       </main>
     </div>
+  )
+}
+
+/** AI LLM 소스 설정 */
+function AiLlmSettings() {
+  const [hasKey, setHasKey] = useState(false)
+  const [keyInput, setKeyInput] = useState('')
+  const [saving, setSaving] = useState(false)
+  const addAlert = useAlertStore((s) => s.add)
+
+  useEffect(() => {
+    cloudAi.credit().then((r) => {
+      if (r?.has_byo_key) setHasKey(true)
+    }).catch(() => {})
+  }, [])
+
+  const handleRegister = async () => {
+    if (!keyInput.trim()) return
+    setSaving(true)
+    try {
+      await cloudAi.registerApiKey(keyInput.trim())
+      setHasKey(true)
+      setKeyInput('')
+      addAlert('API 키가 등록되었습니다', 'success')
+    } catch {
+      addAlert('API 키 등록 실패', 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    try {
+      await cloudAi.deleteApiKey()
+      setHasKey(false)
+      addAlert('API 키가 삭제되었습니다', 'info')
+    } catch {
+      addAlert('API 키 삭제 실패', 'error')
+    }
+  }
+
+  return (
+    <section className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+      <h2 className="text-base font-semibold mb-4">AI 설정</h2>
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <span className={`w-2.5 h-2.5 rounded-full ${hasKey ? 'bg-green-400' : 'bg-gray-600'}`} />
+          <span className="text-sm text-gray-300">
+            LLM 소스: {hasKey ? '내 API 키 (무제한)' : '플랫폼 크레딧'}
+          </span>
+        </div>
+        {hasKey ? (
+          <button
+            onClick={handleDelete}
+            className="px-3 py-1.5 text-xs text-red-400 bg-red-900/30 border border-red-800 rounded-lg hover:bg-red-900/50 transition"
+          >
+            API 키 삭제
+          </button>
+        ) : (
+          <div className="flex gap-2">
+            <input
+              type="password"
+              value={keyInput}
+              onChange={(e) => setKeyInput(e.target.value)}
+              placeholder="Anthropic API 키 입력"
+              className="flex-1 px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-indigo-500 transition"
+            />
+            <button
+              onClick={handleRegister}
+              disabled={saving || !keyInput.trim()}
+              className="px-3 py-1.5 text-xs bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition disabled:opacity-50"
+            >
+              {saving ? '등록 중...' : '등록'}
+            </button>
+          </div>
+        )}
+        <p className="text-xs text-gray-600">
+          API 키를 등록하면 빌더와 비서 모두 자체 키로 동작합니다 (크레딧 소모 없음).
+        </p>
+      </div>
+    </section>
   )
 }
 
