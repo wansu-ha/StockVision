@@ -23,7 +23,7 @@ from sv_core.indicators.calculator import (
     calc_avg_volume,
 )
 from sv_core.parsing.evaluator import evaluate as dsl_evaluate
-from sv_core.parsing.parser import parse
+from sv_core.parsing.parser import parse_v2
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +105,7 @@ class BacktestRunner:
         cfg = config or BacktestConfig()
 
         # 1. DSL 파싱
-        ast = parse(script)
+        ast = parse_v2(script)
 
         # 2. 바 데이터 로드
         bars = self._load_bars(symbol, start_date, end_date, timeframe)
