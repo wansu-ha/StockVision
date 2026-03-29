@@ -184,11 +184,16 @@ export const localBroker = {
 
 /** 헬스 체크 (버전 + 업데이트 상태 포함) */
 export interface UpdateStatus {
+  status: string
   available: boolean
   latest: string
+  current: string
   major_mismatch: boolean
   download_progress: number
   ready_to_install: boolean
+  last_error: string | null
+  last_checked_at: string | null
+  mandatory: boolean
 }
 
 export interface HealthResponse {
@@ -202,6 +207,18 @@ export const localHealth = {
     axios.get<HealthResponse>(`${LOCAL_URL}/health`, { timeout: 3000 })
       .then((r) => r.data)
       .catch(() => null),
+}
+
+/** 업데이트 수동 제어 */
+export const localUpdate = {
+  status: () =>
+    client.get<UpdateStatus>('/update/status').then((r) => r.data).catch(() => null),
+  check: () =>
+    client.post<UpdateStatus>('/update/check').then((r) => r.data).catch(() => null),
+  install: (force = false) =>
+    client.post('/update/install', null, { params: { force } }).then((r) => r.data),
+  releaseNotes: () =>
+    client.get<{ notes: string }>('/update/release-notes').then((r) => r.data).catch(() => null),
 }
 
 export default client

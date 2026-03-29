@@ -2,7 +2,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { localEngine, localBroker } from '../services/localClient'
+import { localEngine, localBroker, localUpdate } from '../services/localClient'
+import type { UpdateStatus } from '../services/localClient'
 import { cloudAuth } from '../services/cloudClient'
 import { useAuth } from '../context/AuthContext'
 import { useAlertStore } from '../stores/alertStore'
@@ -63,6 +64,7 @@ export default function Settings() {
   // Bridge 연결 상태 (localReady와 독립적으로 /health 직접 폴링)
   const [bridgeConnected, setBridgeConnected] = useState(false)
   const [bridgeUptime, setBridgeUptime] = useState<number | null>(null)
+  const [bridgeVersion, setBridgeVersion] = useState<string | null>(null)
   const [launchWaiting, setLaunchWaiting] = useState(false)
   const [launchFailed, setLaunchFailed] = useState(false)
   const launchIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -75,9 +77,11 @@ export default function Settings() {
           if (data.app === 'stockvision') {
             setBridgeConnected(true)
             setBridgeUptime(data.uptime ?? null)
+            setBridgeVersion(data.version ?? null)
           } else {
             setBridgeConnected(false)
             setBridgeUptime(null)
+            setBridgeVersion(null)
           }
         })
         .catch(() => {
@@ -171,12 +175,16 @@ export default function Settings() {
             <span className={`text-sm ${bridgeConnected ? 'text-green-400' : 'text-yellow-400'}`}>
               {bridgeConnected ? '연결됨' : '미연결'}
             </span>
+            {bridgeConnected && bridgeVersion && (
+              <span className="text-xs text-gray-500 ml-1">v{bridgeVersion}</span>
+            )}
             {bridgeConnected && bridgeUptime != null && (
               <span className="text-xs text-gray-500 ml-2">
                 업타임: {formatUptime(bridgeUptime)}
               </span>
             )}
           </div>
+          {bridgeConnected && <BridgeUpdateInfo />}
 
           {!bridgeConnected && (
             <div className="space-y-3">
@@ -355,6 +363,80 @@ export default function Settings() {
         )}
 
       </main>
+    </div>
+  )
+}
+
+/** Bridge 업데이트 정보 — 현재/최신 버전 + 수동 제어 */
+function BridgeUpdateInfo() {
+  const [info, setInfo] = useState<UpdateStatus | null>(null)
+  const [checking, setChecking] = useState(false)
+  const addAlert = useAlertStore((s) => s.add)
+
+  useEffect(() => {
+    localUpdate.status().then(setInfo)
+  }, [])
+
+  const handleCheck = async () => {
+    setChecking(true)
+    try {
+      const result = await localUpdate.check()
+      if (result) setInfo(result)
+      addAlert('업데이트 확인 완료', 'info')
+    } catch {
+      addAlert('업데이트 확인 실패', 'error')
+    } finally {
+      setChecking(false)
+    }
+  }
+
+  const handleInstall = async () => {
+    try {
+      await localUpdate.install()
+    } catch (e: unknown) {
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      addAlert(detail ?? '설치 실패', 'error')
+    }
+  }
+
+  if (!info) return null
+
+  return (
+    <div className="mb-4 p-3 bg-gray-800/50 rounded-lg space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="text-xs text-gray-400">
+          현재: <span className="text-gray-200 font-mono">v{info.current || '?'}</span>
+          {info.available && (
+            <> → 최신: <span className="text-yellow-300 font-mono">v{info.latest}</span></>
+          )}
+          {!info.available && info.current && (
+            <span className="text-green-400 ml-2">최신 버전</span>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={handleCheck}
+            disabled={checking}
+            className="px-2 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition disabled:opacity-50"
+          >
+            {checking ? '확인 중...' : '업데이트 확인'}
+          </button>
+          {info.ready_to_install && (
+            <button
+              onClick={handleInstall}
+              className="px-2 py-1 text-xs bg-yellow-700 hover:bg-yellow-600 text-yellow-200 rounded transition"
+            >
+              지금 설치
+            </button>
+          )}
+        </div>
+      </div>
+      {info.status === 'error' && info.last_error && (
+        <p className="text-xs text-red-400">{info.last_error}</p>
+      )}
+      {info.status === 'rolled_back' && (
+        <p className="text-xs text-red-400">{info.last_error || '업데이트 실패, 이전 버전으로 복원됨'}</p>
+      )}
     </div>
   )
 }
