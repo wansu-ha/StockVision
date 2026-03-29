@@ -37,6 +37,7 @@ class AIChatService:
         mode: str,
         thinking: bool,
         user_id: str,
+        context: dict | None = None,
     ) -> AsyncGenerator[dict, None]:
         """대화 처리 → SSE 이벤트 스트림.
 
@@ -96,6 +97,9 @@ class AIChatService:
             }
             if thinking and mode == "builder":
                 create_kwargs["thinking"] = {"type": "enabled", "budget_tokens": 4096}
+            if mode == "assistant":
+                from cloud_server.services.ai_tool_executor import ASSISTANT_TOOLS
+                create_kwargs["tools"] = ASSISTANT_TOOLS
 
             with client.messages.stream(**create_kwargs) as stream:
                 for event in stream:
@@ -108,9 +112,52 @@ class AIChatService:
                                 yield {"event": "token", "data": {"content": event.delta.text}}
 
                 # 사용량
-                usage = stream.get_final_message().usage
+                final_msg = stream.get_final_message()
+                usage = final_msg.usage
                 total_input = usage.input_tokens
                 total_output = usage.output_tokens
+
+            # tool_use 처리 루프 (assistant 모드만)
+            if mode == "assistant":
+                from cloud_server.services.ai_tool_executor import execute_tool
+
+                while final_msg.stop_reason == "tool_use":
+                    # tool_use 블록 추출
+                    tool_blocks = [b for b in final_msg.content if b.type == "tool_use"]
+                    if not tool_blocks:
+                        break
+
+                    # tool 실행 + 결과 수집
+                    tool_results = []
+                    for tb in tool_blocks:
+                        yield {"event": "tool_call", "data": {"name": tb.name, "input": tb.input}}
+                        result = execute_tool(tb.name, tb.input, user_id, self.db, context)
+                        tool_results.append({
+                            "type": "tool_result",
+                            "tool_use_id": tb.id,
+                            "content": result,
+                        })
+                        yield {"event": "tool_result", "data": {"name": tb.name, "result": result[:500]}}
+
+                    # Claude 재호출 (tool 결과 포함)
+                    llm_messages = llm_messages + [
+                        {"role": "assistant", "content": final_msg.content},
+                        *tool_results,
+                    ]
+
+                    full_response = ""  # 새 응답으로 교체
+                    with client.messages.stream(
+                        model=model, max_tokens=2048, system=system_prompt,
+                        messages=llm_messages, tools=create_kwargs.get("tools", []),
+                    ) as stream2:
+                        for event in stream2:
+                            if hasattr(event, "type") and event.type == "content_block_delta":
+                                if hasattr(event.delta, "text"):
+                                    full_response += event.delta.text
+                                    yield {"event": "token", "data": {"content": event.delta.text}}
+                        final_msg = stream2.get_final_message()
+                        total_input += final_msg.usage.input_tokens
+                        total_output += final_msg.usage.output_tokens
 
         except Exception as e:
             logger.error("Claude API 스트리밍 실패: %s", e)

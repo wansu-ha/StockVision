@@ -31,7 +31,7 @@ export default function MainDashboard() {
   const { completed: onboardingDone } = useOnboarding()
   const [view, setView] = useState<'list' | 'detail'>('list')
   const [selectedStock, setSelectedStock] = useState<Stock | null>(null)
-  const [tab, setTab] = useState<'my' | 'watch'>('my')
+  const [tab, setTab] = useState<'my' | 'watch' | 'strategy'>('my')
   const [strategyLoading, setStrategyLoading] = useState(false)
   const [showArmDialog, setShowArmDialog] = useState(false)
   const [showDisclaimer, setShowDisclaimer] = useState(false)
@@ -229,6 +229,7 @@ export default function MainDashboard() {
               watchlistSet={watchlistSet}
               onToggleWatchlist={(sym, add) => toggleWatchlist({ symbol: sym, add })}
               onCancelOrder={isRemote ? undefined : handleCancelOrder}
+              rules={rules}
             />
             </>
           ) : (

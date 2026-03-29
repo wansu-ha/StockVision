@@ -112,6 +112,8 @@ class StrategyEngine:
         if symbols:
             await self._broker.subscribe_quotes(symbols, self._on_quote)
         await self._scheduler.start()
+        # 포지션 동기화 (시작 시 1회)
+        await self._sync_positions()
         logger.info("StrategyEngine 시작 (규칙 %d개, 종목 %d개)", len(self._rules), len(symbols))
 
     async def stop(self) -> None:
@@ -206,6 +208,13 @@ class StrategyEngine:
             )
             if not active_rules:
                 return
+
+            # 주기적 포지션 동기화 (60초마다)
+            import time as _time
+            _now_ts = _time.monotonic()
+            if _now_ts - self._last_sync_ts >= 60:
+                await self._sync_positions()
+                self._last_sync_ts = _now_ts
 
             # 잔고 / 미체결 조회 + 당일 손익 (AlertMonitor에 필요, 무조건 조회)
             balance = await self._broker.get_balance()
@@ -581,6 +590,35 @@ class StrategyEngine:
         if action_dict and action_dict.get("action"):
             rule_index = action_dict["action"].get("rule_index", 0)
             ps.record_execution(rule_index)
+
+    # ── 포지션 동기화 ──
+
+    _last_sync_ts: float = 0.0
+
+    async def _sync_positions(self) -> None:
+        """브로커 잔고와 PositionState를 동기화한다."""
+        if not self._broker or not self._broker.is_connected:
+            return
+        try:
+            balance = await self._broker.get_balance()
+        except Exception:
+            logger.debug("포지션 동기화: 잔고 조회 실패 (스킵)")
+            return
+
+        broker_positions = {p.symbol: p for p in balance.positions}
+        for symbol, ps in self._position_states.items():
+            bp = broker_positions.get(symbol)
+            if bp is None:
+                if ps.total_qty > 0:
+                    logger.debug("포지션 동기화: %s 잔고에 없음 → 리셋", symbol)
+                    ps.record_sell(ps.total_qty)
+            elif bp.qty != ps.total_qty or abs(bp.avg_price - ps.entry_price) > 0.01:
+                logger.debug(
+                    "포지션 동기화: %s qty %d→%d, price %.0f→%.0f",
+                    symbol, ps.total_qty, bp.qty, ps.entry_price, bp.avg_price,
+                )
+                ps.total_qty = bp.qty
+                ps.entry_price = bp.avg_price
 
     # ── 손실 제한 처리 ──
 

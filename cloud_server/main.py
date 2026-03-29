@@ -11,6 +11,12 @@ import time
 import uuid
 from contextlib import asynccontextmanager
 
+# Sentry 에러 모니터링 (DSN 미설정 시 비활성)
+_sentry_dsn = os.getenv("SENTRY_DSN")
+if _sentry_dsn:
+    import sentry_sdk
+    sentry_sdk.init(dsn=_sentry_dsn, traces_sample_rate=0.1)
+
 # 로그 레벨 환경변수 (LOG_LEVEL=DEBUG|INFO|WARNING|ERROR, 기본 INFO)
 logging.basicConfig(
     level=getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO),

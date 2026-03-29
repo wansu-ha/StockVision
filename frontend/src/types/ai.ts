@@ -6,10 +6,11 @@ export interface AIChatRequest {
   current_dsl?: string | null
   mode: 'builder' | 'assistant'
   thinking?: boolean
+  context?: Record<string, unknown> | null
 }
 
 export interface SSEEvent {
-  event: 'status' | 'thinking' | 'token' | 'dsl' | 'error' | 'done'
+  event: 'status' | 'thinking' | 'token' | 'dsl' | 'error' | 'done' | 'tool_call' | 'tool_result'
   data: Record<string, unknown>
 }
 
