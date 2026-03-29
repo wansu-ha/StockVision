@@ -26,6 +26,7 @@ class UpdateInfo:
     major_mismatch: bool
     download_url: str = ""
     sha256_url: str = ""
+    release_notes: str = ""
 
 
 def check_from_heartbeat(resp: dict[str, Any]) -> UpdateInfo | None:
@@ -72,10 +73,14 @@ async def check_from_github() -> UpdateInfo | None:
         elif name == SHA256_ASSET_NAME:
             sha256_url = asset.get("browser_download_url", "")
 
-    return _compare(_VERSION, latest, download_url, sha256_url)
+    release_notes = data.get("body", "") or ""
+    return _compare(_VERSION, latest, download_url, sha256_url, release_notes)
 
 
-def _compare(current: str, latest: str, download_url: str, sha256_url: str) -> UpdateInfo:
+def _compare(
+    current: str, latest: str, download_url: str, sha256_url: str,
+    release_notes: str = "",
+) -> UpdateInfo:
     """현재 버전과 최신 버전을 비교한다."""
     try:
         cur_v = Version(current)
@@ -96,4 +101,5 @@ def _compare(current: str, latest: str, download_url: str, sha256_url: str) -> U
         major_mismatch=major_mismatch,
         download_url=download_url,
         sha256_url=sha256_url,
+        release_notes=release_notes,
     )
