@@ -4,7 +4,8 @@
 
 ## 의존성
 
-- **preset-expansion** 먼저 완료해야 함 (few-shot 예시용 프리셋, 전략 상태 요약 컴포넌트)
+- **preset-expansion** ✅ 완료 (few-shot 예시용 프리셋, 전략 상태 요약 컴포넌트)
+- **dsl-schema-api** 먼저 완료해야 함 (스키마 API, 자동완성, DslEditor v2 전환, validators v2)
 
 ## 아키텍처
 
@@ -188,17 +189,17 @@ frontend/src/
 
 ### Step 6 — 코드 인텔리전스 (에디터)
 
+> 자동완성, DslEditor v2 전환, 스키마 API는 `dsl-schema-api`에서 구현 완료 전제.
+> 여기서는 dsl-schema-api가 제외한 **구문 하이라이팅 + 인라인 에러**만 추가.
+
 **작업:**
-- `DslEditor.tsx`: textarea 대체 코드 에디터
-  - 구문 하이라이팅 (키워드, 함수, 상수, 숫자 색 구분)
-  - 인라인 에러 표시 (parse_v2 실패 위치)
-  - 자동완성 (builtins API 조회 → prefix 매칭 드롭다운)
-- `DslHighlighter.tsx`: 토큰별 색상 매핑 로직
+- `DslHighlighter.tsx`: 토큰별 색상 매핑 (키워드, 함수, 상수, 숫자)
+- `DslEditor.tsx`에 하이라이팅 오버레이 통합 (dsl-schema-api의 자동완성과 공존)
+- 인라인 에러: parse_v2 실패 위치에 빨간 밑줄 (dsl-schema-api S2의 errors 배열 활용)
 
 **검증:**
 - 프리셋 DSL 입력 시 하이라이팅 정상
 - 에러 있는 DSL 입력 시 빨간 밑줄
-- "MA" 입력 시 자동완성 드롭다운
 - `cd frontend && npm run build && npm run lint`
 
 ### Step 7 — AI 대화 패널 + 레이아웃
