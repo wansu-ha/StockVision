@@ -55,6 +55,9 @@ async def run_backtest(
         script = rule.script
         if not script:
             raise HTTPException(status_code=400, detail="DSL 스크립트가 없는 규칙입니다.")
+        # 파싱 오류가 있는 규칙은 백테스트 불가
+        if rule.dsl_meta and rule.dsl_meta.get("parse_status") == "error":
+            raise HTTPException(status_code=400, detail="DSL 파싱 오류가 있는 규칙은 백테스트할 수 없습니다.")
 
     if not script:
         raise HTTPException(status_code=400, detail="rule_id 또는 script가 필요합니다.")
