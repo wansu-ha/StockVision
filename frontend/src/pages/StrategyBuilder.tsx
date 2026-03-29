@@ -6,6 +6,7 @@ import { cloudRules } from '../services/cloudClient'
 import { localRules } from '../services/localClient'
 import type { Rule, CreateRulePayload } from '../types/strategy'
 import { AVAILABLE_INDICATORS, CONTEXT_FIELDS } from '../types/strategy'
+import { STRATEGY_PRESETS } from '../data/strategyPresets'
 import ConditionRow from '../components/ConditionRow'
 import RuleList from '../components/RuleList'
 import DslEditor from '../components/DslEditor'
@@ -54,6 +55,7 @@ export default function StrategyBuilder() {
   // 조건 편집 모드: 'form' = 폼 UI, 'script' = DSL 텍스트 편집
   const [condMode, setCondMode] = useState<'form' | 'script'>('form')
   const [dslText, setDslText]  = useState<string>('')
+  const [showPresets, setShowPresets] = useState(false)
 
   // 백테스트 상태
   const [btLoading, setBtLoading] = useState(false)
@@ -87,7 +89,7 @@ export default function StrategyBuilder() {
       return editId ? cloudRules.update(editId, payload) : cloudRules.create(payload)
     },
     onSuccess: () => {
-      invalidate(); setShowForm(false); setEditId(null); setForm(EMPTY_FORM); setError(null); setCondMode('form'); setDslText('')
+      invalidate(); setShowForm(false); setEditId(null); setForm(EMPTY_FORM); setError(null); setCondMode('form'); setDslText(''); setShowPresets(false)
       cloudRules.list().then((rules) => localRules.sync(rules)).catch(() => {})
     },
     onError: (err: unknown) => {
@@ -181,6 +183,7 @@ export default function StrategyBuilder() {
       setDslText(script)
       setCondMode(script ? 'script' : 'form')
     }
+    setShowPresets(false)
     setShowForm(true)
   }
 
@@ -190,7 +193,7 @@ export default function StrategyBuilder() {
         <h1 className="text-2xl font-bold">전략 빌더</h1>
         {!showForm && (
           <button
-            onClick={() => { setShowForm(true); setEditId(null); setForm(EMPTY_FORM); setError(null); setCondMode('form'); setDslText('') }}
+            onClick={() => { setShowForm(true); setEditId(null); setForm(EMPTY_FORM); setError(null); setCondMode('form'); setDslText(''); setShowPresets(false) }}
             className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 text-sm"
           >
             + 새 전략
@@ -251,6 +254,39 @@ export default function StrategyBuilder() {
                   min={1}
                 />
               </div>
+            </div>
+
+            {/* 프리셋 템플릿 선택 */}
+            <div>
+              <button
+                type="button"
+                onClick={() => setShowPresets(!showPresets)}
+                className="text-xs text-indigo-400 hover:text-indigo-300 underline"
+              >
+                {showPresets ? '템플릿 닫기' : '템플릿에서 시작'}
+              </button>
+              {showPresets && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                  {STRATEGY_PRESETS.map(preset => (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => {
+                        setDslText(preset.script)
+                        setCondMode('script')
+                        setShowPresets(false)
+                      }}
+                      className="text-left bg-gray-800 border border-gray-700 rounded-lg p-3 hover:border-indigo-500 transition"
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-semibold text-gray-100">{preset.name}</span>
+                        <span className="text-xs bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded">{preset.category}</span>
+                      </div>
+                      <div className="text-xs text-gray-400">{preset.description}</div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* 조건 편집 모드 토글 */}
@@ -345,7 +381,7 @@ export default function StrategyBuilder() {
               {btLoading ? '실행 중...' : '백테스트'}
             </button>
             <button
-              onClick={() => { setShowForm(false); setEditId(null); setError(null); setCondMode('form'); setDslText(''); setBtResult(null) }}
+              onClick={() => { setShowForm(false); setEditId(null); setError(null); setCondMode('form'); setDslText(''); setShowPresets(false); setBtResult(null) }}
               className="px-4 py-2 border border-gray-700 rounded-xl text-sm text-gray-300 hover:bg-gray-800 transition"
             >
               취소
