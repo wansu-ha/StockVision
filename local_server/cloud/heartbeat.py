@@ -103,6 +103,7 @@ async def start_heartbeat() -> None:
             last_watchlist_version, last_stock_master_version,
         )
         _check_server_version(ack_payload)
+        _notify_update_manager(ack_payload)
 
         if ack_payload.get("rules_version") is not None:
             last_rules_version = str(ack_payload["rules_version"])
@@ -143,6 +144,7 @@ async def start_heartbeat() -> None:
 
                 # 서버 버전 업데이트 알림
                 _check_server_version(resp)
+                _notify_update_manager(resp)
 
                 # 버전 갱신 (cloud가 int를 보내도 str로 통일)
                 if resp.get("rules_version") is not None:
@@ -183,6 +185,23 @@ async def start_heartbeat() -> None:
 
 
 _version_notified: str | None = None  # 이미 알림 보낸 버전
+
+
+def _notify_update_manager(resp: dict[str, Any]) -> None:
+    """하트비트 응답으로 UpdateManager 상태를 갱신하고 필요 시 다운로드 예약."""
+    try:
+        from local_server.updater.manager import get_update_manager
+        mgr = get_update_manager()
+        mgr.on_heartbeat(resp)
+
+        if (mgr.state.info and mgr.state.info.available
+                and not mgr.state.ready_to_install
+                and not mgr._download_in_progress):
+            cfg = get_config()
+            if cfg.get("update.auto_enabled", True):
+                asyncio.create_task(mgr.start_download())
+    except Exception:
+        logger.debug("UpdateManager 연결 실패 (무시)", exc_info=True)
 
 
 def _check_server_version(resp: dict[str, Any]) -> None:
