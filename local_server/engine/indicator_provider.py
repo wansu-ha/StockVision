@@ -95,9 +95,11 @@ class IndicatorProvider:
             valid = [b for b in data if b.get("close") is not None]
             closes = pd.Series([float(b["close"]) for b in valid])
             volumes = pd.Series([float(b.get("volume") or 0) for b in valid])
+            highs = pd.Series([float(b.get("high") or b["close"]) for b in valid])
+            lows = pd.Series([float(b.get("low") or b["close"]) for b in valid])
             if len(closes) < 15:
                 return
-            indicators = calc_all_indicators(closes, volumes)
+            indicators = calc_all_indicators(closes, volumes, highs=highs, lows=lows)
         except Exception:
             logger.exception("분봉 지표 계산 실패 [%s %s]", symbol, tf)
             return
@@ -189,7 +191,9 @@ class IndicatorProvider:
             try:
                 closes = df["Close"].squeeze()
                 volumes = df["Volume"].squeeze()
-                indicators = calc_all_indicators(closes, volumes)
+                highs = df["High"].squeeze() if "High" in df.columns else None
+                lows = df["Low"].squeeze() if "Low" in df.columns else None
+                indicators = calc_all_indicators(closes, volumes, highs=highs, lows=lows)
                 if indicators:
                     results[sym] = indicators
             except Exception:
