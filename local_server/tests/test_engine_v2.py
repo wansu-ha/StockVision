@@ -365,6 +365,45 @@ class TestConditionTrackerIntegration:
         assert latest["action"]["side"] == "매수"
 
 
+# ── 시간 필드 ──
+
+class TestTimeFields:
+    """시간 필드(시간, 장시작후, 요일)가 v2 평가에서 사용 가능."""
+
+    def test_time_fields_in_rule(self):
+        """장시작후 >= 10 조건이 충족되면 매수 신호 발생."""
+        ev = RuleEvaluator()
+        rule = _rule("장시작후 >= 10 AND RSI(14) < 30 → 매수 100%")
+
+        from unittest.mock import patch
+        from datetime import datetime as _dt
+
+        # 09:30 → 장시작후=30
+        fake_now = _dt(2026, 3, 29, 9, 30, 0)
+        with patch("local_server.engine.evaluator.datetime") as mock_dt:
+            mock_dt.now.return_value = fake_now
+            result = ev.evaluate_v2(rule, _market(rsi_14=25), _ctx())
+
+        assert result.action is not None
+        assert result.action.side == "매수"
+
+    def test_time_field_blocks_entry(self):
+        """장시작후 < 10이면 진입 차단."""
+        ev = RuleEvaluator()
+        rule = _rule("장시작후 >= 10 AND RSI(14) < 30 → 매수 100%")
+
+        from unittest.mock import patch
+        from datetime import datetime as _dt
+
+        # 09:05 → 장시작후=5
+        fake_now = _dt(2026, 3, 29, 9, 5, 0)
+        with patch("local_server.engine.evaluator.datetime") as mock_dt:
+            mock_dt.now.return_value = fake_now
+            result = ev.evaluate_v2(rule, _market(rsi_14=25), _ctx())
+
+        assert result.action is None
+
+
 # ── 상태 함수 (횟수/연속) — RuleEvaluator 경유 ──
 
 class TestStateFunctionsThroughEvaluator:

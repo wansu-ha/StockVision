@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -151,6 +152,13 @@ class RuleEvaluator:
         for key in ("고점 대비", "수익률고점", "진입가", "보유일", "보유봉"):
             if key in context:
                 ctx[key] = context[key]
+
+        # 시간 필드 — 현재 시각 기반
+        now = datetime.now()
+        ctx["시간"] = now.hour * 100 + now.minute
+        market_open = now.replace(hour=9, minute=0, second=0, microsecond=0)
+        ctx["장시작후"] = max(0, int((now - market_open).total_seconds() / 60))
+        ctx["요일"] = now.isoweekday()
 
         # 내장 함수 — 지표 데이터에서 resolve
         # indicators는 {tf: {key: val}} 구조.
