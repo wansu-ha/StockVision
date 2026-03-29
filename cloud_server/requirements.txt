@@ -37,5 +37,8 @@ anthropic>=0.25.0
 # WebSocket (키움 WS - sv_core 경유)
 websockets>=12.0
 
+# 모니터링
+sentry-sdk[fastapi]>=2.0.0
+
 # 공유 패키지 (Unit 1 완성 후 활성화)
 # -e ../sv_core

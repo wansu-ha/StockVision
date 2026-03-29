@@ -147,6 +147,7 @@ class ChatRequest(BaseModel):
     current_dsl: str | None = None
     mode: str = "builder"  # builder | assistant
     thinking: bool = False
+    context: dict | None = None  # 프론트에서 주입하는 로컬 데이터 (assistant 모드)
 
 
 @router.post("/chat")
@@ -166,6 +167,7 @@ async def chat(
             mode=body.mode,
             thinking=body.thinking,
             user_id=user["sub"],
+            context=body.context,
         ):
             yield f"event: {event['event']}\ndata: {json.dumps(event['data'], ensure_ascii=False)}\n\n"
 

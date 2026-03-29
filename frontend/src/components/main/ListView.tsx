@@ -5,6 +5,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import HeartToggle from '../HeartToggle'
+import type { Rule } from '../../types/strategy'
 
 // ─── Types ───
 
@@ -57,8 +58,8 @@ const FIRST_VISIT_KEY = 'sv_accordion_seen'
 // ─── Component ───
 
 interface ListViewProps {
-  tab: 'my' | 'watch'
-  setTab: (t: 'my' | 'watch') => void
+  tab: 'my' | 'watch' | 'strategy'
+  setTab: (t: 'my' | 'watch' | 'strategy') => void
   stocks: Stock[]
   account: AccountInfo
   isMock: boolean | null
@@ -73,12 +74,13 @@ interface ListViewProps {
   onCancelOrder?: (orderId: string) => void
   watchlistSet?: Set<string>
   onToggleWatchlist?: (symbol: string, add: boolean) => void
+  rules?: Rule[]
 }
 
 export default function ListView({
   tab, setTab, stocks, account, isMock, marketStatus, trades, pendingOrders, onDetail,
   engineRunning, brokerConnected, onStrategyToggle, strategyLoading, onCancelOrder,
-  watchlistSet, onToggleWatchlist,
+  watchlistSet, onToggleWatchlist, rules,
 }: ListViewProps) {
   const navigate = useNavigate()
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
@@ -166,7 +168,7 @@ export default function ListView({
       <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mb-5">
         {/* 탭 */}
         <div className="flex gap-1 px-4 pt-3 pb-2 border-b border-gray-800/50" role="tablist">
-          {([['my', '내 종목'], ['watch', '관심 종목']] as const).map(([key, label]) => (
+          {([['my', '내 종목'], ['watch', '관심 종목'], ['strategy', '전략']] as const).map(([key, label]) => (
             <button
               key={key}
               role="tab"
@@ -183,7 +185,39 @@ export default function ListView({
           ))}
         </div>
 
-        {stocks.length === 0 ? (
+        {tab === 'strategy' ? (
+          /* 전략 탭 — 전체 규칙 목록 */
+          !rules || rules.length === 0 ? (
+            <div className="py-12 text-center">
+              <div className="text-gray-600 text-sm mb-2">등록된 전략이 없습니다</div>
+              <button
+                onClick={() => navigate('/strategies/new')}
+                className="text-xs text-indigo-400 hover:text-indigo-300 transition"
+              >
+                새 전략 만들기
+              </button>
+            </div>
+          ) : (
+            rules.map((r, i) => (
+              <div
+                key={r.id}
+                className={`flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-gray-800/30 transition ${i > 0 ? 'border-t border-gray-800/50' : ''}`}
+                onClick={() => navigate(`/strategies/${r.id}/edit`)}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`w-2 h-2 rounded-full shrink-0 ${r.is_active ? 'bg-green-400' : 'bg-gray-600'}`} />
+                  <div className="min-w-0">
+                    <div className="text-sm text-gray-200 truncate">{r.name || r.symbol}</div>
+                    <div className="text-xs text-gray-500 truncate">{r.symbol} · {r.script?.split('\n')[0]?.slice(0, 40) || 'DSL 없음'}</div>
+                  </div>
+                </div>
+                <div className="text-xs text-gray-500 shrink-0">
+                  {r.is_active ? '활성' : '비활성'}
+                </div>
+              </div>
+            ))
+          )
+        ) : stocks.length === 0 ? (
           /* (D) 빈 상태 — Step 2에서 실제 빈 데이터 시 표시 */
           <div className="py-12 text-center">
             <div className="text-gray-600 text-sm mb-2">
