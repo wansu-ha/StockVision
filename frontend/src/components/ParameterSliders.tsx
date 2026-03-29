@@ -1,12 +1,22 @@
 import { parseDslV2 } from '../utils/dslParserV2'
+import type { DslMeta } from '../types/strategy'
 
 interface Props {
   script: string
   onChange: (newScript: string) => void
+  dslMeta?: DslMeta | null
 }
 
-export default function ParameterSliders({ script, onChange }: Props) {
-  const { constants } = parseDslV2(script)
+export default function ParameterSliders({ script, onChange, dslMeta }: Props) {
+  // dsl_meta가 있으면 서버 파싱 결과 사용, 없으면 로컬 파서 fallback
+  const localParsed = parseDslV2(script)
+  const constants = dslMeta?.constants
+    ? dslMeta.constants.map(c => ({
+        name: c.name,
+        value: c.value,
+        type: (typeof c.value === 'number' ? 'number' : 'string') as 'number' | 'string',
+      }))
+    : localParsed.constants
 
   if (constants.length === 0) return null
 
