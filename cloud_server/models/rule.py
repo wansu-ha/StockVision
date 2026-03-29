@@ -52,6 +52,12 @@ class TradingRule(Base):
     # Expected format:
     # {"기간": {"type": "number", "default": 14}, "tf": {"type": "string", "default": "1d"}}
 
+    # DSL 정식 파싱 결과 (저장 시 parse_v2 실행 → 자동 생성)
+    dsl_meta = Column(JSON, nullable=True)
+    # Expected format:
+    # {"constants": [...], "custom_functions": [...], "rules": [...],
+    #  "parse_status": "ok"|"error", "is_v2": true, "errors": []}
+
     # 상태
     is_active  = Column(Boolean, default=True, nullable=False)
     version    = Column(Integer, default=1, nullable=False)  # 클라이언트 동기화용
