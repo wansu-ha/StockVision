@@ -1,11 +1,10 @@
 import { Card, CardBody, CardHeader, Chip } from '@heroui/react'
 import ConditionStatusRow from './ConditionStatusRow'
 import TriggerTimeline from './TriggerTimeline'
-import { useConditionStatus } from '../hooks/useConditionStatus'
+import type { ConditionStatus } from '../types/condition-status'
 import type { Rule } from '../types/strategy'
 
-export default function StrategyMonitorCard({ rule }: { rule: Rule }) {
-  const { data: status } = useConditionStatus(rule.id)
+export default function StrategyMonitorCard({ rule, status }: { rule: Rule; status: ConditionStatus | null }) {
 
   return (
     <Card className="w-full">
