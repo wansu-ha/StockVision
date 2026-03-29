@@ -74,32 +74,62 @@ class RuleUpdateBody(BaseModel):
 # ── 헬퍼 ─────────────────────────────────────────────────────────────
 
 
-def _extract_parameters(script: str | None) -> dict | None:
-    """DSL script에서 상수 선언을 추출하여 파라미터 메타데이터 생성."""
+def _extract_dsl_metadata(script: str | None) -> tuple[dict | None, dict]:
+    """DSL script에서 파라미터 + dsl_meta를 한 번에 추출.
+
+    Returns:
+        (parameters, dsl_meta) — parameters는 슬라이더용, dsl_meta는 정식 파싱 결과.
+    """
+    empty_meta = {"parse_status": "error", "is_v2": False, "constants": [],
+                  "custom_functions": [], "rules": [], "errors": []}
     if not script:
-        return None
+        return None, {**empty_meta, "parse_status": "ok"}
+
     try:
-        from sv_core.parsing import parse_v2
+        from sv_core.parsing import parse_v2, DSLError
+        from sv_core.parsing.ast_nodes import NumberLit, StringLit
         ast = parse_v2(script)
-        if not ast.consts:
-            return None
+
+        # parameters 추출 (상수 슬라이더용)
         params = {}
         for const in ast.consts:
-            from sv_core.parsing.ast_nodes import NumberLit, StringLit
             if isinstance(const.value, NumberLit):
                 params[const.name] = {"type": "number", "default": const.value.value}
             elif isinstance(const.value, StringLit):
                 params[const.name] = {"type": "string", "default": const.value.value}
             else:
-                # float/str directly on value
                 val = const.value
                 if isinstance(val, (int, float)):
                     params[const.name] = {"type": "number", "default": val}
                 elif isinstance(val, str):
                     params[const.name] = {"type": "string", "default": val}
-        return params if params else None
-    except Exception:
-        return None
+
+        # dsl_meta 구성
+        dsl_meta: dict = {
+            "parse_status": "ok",
+            "is_v2": bool(ast.rules),
+            "constants": [{"name": c.name,
+                          "value": c.value.value if hasattr(c.value, 'value') else
+                                   (c.value if isinstance(c.value, (int, float, str)) else str(c.value))}
+                          for c in ast.consts],
+            "custom_functions": [{"name": f.name, "body": str(f.body)}
+                                 for f in ast.custom_funcs],
+            "rules": [{"index": i, "condition": str(r.condition), "side": r.action.side,
+                        "qty": f"{r.action.qty_value}{'%' if r.action.qty_type == 'percent' else ''}"}
+                      for i, r in enumerate(ast.rules)],
+            "errors": [],
+        }
+        return params if params else None, dsl_meta
+
+    except Exception as e:
+        error_info = {"line": 0, "column": 0, "message": str(e)}
+        if hasattr(e, "line"):
+            error_info["line"] = e.line
+        if hasattr(e, "col"):
+            error_info["column"] = e.col
+        if hasattr(e, "message"):
+            error_info["message"] = e.message
+        return None, {**empty_meta, "errors": [error_info]}
 
 
 # ── 엔드포인트 ────────────────────────────────────────────────────────
@@ -130,7 +160,9 @@ def create_rule(
 ):
     """규칙 생성"""
     data = body.model_dump(exclude_unset=False)
-    data["parameters"] = _extract_parameters(data.get("script"))
+    params, dsl_meta = _extract_dsl_metadata(data.get("script"))
+    data["parameters"] = params
+    data["dsl_meta"] = dsl_meta
     rule = rule_service.create_rule(user["sub"], data, db)
     return {"success": True, "data": rule}
 
@@ -156,7 +188,9 @@ def update_rule(
     """규칙 수정 (version 증가)"""
     data = body.model_dump(exclude_unset=True)
     if "script" in data:
-        data["parameters"] = _extract_parameters(data.get("script"))
+        params, dsl_meta = _extract_dsl_metadata(data.get("script"))
+        data["parameters"] = params
+        data["dsl_meta"] = dsl_meta
     rule = rule_service.update_rule(rule_id, user["sub"], data, db)
     return {"success": True, "data": rule}
 

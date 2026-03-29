@@ -121,3 +121,38 @@ def get_pattern_func(name: str) -> PatternFuncSpec | None:
 def is_builtin_name(name: str) -> bool:
     """내장 필드/함수/패턴 중 하나인지."""
     return name in BUILTIN_FIELDS or name in BUILTIN_FUNCTIONS or name in BUILTIN_PATTERNS
+
+
+def to_schema() -> dict:
+    """DSL 스키마를 JSON 직렬화 가능한 dict로 반환."""
+    import hashlib
+    import json
+
+    functions = {
+        name: {
+            "min_args": spec.param_min,
+            "max_args": spec.param_max,
+            "return_type": spec.return_type,
+        }
+        for name, spec in BUILTIN_FUNCTIONS.items()
+    }
+    patterns = {
+        name: {"definition": spec.definition}
+        for name, spec in BUILTIN_PATTERNS.items()
+    }
+
+    # fields + functions + patterns 내용 기반 해시
+    content = json.dumps(
+        {"fields": sorted(BUILTIN_FIELDS), "functions": functions, "patterns": patterns},
+        sort_keys=True,
+        ensure_ascii=False,
+    )
+    version = hashlib.md5(content.encode()).hexdigest()
+
+    return {
+        "version": version,
+        "fields": sorted(BUILTIN_FIELDS),
+        "compound_fields": COMPOUND_FIELDS,
+        "functions": functions,
+        "patterns": patterns,
+    }

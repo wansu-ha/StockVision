@@ -70,6 +70,42 @@ RSI(기간) < 30 AND 골든크로스 AND 보유수량 == 0 → 매수 100%
   })
 })
 
+describe('customFunctions', () => {
+  it('과매도 = RSI(14) <= 30 → customFunctions에 포함', () => {
+    const r = parseDslV2('과매도 = RSI(14) <= 30')
+    expect(r.customFunctions).toHaveLength(1)
+    expect(r.customFunctions[0]).toEqual({ name: '과매도', body: 'RSI(14) <= 30' })
+    expect(r.constants).toHaveLength(0)
+  })
+
+  it('과매도() = RSI(14) <= 30 → customFunctions에 포함', () => {
+    const r = parseDslV2('과매도() = RSI(14) <= 30')
+    expect(r.customFunctions).toHaveLength(1)
+    expect(r.customFunctions[0]).toEqual({ name: '과매도()', body: 'RSI(14) <= 30' })
+  })
+
+  it('음수 상수 손절 = -3 → 상수로 남음 (parseFloat 성공)', () => {
+    const r = parseDslV2('손절 = -3')
+    expect(r.constants).toHaveLength(1)
+    expect(r.constants[0]).toEqual({ name: '손절', value: -3, type: 'number' })
+    expect(r.customFunctions).toHaveLength(0)
+  })
+})
+
+describe('errors', () => {
+  it('인식 못 하는 줄 → errors에 포함', () => {
+    const r = parseDslV2('이상한줄입니다')
+    expect(r.errors).toHaveLength(1)
+    expect(r.errors[0].line).toBe(1)
+    expect(r.errors[0].message).toContain('이상한줄입니다')
+  })
+
+  it('정상 파싱 시 errors 빈 배열', () => {
+    const r = parseDslV2('기간 = 14\nRSI(기간) < 30 → 매수 100%')
+    expect(r.errors).toHaveLength(0)
+  })
+})
+
 describe('serializeDslV2', () => {
   it('상수 + 규칙 직렬화', () => {
     const result = serializeDslV2(

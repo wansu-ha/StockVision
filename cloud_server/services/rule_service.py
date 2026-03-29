@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from cloud_server.core.validators import validate_conditions, validate_dsl_script
+from cloud_server.core.validators import validate_conditions
 from cloud_server.models.rule import TradingRule
 
 
@@ -29,6 +29,7 @@ def _rule_to_dict(rule: TradingRule) -> dict:
         "max_position_count": rule.max_position_count,
         "budget_ratio": rule.budget_ratio,
         "parameters": rule.parameters,
+        "dsl_meta": rule.dsl_meta,
         "is_active": rule.is_active,
         "version": rule.version,
         "created_at": rule.created_at.isoformat() if rule.created_at else None,
@@ -57,12 +58,11 @@ def get_rule(rule_id: int, user_id: str, db: Session) -> dict:
 
 def create_rule(user_id: str, data: dict, db: Session) -> dict:
     """규칙 생성"""
-    # DSL 스크립트 검증 (v2)
-    if data.get("script"):
-        try:
-            validate_dsl_script(data["script"])
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+    # DSL 파싱은 라우터의 _extract_dsl_metadata()에서 완료 → dsl_meta로 판단
+    dsl_meta = data.get("dsl_meta")
+    if dsl_meta and dsl_meta.get("parse_status") == "error":
+        # 파싱 실패한 스크립트도 저장 허용하되 강제 비활성화
+        data["is_active"] = False
 
     # 조건 JSON 검증 (v1 하위 호환)
     try:
@@ -86,6 +86,7 @@ def create_rule(user_id: str, data: dict, db: Session) -> dict:
         max_position_count=data.get("max_position_count", 5),
         budget_ratio=data.get("budget_ratio", 0.2),
         parameters=data.get("parameters"),
+        dsl_meta=data.get("dsl_meta"),
         is_active=data.get("is_active", True),
         version=1,
     )
@@ -110,12 +111,16 @@ def update_rule(rule_id: int, user_id: str, data: dict, db: Session) -> dict:
     if not rule:
         raise HTTPException(status_code=404, detail="규칙을 찾을 수 없습니다.")
 
-    # DSL 스크립트 검증 (v2)
-    if "script" in data and data["script"]:
-        try:
-            validate_dsl_script(data["script"])
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+    # DSL 파싱은 라우터의 _extract_dsl_metadata()에서 완료 → dsl_meta로 판단
+    dsl_meta = data.get("dsl_meta")
+    if dsl_meta and dsl_meta.get("parse_status") == "error":
+        # script 수정으로 파싱 실패 → 강제 비활성화
+        data["is_active"] = False
+    if "is_active" in data and data["is_active"] is True:
+        # 활성화 요청 시 parse_status 체크
+        current_meta = dsl_meta or (rule.dsl_meta if rule.dsl_meta else None)
+        if current_meta and current_meta.get("parse_status") == "error":
+            raise HTTPException(status_code=400, detail="파싱 오류가 있는 규칙은 활성화할 수 없습니다.")
 
     # 조건 JSON 검증 (v1 하위 호환)
     if "buy_conditions" in data:
@@ -135,7 +140,7 @@ def update_rule(rule_id: int, user_id: str, data: dict, db: Session) -> dict:
         "name", "symbol", "script", "execution", "trigger_policy", "priority",
         "buy_conditions", "sell_conditions",
         "order_type", "qty", "max_position_count", "budget_ratio", "is_active",
-        "parameters",
+        "parameters", "dsl_meta",
     ]
     for field in updatable:
         if field in data:
