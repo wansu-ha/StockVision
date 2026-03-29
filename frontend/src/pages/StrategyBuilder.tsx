@@ -14,6 +14,7 @@ import { dslToConditions } from '../utils/dslConverter'
 import { runBacktest, type BacktestResponse } from '../services/backtest'
 import BacktestResultView from '../components/BacktestResult'
 import ParameterSliders from '../components/ParameterSliders'
+import AIChatPanel from '../components/ai/AIChatPanel'
 
 interface FormState {
   name: string
@@ -57,6 +58,7 @@ export default function StrategyBuilder() {
   const [condMode, setCondMode] = useState<'form' | 'script'>('form')
   const [dslText, setDslText]  = useState<string>('')
   const [showPresets, setShowPresets] = useState(false)
+  const [mobileTab, setMobileTab] = useState<'chat' | 'editor'>('editor')
 
   // 백테스트 상태
   const [btLoading, setBtLoading] = useState(false)
@@ -144,6 +146,13 @@ export default function StrategyBuilder() {
     setCondMode('script')
   }
 
+  /** AI가 생성한 DSL을 에디터에 적용 */
+  const handleApplyDsl = (script: string) => {
+    setDslText(script)
+    setCondMode('script')
+    setMobileTab('editor')
+  }
+
   /** 스크립트 → 폼 모드 전환: DSL을 파싱해 폼 조건으로 복원 (오류 시 모드 유지) */
   const switchToForm = () => {
     const converted = dslToConditions(dslText)
@@ -189,7 +198,7 @@ export default function StrategyBuilder() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto p-6">
+    <div className={`mx-auto p-6 ${showForm ? 'max-w-6xl' : 'max-w-3xl'}`}>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">전략 빌더</h1>
         {!showForm && (
@@ -203,18 +212,49 @@ export default function StrategyBuilder() {
       </div>
 
       {/* 규칙 목록 */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-6">
-        <h2 className="text-sm font-semibold text-gray-400 mb-2">저장된 전략</h2>
-        <RuleList
-          rules={rules}
-          onToggle={(rule: Rule) => toggleMut.mutate(rule)}
-          onEdit={startEdit}
-          onDelete={(id: number) => deleteMut.mutate(id)}
-        />
-      </div>
+      {!showForm && (
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-6">
+          <h2 className="text-sm font-semibold text-gray-400 mb-2">저장된 전략</h2>
+          <RuleList
+            rules={rules}
+            onToggle={(rule: Rule) => toggleMut.mutate(rule)}
+            onEdit={startEdit}
+            onDelete={(id: number) => deleteMut.mutate(id)}
+          />
+        </div>
+      )}
 
-      {/* 폼 */}
+      {/* 폼 + AI 대화 (나란히) */}
       {showForm && (
+        <>
+          {/* 모바일 탭 전환 */}
+          <div className="flex lg:hidden rounded-lg overflow-hidden border border-gray-700 text-xs mb-4">
+            <button
+              type="button"
+              onClick={() => setMobileTab('chat')}
+              className={`flex-1 px-3 py-2 transition-colors ${mobileTab === 'chat' ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-400'}`}
+            >
+              AI 대화
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileTab('editor')}
+              className={`flex-1 px-3 py-2 transition-colors ${mobileTab === 'editor' ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-400'}`}
+            >
+              편집기
+            </button>
+          </div>
+
+          <div className="flex gap-4">
+            {/* AI 대화 패널 — 데스크톱 항상, 모바일 탭 */}
+            <div className={`lg:w-[400px] lg:flex-shrink-0 lg:block ${mobileTab === 'chat' ? 'block w-full' : 'hidden'}`}>
+              <div className="h-[calc(100vh-200px)] sticky top-6">
+                <AIChatPanel currentDsl={dslText} onApplyDsl={handleApplyDsl} />
+              </div>
+            </div>
+
+            {/* 편집기 — 데스크톱 항상, 모바일 탭 */}
+            <div className={`flex-1 min-w-0 lg:block ${mobileTab === 'editor' ? 'block' : 'hidden'}`}>
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
           <h2 className="text-lg font-semibold mb-4 text-gray-100">{editId ? '전략 수정' : '새 전략 만들기'}</h2>
 
@@ -401,6 +441,9 @@ export default function StrategyBuilder() {
             </div>
           )}
         </div>
+            </div>
+          </div>
+        </>
       )}
     </div>
   )

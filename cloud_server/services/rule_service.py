@@ -7,8 +7,9 @@ from fastapi import HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from cloud_server.core.validators import validate_conditions, validate_dsl_script
+from cloud_server.core.validators import validate_conditions
 from cloud_server.models.rule import TradingRule
+from cloud_server.models.strategy_version import StrategyVersion
 
 
 def _rule_to_dict(rule: TradingRule) -> dict:
@@ -29,6 +30,7 @@ def _rule_to_dict(rule: TradingRule) -> dict:
         "max_position_count": rule.max_position_count,
         "budget_ratio": rule.budget_ratio,
         "parameters": rule.parameters,
+        "dsl_meta": rule.dsl_meta,
         "is_active": rule.is_active,
         "version": rule.version,
         "created_at": rule.created_at.isoformat() if rule.created_at else None,
@@ -57,12 +59,11 @@ def get_rule(rule_id: int, user_id: str, db: Session) -> dict:
 
 def create_rule(user_id: str, data: dict, db: Session) -> dict:
     """규칙 생성"""
-    # DSL 스크립트 검증 (v2)
-    if data.get("script"):
-        try:
-            validate_dsl_script(data["script"])
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+    # DSL 파싱은 라우터의 _extract_dsl_metadata()에서 완료 → dsl_meta로 판단
+    dsl_meta = data.get("dsl_meta")
+    if dsl_meta and dsl_meta.get("parse_status") == "error":
+        # 파싱 실패한 스크립트도 저장 허용하되 강제 비활성화
+        data["is_active"] = False
 
     # 조건 JSON 검증 (v1 하위 호환)
     try:
@@ -86,6 +87,7 @@ def create_rule(user_id: str, data: dict, db: Session) -> dict:
         max_position_count=data.get("max_position_count", 5),
         budget_ratio=data.get("budget_ratio", 0.2),
         parameters=data.get("parameters"),
+        dsl_meta=data.get("dsl_meta"),
         is_active=data.get("is_active", True),
         version=1,
     )
@@ -98,6 +100,11 @@ def create_rule(user_id: str, data: dict, db: Session) -> dict:
         raise HTTPException(status_code=409, detail="같은 이름의 규칙이 이미 존재합니다.")
 
     db.refresh(rule)
+
+    # 초기 버전 스냅샷
+    if rule.script:
+        _create_version_snapshot(rule.id, rule.script, "초기 생성", "user", db)
+
     return _rule_to_dict(rule)
 
 
@@ -110,12 +117,16 @@ def update_rule(rule_id: int, user_id: str, data: dict, db: Session) -> dict:
     if not rule:
         raise HTTPException(status_code=404, detail="규칙을 찾을 수 없습니다.")
 
-    # DSL 스크립트 검증 (v2)
-    if "script" in data and data["script"]:
-        try:
-            validate_dsl_script(data["script"])
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+    # DSL 파싱은 라우터의 _extract_dsl_metadata()에서 완료 → dsl_meta로 판단
+    dsl_meta = data.get("dsl_meta")
+    if dsl_meta and dsl_meta.get("parse_status") == "error":
+        # script 수정으로 파싱 실패 → 강제 비활성화
+        data["is_active"] = False
+    if "is_active" in data and data["is_active"] is True:
+        # 활성화 요청 시 parse_status 체크
+        current_meta = dsl_meta or (rule.dsl_meta if rule.dsl_meta else None)
+        if current_meta and current_meta.get("parse_status") == "error":
+            raise HTTPException(status_code=400, detail="파싱 오류가 있는 규칙은 활성화할 수 없습니다.")
 
     # 조건 JSON 검증 (v1 하위 호환)
     if "buy_conditions" in data:
@@ -135,11 +146,14 @@ def update_rule(rule_id: int, user_id: str, data: dict, db: Session) -> dict:
         "name", "symbol", "script", "execution", "trigger_policy", "priority",
         "buy_conditions", "sell_conditions",
         "order_type", "qty", "max_position_count", "budget_ratio", "is_active",
-        "parameters",
+        "parameters", "dsl_meta",
     ]
     for field in updatable:
         if field in data:
             setattr(rule, field, data[field])
+
+    # script 변경 시 버전 스냅샷
+    script_changed = "script" in data and data["script"] != rule.script
 
     rule.version += 1
     rule.updated_at = datetime.utcnow()
@@ -151,6 +165,10 @@ def update_rule(rule_id: int, user_id: str, data: dict, db: Session) -> dict:
         raise HTTPException(status_code=409, detail="같은 이름의 규칙이 이미 존재합니다.")
 
     db.refresh(rule)
+
+    if script_changed and rule.script:
+        _create_version_snapshot(rule.id, rule.script, "수정", "user", db)
+
     return _rule_to_dict(rule)
 
 
@@ -164,6 +182,24 @@ def delete_rule(rule_id: int, user_id: str, db: Session) -> None:
         raise HTTPException(status_code=404, detail="규칙을 찾을 수 없습니다.")
 
     db.delete(rule)
+    db.commit()
+
+
+def _create_version_snapshot(
+    rule_id: int, script: str, message: str, created_by: str, db: Session,
+) -> None:
+    """전략 버전 스냅샷 생성."""
+    max_ver = db.query(func.max(StrategyVersion.version)).filter(
+        StrategyVersion.rule_id == rule_id,
+    ).scalar() or 0
+    sv = StrategyVersion(
+        rule_id=rule_id,
+        version=max_ver + 1,
+        script=script,
+        message=message,
+        created_by=created_by,
+    )
+    db.add(sv)
     db.commit()
 
 

@@ -12,18 +12,28 @@ import numpy as np
 import pandas as pd
 
 
-def calc_all_indicators(closes: pd.Series, volumes: pd.Series) -> dict:
+def calc_all_indicators(
+    closes: pd.Series,
+    volumes: pd.Series,
+    highs: pd.Series | None = None,
+    lows: pd.Series | None = None,
+) -> dict:
     """evaluator가 기대하는 전체 indicators dict를 생성한다.
 
     Args:
         closes: 종가 시계열 (오래된 순 → 최근 순)
         volumes: 거래량 시계열
+        highs: 고가 시계열 (스토캐스틱용, 없으면 None)
+        lows: 저가 시계열 (스토캐스틱용, 없으면 None)
 
     Returns:
         {"rsi_14": float|None, "ma_5": float|None, ...}
     """
     macd, macd_signal = calc_macd(closes)
     bb_upper_20, bb_lower_20 = calc_bollinger(closes, 20)
+
+    macd_hist = round(macd - macd_signal, 2) if macd is not None and macd_signal is not None else None
+    stoch_k, stoch_d = calc_stochastic(highs, lows, closes) if highs is not None else (None, None)
 
     return {
         # RSI
@@ -41,11 +51,15 @@ def calc_all_indicators(closes: pd.Series, volumes: pd.Series) -> dict:
         # MACD
         "macd": macd,
         "macd_signal": macd_signal,
+        "macd_hist": macd_hist,
         # 볼린저
         "bb_upper_20": bb_upper_20,
         "bb_lower_20": bb_lower_20,
         # 평균 거래량
         "avg_volume_20": calc_avg_volume(volumes, 20),
+        # 스토캐스틱
+        "stoch_k_5_3": stoch_k,
+        "stoch_d_5_3_3": stoch_d,
     }
 
 
@@ -138,6 +152,34 @@ def calc_atr(highs: pd.Series, lows: pd.Series, closes: pd.Series, period: int =
     tr = pd.concat([highs - lows, (highs - prev_close).abs(), (lows - prev_close).abs()], axis=1).max(axis=1)
     val = tr.rolling(period).mean().iloc[-1]
     return round(float(val), 2) if not np.isnan(val) else None
+
+
+def calc_stochastic(
+    highs: pd.Series,
+    lows: pd.Series,
+    closes: pd.Series,
+    k_period: int = 5,
+    slowing: int = 3,
+    d_period: int = 3,
+) -> tuple[float | None, float | None]:
+    """스토캐스틱 (%K, %D).
+
+    Returns:
+        (slow_k, slow_d)
+    """
+    min_len = k_period + slowing + d_period
+    if len(closes) < min_len:
+        return None, None
+    lowest_low = lows.rolling(k_period).min()
+    highest_high = highs.rolling(k_period).max()
+    denom = highest_high - lowest_low
+    fast_k = 100 * (closes - lowest_low) / denom.replace(0, np.nan)
+    slow_k = fast_k.rolling(slowing).mean()
+    slow_d = slow_k.rolling(d_period).mean()
+    k_val, d_val = slow_k.iloc[-1], slow_d.iloc[-1]
+    if np.isnan(k_val) or np.isnan(d_val):
+        return None, None
+    return round(float(k_val), 2), round(float(d_val), 2)
 
 
 def calc_highest(prices: pd.Series, period: int) -> float | None:

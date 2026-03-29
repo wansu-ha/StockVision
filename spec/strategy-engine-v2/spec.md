@@ -1,6 +1,6 @@
 # 전략 엔진 v2 명세서 (strategy-engine-v2)
 
-> 작성일: 2026-03-29 | 상태: 초안 | Phase E
+> 작성일: 2026-03-29 | 상태: 구현 완료 | Phase E
 >
 > **이전**: `spec/strategy-engine/` (구현 완료) — 기본 DSL + 단순 매수/매도
 > **근거**: `docs/research/strategy-ux-improvement-discussion-2026-03-28.md` 및 브레인스토밍 논의

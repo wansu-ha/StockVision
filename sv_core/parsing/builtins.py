@@ -29,6 +29,8 @@ BUILTIN_FIELDS: set[str] = {
     "요일",          # 1=월 ~ 5=금
     # v2 상태 필드
     "실행횟수",       # 이 규칙의 현재 포지션 내 실행 횟수
+    # v2 시세 필드
+    "등락률",         # 전일 대비 등락률 %
 }
 
 # 복합 필드 (공백 포함) — 파서에서 lookahead 결합 시 사용
@@ -59,9 +61,13 @@ BUILTIN_FUNCTIONS: dict[str, BuiltinFuncSpec] = {
     "EMA": BuiltinFuncSpec("EMA", 1, 2, "number"),
     "MACD": BuiltinFuncSpec("MACD", 0, 1, "number"),
     "MACD_SIGNAL": BuiltinFuncSpec("MACD_SIGNAL", 0, 1, "number"),
+    "MACD_HIST": BuiltinFuncSpec("MACD_HIST", 0, 3, "number"),
     "볼린저_상단": BuiltinFuncSpec("볼린저_상단", 1, 2, "number"),
     "볼린저_하단": BuiltinFuncSpec("볼린저_하단", 1, 2, "number"),
     "평균거래량": BuiltinFuncSpec("평균거래량", 1, 2, "number"),
+    # 스토캐스틱
+    "STOCH_K": BuiltinFuncSpec("STOCH_K", 0, 2, "number"),
+    "STOCH_D": BuiltinFuncSpec("STOCH_D", 0, 3, "number"),
     # 크로스오버: 인자 고정
     "상향돌파": BuiltinFuncSpec("상향돌파", 2, 2, "boolean"),
     "하향돌파": BuiltinFuncSpec("하향돌파", 2, 2, "boolean"),
@@ -73,6 +79,9 @@ BUILTIN_FUNCTIONS: dict[str, BuiltinFuncSpec] = {
     # v2 상태 함수
     "횟수": BuiltinFuncSpec("횟수", 2, 2, "number"),
     "연속": BuiltinFuncSpec("연속", 1, 1, "number"),
+    # 다이버전스 감지
+    "강세다이버전스": BuiltinFuncSpec("강세다이버전스", 1, 2, "boolean"),
+    "약세다이버전스": BuiltinFuncSpec("약세다이버전스", 1, 2, "boolean"),
 }
 
 # ── 내장 패턴 함수 (괄호 필수, 인자 없음 — spec §3) ──
@@ -112,3 +121,38 @@ def get_pattern_func(name: str) -> PatternFuncSpec | None:
 def is_builtin_name(name: str) -> bool:
     """내장 필드/함수/패턴 중 하나인지."""
     return name in BUILTIN_FIELDS or name in BUILTIN_FUNCTIONS or name in BUILTIN_PATTERNS
+
+
+def to_schema() -> dict:
+    """DSL 스키마를 JSON 직렬화 가능한 dict로 반환."""
+    import hashlib
+    import json
+
+    functions = {
+        name: {
+            "min_args": spec.param_min,
+            "max_args": spec.param_max,
+            "return_type": spec.return_type,
+        }
+        for name, spec in BUILTIN_FUNCTIONS.items()
+    }
+    patterns = {
+        name: {"definition": spec.definition}
+        for name, spec in BUILTIN_PATTERNS.items()
+    }
+
+    # fields + functions + patterns 내용 기반 해시
+    content = json.dumps(
+        {"fields": sorted(BUILTIN_FIELDS), "functions": functions, "patterns": patterns},
+        sort_keys=True,
+        ensure_ascii=False,
+    )
+    version = hashlib.md5(content.encode()).hexdigest()
+
+    return {
+        "version": version,
+        "fields": sorted(BUILTIN_FIELDS),
+        "compound_fields": COMPOUND_FIELDS,
+        "functions": functions,
+        "patterns": patterns,
+    }

@@ -1,6 +1,6 @@
 # StockVision 로드맵
 
-> 최종 갱신: 2026-03-28 (Phase E Wave 1~3 완료, 테스트 364개)
+> 최종 갱신: 2026-03-29 (전략 엔진 v2 구현 완료, 테스트 521개)
 > 역할: 개발 우선순위와 Phase 간 의존성을 요약하는 최상위 방향 문서.
 > 상세 제품 방향: `docs/product/product-direction-log.md`
 
@@ -124,16 +124,16 @@ Step 4
 
 **끝나면**: 밖에서 폰으로 상태 확인 + 긴급 정지 가능. 재개는 추가 확인을 거쳐야만 가능.
 
-### 테스트 및 안정성 현황 (2026-03-28)
+### 테스트 및 안정성 현황 (2026-03-29)
 
 | 레이어 | 테스트 수 | 비고 |
 |--------|----------|------|
 | cloud_server | 79 | WS relay 8, scheduler 3, backtest 9 포함 |
-| local_server | 140 | 브로커 + 엔진 + 라우터 + 분봉 지표 17 |
-| sv_core (DSL + indicators) | 87 | 파서/평가기/렉서 + 지표 계산기 |
-| frontend Vitest | 42 | dslParser 26 + dslConverter 8 + e2eCrypto 8 |
-| frontend Playwright | 16 | auth 4, admin 2, onboarding 1, strategy 2, backtest 2, Builder E2E 5 |
-| **합계** | **364** | |
+| local_server | 213 | 브로커 + 엔진 + 라우터 + 분봉 지표 + **엔진 v2 30 + PositionState 11 + 링버퍼 4 + Tracker 6 + 시간 2** |
+| sv_core (DSL + indicators) | 152 | 파서/평가기/렉서 + 지표 + **v2 파서 44 + v2 평가기 21** |
+| frontend Vitest | 53 | dslParser 26 + dslConverter 8 + e2eCrypto 8 + **dslParserV2 11** |
+| frontend Playwright | 24 | auth 4, admin 2, onboarding 1, strategy 2, backtest 2, Builder E2E 5, **v2 E2E 8** |
+| **합계** | **521** | (2개 flaky backtest 간헐 실패 — 기존 이슈) |
 
 **risk-mitigation 완료 (2026-03-26)**: `spec/risk-mitigation/`
 - WS relay kill-switch 경로 테스트, APScheduler catch-up, Playwright E2E 기반 구축
@@ -172,9 +172,10 @@ Step 4
 | DSL 타임프레임 확장 | sv_core 파서 | 구현 완료 |
 | 전략 수명주기 (Builder→백테스트→결과→RuleCard) | 백테스트 | 구현 완료 |
 | 라이브 분봉 IndicatorProvider | 분봉 수집 | 구현 완료 |
+| 전략 엔진 v2 (DSL+엔진+상태API+카드UI+프리셋) | - | 구현 완료 (2026-03-29) |
+| AI 전략 생성 (자연어→DSL, 운영자 API) | Claude API | 미착수 |
+| 시험 모드 (모의 실행) | 엔진 v2 | 미착수 |
 | 사용자 프로필/메모리 모델 | - | 미착수 |
-| BYO LLM 연결 + 전략 DSL 코파일럿 | 프로필 모델 | 미착수 |
-| 전략 빌더 위저드 (문장형 편집 → DSL) | UX PRD P1 | 미착수 |
 | 기본 복구/최근 이력 | 무료 범위 | 미착수 |
 | 장기 보관/다기기 연속성 | Pro 과금 핵심 | 미착수 |
 

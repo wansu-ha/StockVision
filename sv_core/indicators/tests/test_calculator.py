@@ -11,6 +11,7 @@ from sv_core.indicators.calculator import (
     calc_macd,
     calc_bollinger,
     calc_avg_volume,
+    calc_stochastic,
 )
 
 
@@ -120,9 +121,10 @@ class TestCalcAllIndicators:
             "rsi_14", "rsi_21",
             "ma_5", "ma_10", "ma_20", "ma_60",
             "ema_12", "ema_20", "ema_26",
-            "macd", "macd_signal",
+            "macd", "macd_signal", "macd_hist",
             "bb_upper_20", "bb_lower_20",
             "avg_volume_20",
+            "stoch_k_5_3", "stoch_d_5_3_3",
         }
         assert set(result.keys()) == expected_keys
 
@@ -135,3 +137,61 @@ class TestCalcAllIndicators:
         assert result["ma_60"] is None
         # ma_5는 5바면 충분 → 값 있음
         assert result["ma_5"] is not None
+
+
+class TestCalcStochastic:
+    def test_basic(self):
+        """기본 스토캐스틱 계산."""
+        n = 30
+        highs = pd.Series([100 + i * 0.5 for i in range(n)], dtype=float)
+        lows = pd.Series([90 + i * 0.5 for i in range(n)], dtype=float)
+        closes = pd.Series([95 + i * 0.5 for i in range(n)], dtype=float)
+        k, d = calc_stochastic(highs, lows, closes)
+        assert k is not None
+        assert d is not None
+        assert 0 <= k <= 100
+        assert 0 <= d <= 100
+
+    def test_insufficient_data(self):
+        """데이터 부족 시 None."""
+        highs = pd.Series([100, 101, 102], dtype=float)
+        lows = pd.Series([98, 99, 100], dtype=float)
+        closes = pd.Series([99, 100, 101], dtype=float)
+        k, d = calc_stochastic(highs, lows, closes)
+        assert k is None
+        assert d is None
+
+    def test_overbought(self):
+        """상승 추세 → %K가 높아야 함."""
+        n = 30
+        highs = pd.Series(range(100, 100 + n), dtype=float)
+        lows = pd.Series(range(90, 90 + n), dtype=float)
+        closes = pd.Series(range(99, 99 + n), dtype=float)  # 고가 근처
+        k, d = calc_stochastic(highs, lows, closes)
+        assert k is not None and k > 50
+
+
+class TestPresetsParseV2:
+    """모든 프리셋이 parse_v2()를 통과하는지 검증."""
+
+    @pytest.fixture
+    def presets(self):
+        return [
+            # 기존 7개
+            ('trend-following', """기간 = 14\nMA(20) <= MA(60) AND 보유수량 > 0 → 매도 전량\nRSI(기간) < 30 AND MA(20) > MA(60) AND 보유수량 == 0 → 매수 100%\n수익률 <= -2 → 매도 전량\n수익률 >= 5 → 매도 전량"""),
+            # 신규 8개
+            ('macd-golden', """MACD골든크로스 AND RSI(14) >= 50 AND 보유수량 == 0 → 매수 100%\nMACD데드크로스 AND 보유수량 > 0 → 매도 전량\n수익률 <= -3 → 매도 전량"""),
+            ('bb-rsi-reversal', """볼린저하단돌파 AND RSI과매도 AND 보유수량 == 0 → 매수 100%\n볼린저상단돌파 OR RSI과매수 → 매도 전량\n수익률 <= -4 → 매도 전량"""),
+            ('stochastic-bounce', """슬로잉 = 3\n상향돌파(STOCH_K(5, 슬로잉), STOCH_D(5, 슬로잉)) AND STOCH_K(5, 슬로잉) <= 25 AND MA(20) > MA(60) AND 보유수량 == 0 → 매수 100%\n수익률 >= 4 OR STOCH_K(5, 슬로잉) >= 80 → 매도 전량\n수익률 <= -3 → 매도 전량"""),
+            ('macd-divergence', """기간 = 20\n강세다이버전스(MACD_HIST(), 기간) AND RSI(14) < 50 AND 보유수량 == 0 → 매수 100%\n약세다이버전스(MACD_HIST(), 기간) AND 보유수량 > 0 → 매도 전량\n수익률 <= -3 → 매도 전량"""),
+            ('triple-ma', """MA(5) > MA(20) AND MA(20) > MA(60) AND RSI(14) < 60 AND 보유수량 == 0 → 매수 100%\nMA(5) < MA(20) AND 보유수량 > 0 → 매도 전량\n수익률 <= -3 → 매도 전량"""),
+            ('bb-squeeze-breakout', """배수 = 1.5\n상향돌파(현재가, 볼린저_상단(20)) AND 거래량 > 평균거래량(20) * 배수 AND 보유수량 == 0 → 매수 100%\n고점 대비 <= -2 → 매도 전량\n수익률 <= -3 → 매도 전량"""),
+            ('morning-momentum', """시간제한 = 30\n목표수익 = 3\n손절 = -2\n등락률 >= 3 AND 장시작후 <= 시간제한 AND 거래량 > 평균거래량(20) * 3 AND 보유수량 == 0 → 매수 100%\n수익률 >= 목표수익 → 매도 전량\n수익률 <= 손절 → 매도 전량\n장시작후 >= 180 AND 보유수량 > 0 → 매도 전량"""),
+            ('ema-cross', """단기 = 12\n장기 = 26\n상향돌파(EMA(단기), EMA(장기)) AND 보유수량 == 0 → 매수 100%\n하향돌파(EMA(단기), EMA(장기)) AND 보유수량 > 0 → 매도 전량\n수익률 <= -3 → 매도 전량"""),
+        ]
+
+    def test_all_presets_parse(self, presets):
+        from sv_core.parsing.parser import parse_v2
+        for preset_id, script in presets:
+            ast = parse_v2(script)
+            assert len(ast.rules) > 0, f"프리셋 {preset_id} 파싱 실패: 규칙 없음"

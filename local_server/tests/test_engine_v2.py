@@ -7,9 +7,12 @@ from __future__ import annotations
 
 import pytest
 
+from unittest.mock import MagicMock
+
 from local_server.engine.evaluator import RuleEvaluator
 from local_server.engine.position_state import PositionState
 from local_server.engine.condition_tracker import ConditionTracker
+from local_server.engine.engine import StrategyEngine
 from sv_core.parsing import parse_v2, EvalV2Result
 
 
@@ -432,3 +435,175 @@ class TestStateFunctionsThroughEvaluator:
         r3 = ev.evaluate_v2(rule, _market(), _ctx(수익률=2))
         assert r3.action is not None
         assert r3.action.side == "매도"
+
+
+# ── 체결 루프 통합 테스트 ──
+
+
+def _make_engine() -> StrategyEngine:
+    """mock broker로 StrategyEngine 인스턴스 생성."""
+    broker = MagicMock()
+    return StrategyEngine(broker=broker)
+
+
+class TestFillLoopIntegration:
+    """v2 평가 → 수량 계산 → 체결 → PositionState 갱신 → 다음 사이클 재평가.
+
+    StrategyEngine의 _collect_candidates_v2와 _update_position_state_on_fill을
+    직접 호출하여 전체 루프를 검증한다.
+    """
+
+    def test_buy_fill_updates_position_state(self):
+        """매수 체결 후 PositionState에 보유수량/진입가가 반영된다."""
+        engine = _make_engine()
+        rule = _rule("RSI(14) < 30 AND 보유수량 == 0 -> 매수 100%")
+        market = _market(price=50000, rsi_14=25)
+
+        # 사이클 1: 매수 신호 생성
+        results = engine._collect_candidates_v2(rule, "cycle-1", market)
+        assert len(results) == 1
+        candidate, _ = results[0]
+        assert candidate.side == "BUY"
+
+        # 체결 시뮬레이션
+        engine._update_position_state_on_fill(candidate)
+
+        # PositionState 검증
+        ps = engine._position_states.get("")
+        # rule에 symbol이 없으므로 빈 문자열
+        assert ps is not None
+        assert ps.total_qty > 0
+        assert ps.entry_price == 50000
+
+    def test_sell_fill_resets_position_state(self):
+        """매도 전량 체결 후 PositionState가 리셋된다."""
+        engine = _make_engine()
+        rule = _rule(
+            "RSI(14) < 30 AND 보유수량 == 0 -> 매수 100%\n"
+            "수익률 >= 5 -> 매도 전량"
+        )
+
+        # 사전 조건: 포지션 보유 상태
+        ps = PositionState(symbol="005930")
+        ps.record_buy(50000, 10)
+        engine._position_states["005930"] = ps
+
+        rule_with_sym = {**rule, "symbol": "005930"}
+        market = _market(price=52600)  # 수익률 = +5.2%
+
+        # 사이클: 매도 신호
+        results = engine._collect_candidates_v2(rule_with_sym, "cycle-1", market)
+        assert len(results) == 1
+        candidate, _ = results[0]
+        assert candidate.side == "SELL"
+        assert candidate.desired_qty == 10  # 전량
+
+        # 체결
+        engine._update_position_state_on_fill(candidate)
+
+        # PositionState 리셋 확인
+        assert ps.total_qty == 0
+        assert ps.entry_price == 0.0
+
+    def test_full_loop_buy_then_sell(self):
+        """매수 → 다음 사이클 재평가 → 매도까지 전체 루프."""
+        engine = _make_engine()
+        script = (
+            "RSI(14) < 30 AND 보유수량 == 0 -> 매수 100%\n"
+            "수익률 >= 5 -> 매도 전량"
+        )
+        rule = {**_rule(script), "symbol": "005930"}
+
+        # --- 사이클 1: 매수 ---
+        market_1 = _market(price=50000, rsi_14=25)
+        results_1 = engine._collect_candidates_v2(rule, "cycle-1", market_1)
+        assert len(results_1) == 1
+        buy_candidate, _ = results_1[0]
+        assert buy_candidate.side == "BUY"
+
+        # 체결
+        engine._update_position_state_on_fill(buy_candidate)
+        ps = engine._position_states["005930"]
+        assert ps.total_qty > 0
+
+        # --- 사이클 2: 가격 상승, 매도 조건 미충족 ---
+        market_2 = _market(price=51000, rsi_14=45)
+        results_2 = engine._collect_candidates_v2(rule, "cycle-2", market_2)
+        # 수익률 = (51000-50000)/50000*100 = 2% < 5% → 매도 안 됨
+        # RSI=45 > 30 → 매수도 안 됨
+        assert len(results_2) == 0
+
+        # --- 사이클 3: 가격 더 상승, 매도 조건 충족 ---
+        market_3 = _market(price=52600, rsi_14=55)
+        results_3 = engine._collect_candidates_v2(rule, "cycle-3", market_3)
+        # 수익률 = (52600-50000)/50000*100 = 5.2% >= 5% → 매도
+        assert len(results_3) == 1
+        sell_candidate, _ = results_3[0]
+        assert sell_candidate.side == "SELL"
+
+        # 체결
+        engine._update_position_state_on_fill(sell_candidate)
+        assert ps.total_qty == 0
+
+    def test_dca_loop_with_position_update(self):
+        """DCA: 초기 매수 → 하락 시 추가 매수 → PositionState 누적 확인."""
+        engine = _make_engine()
+        script = (
+            "RSI(14) < 30 AND 보유수량 == 0 -> 매수 100%\n"
+            "수익률 <= -5 AND 보유수량 > 0 -> 매수 50%\n"
+            "수익률 >= 10 -> 매도 전량"
+        )
+        rule = {**_rule(script), "symbol": "005930"}
+
+        # --- 사이클 1: 초기 매수 ---
+        market_1 = _market(price=50000, rsi_14=25)
+        results_1 = engine._collect_candidates_v2(rule, "cycle-1", market_1)
+        assert len(results_1) == 1
+        assert results_1[0][0].side == "BUY"
+        engine._update_position_state_on_fill(results_1[0][0])
+
+        ps = engine._position_states["005930"]
+        initial_qty = ps.total_qty
+        assert initial_qty > 0
+        assert ps.entry_price == 50000
+
+        # --- 사이클 2: 하락 → DCA 매수 ---
+        market_2 = _market(price=47000, rsi_14=40)
+        results_2 = engine._collect_candidates_v2(rule, "cycle-2", market_2)
+        # 수익률 = (47000-50000)/50000*100 = -6% <= -5% → 추가 매수
+        assert len(results_2) == 1
+        assert results_2[0][0].side == "BUY"
+        engine._update_position_state_on_fill(results_2[0][0])
+
+        # 수량 증가, 평단 하락 확인
+        assert ps.total_qty > initial_qty
+        assert ps.entry_price < 50000  # VWAP로 평단 하락
+
+    def test_condition_tracker_records_through_loop(self):
+        """체결 루프 동안 ConditionTracker에 매 사이클 기록이 남는다."""
+        engine = _make_engine()
+        rule = {**_rule("RSI(14) < 30 AND 보유수량 == 0 -> 매수 100%"), "symbol": "005930"}
+
+        market = _market(price=50000, rsi_14=25)
+        engine._collect_candidates_v2(rule, "cycle-1", market)
+
+        tracker = engine._condition_tracker
+        latest = tracker.get_latest(1)
+        assert latest is not None
+        assert len(latest["conditions"]) == 1
+        assert latest["conditions"][0]["result"] is True
+
+    def test_execution_count_increments(self):
+        """체결 시 실행횟수가 PositionState에 기록된다."""
+        engine = _make_engine()
+        rule = {**_rule("RSI(14) < 30 AND 보유수량 == 0 -> 매수 100%"), "symbol": "005930"}
+
+        market = _market(price=50000, rsi_14=25)
+        results = engine._collect_candidates_v2(rule, "cycle-1", market)
+        assert len(results) == 1
+
+        engine._update_position_state_on_fill(results[0][0])
+
+        ps = engine._position_states["005930"]
+        # rule_index 0에 대한 실행횟수가 기록되어야 함
+        assert sum(ps.execution_counts.values()) > 0

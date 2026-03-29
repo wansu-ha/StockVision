@@ -129,7 +129,7 @@ export default function StrategyList() {
         <div className="grid gap-4 md:grid-cols-2">
           {filtered.map((rule) =>
             engineRunning && conditionStatusMap[rule.id] ? (
-              <StrategyMonitorCard key={rule.id} rule={rule} />
+              <StrategyMonitorCard key={rule.id} rule={rule} status={conditionStatusMap[rule.id] ?? null} />
             ) : (
               <RuleCard
                 key={rule.id}

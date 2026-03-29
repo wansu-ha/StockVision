@@ -19,6 +19,10 @@ from cloud_server.models.pending_command import PendingCommand  # noqa: F401
 from cloud_server.models.audit_log import AuditLog  # noqa: F401
 from cloud_server.models.oauth_account import OAuthAccount  # noqa: F401
 from cloud_server.models.device import Device  # noqa: F401
+from cloud_server.models.ai_conversation import AIConversation  # noqa: F401
+from cloud_server.models.ai_usage import AIUsage  # noqa: F401
+from cloud_server.models.ai_api_key import AIApiKey  # noqa: F401
+from cloud_server.models.strategy_version import StrategyVersion  # noqa: F401
 
 
 def init_db() -> None:

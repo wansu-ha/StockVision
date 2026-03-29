@@ -60,9 +60,9 @@ def validate_conditions(conditions: dict | None) -> None:
 
 def validate_dsl_script(script: str) -> None:
     """DSL 스크립트 파싱 검증. 무효 시 ValueError (위치+메시지)."""
-    from sv_core.parsing import parse, DSLError
+    from sv_core.parsing import parse_v2, DSLError
 
     try:
-        parse(script)
+        parse_v2(script)
     except DSLError as e:
         raise ValueError(f"[{e.line}:{e.col}] {e.message}") from e

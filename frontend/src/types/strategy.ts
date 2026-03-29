@@ -49,6 +49,8 @@ export interface Rule {
   qty: number
   max_position_count: number
   budget_ratio: number
+  parameters: Record<string, { type: string; default: number | string }> | null
+  dsl_meta: DslMeta | null
 }
 
 export type CreateRulePayload = Pick<Rule, 'name' | 'symbol'> & {
@@ -89,6 +91,23 @@ export const CONTEXT_FIELDS: Indicator[] = [
   { key: 'fear_greed', name: '공포/탐욕 지수' },
   { key: 'sector_score', name: '섹터 점수' },
 ]
+
+export interface DslMeta {
+  constants: { name: string; value: number | string }[]
+  custom_functions: { name: string; body: string }[]
+  rules: { index: number; condition: string; side: string; qty: string }[]
+  parse_status: 'ok' | 'error'
+  is_v2: boolean
+  errors: { line: number; column: number; message: string }[]
+}
+
+export interface DslSchema {
+  version: string
+  fields: string[]
+  compound_fields: Record<string, string>
+  functions: Record<string, { min_args: number; max_args: number; return_type: string }>
+  patterns: Record<string, { definition: string }>
+}
 
 /** rule.script 또는 v1 조건 필드에서 매매 방향을 파싱 */
 export function parseDirection(rule: Rule): '매수' | '매도' | '양방향' | '없음' {

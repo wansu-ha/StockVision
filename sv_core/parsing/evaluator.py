@@ -135,6 +135,10 @@ class _Evaluator:
             return self._eval_cross_above(node)
         if name == "하향돌파":
             return self._eval_cross_below(node)
+        if name == "강세다이버전스":
+            return self._eval_divergence(node, bullish=True)
+        if name == "약세다이버전스":
+            return self._eval_divergence(node, bullish=False)
 
         # 일반 내장 함수 — context에서 callable 조회
         func = self._ctx.get(name)
@@ -215,6 +219,83 @@ class _Evaluator:
         """상향/하향돌파 state 키 — 함수명 + 인자 AST repr."""
         arg_repr = "|".join(repr(a) for a in node.args)
         return f"{node.name}:{arg_repr}"
+
+    # ── 다이버전스 ──
+
+    def _eval_divergence(self, node: FuncCall, *, bullish: bool) -> Any:
+        """강세/약세 다이버전스 감지.
+
+        강세: 가격 저점↓ + 지표 저점↑ (하락 모멘텀 소진)
+        약세: 가격 고점↑ + 지표 고점↓ (상승 모멘텀 소진)
+
+        state["divergence_hist"]에 (price, indicator) 히스토리를 축적한다.
+        """
+        if len(node.args) < 1:
+            return _NULL
+
+        # 첫 인자: 지표 함수 호출 → 현재 값
+        indicator_val = self._eval(node.args[0])
+        if indicator_val is _NULL or indicator_val is None:
+            return False
+
+        # 두 번째 인자: lookback 기간 (기본 20)
+        lookback = 20
+        if len(node.args) >= 2:
+            lb = self._eval(node.args[1])
+            if lb is not _NULL and lb is not None:
+                lookback = int(lb)
+
+        # 현재 가격
+        price = self._ctx.get("현재가")
+        if price is None:
+            return False
+
+        # 히스토리 축적
+        if "divergence_hist" not in self._state:
+            self._state["divergence_hist"] = {}
+        key = self._cross_key(node)
+        hist = self._state["divergence_hist"].setdefault(key, [])
+        hist.append((float(price), float(indicator_val)))
+        # lookback 초과분 트리밍
+        if len(hist) > lookback:
+            self._state["divergence_hist"][key] = hist[-lookback:]
+            hist = self._state["divergence_hist"][key]
+
+        if len(hist) < 5:
+            return False  # 최소 5봉 필요
+
+        return self._detect_divergence(hist, bullish=bullish)
+
+    @staticmethod
+    def _detect_divergence(hist: list[tuple[float, float]], *, bullish: bool) -> bool:
+        """히스토리에서 로컬 극값 2개를 찾아 다이버전스 판정."""
+        prices = [h[0] for h in hist]
+        indicators = [h[1] for h in hist]
+        n = len(prices)
+
+        if bullish:
+            # 로컬 저점 찾기 (양쪽보다 낮은 점)
+            extrema = []
+            for i in range(1, n - 1):
+                if prices[i] < prices[i - 1] and prices[i] < prices[i + 1]:
+                    extrema.append(i)
+            if len(extrema) < 2:
+                return False
+            # 가장 최근 2개
+            i1, i2 = extrema[-2], extrema[-1]
+            # 가격 저점↓ + 지표 저점↑
+            return prices[i2] < prices[i1] and indicators[i2] > indicators[i1]
+        else:
+            # 로컬 고점 찾기
+            extrema = []
+            for i in range(1, n - 1):
+                if prices[i] > prices[i - 1] and prices[i] > prices[i + 1]:
+                    extrema.append(i)
+            if len(extrema) < 2:
+                return False
+            i1, i2 = extrema[-2], extrema[-1]
+            # 가격 고점↑ + 지표 고점↓
+            return prices[i2] > prices[i1] and indicators[i2] < indicators[i1]
 
     def _eval_comparison(self, node: Comparison) -> Any:
         left = self._eval(node.left)
@@ -461,6 +542,11 @@ class _EvaluatorV2:
         history = self._state.setdefault("count_history", {})
         hist_list: list[bool] = history.setdefault(key, [])
         hist_list.append(cond_bool)
+
+        # 윈도우 초과분 트리밍 (메모리 누수 방지)
+        if period > 0 and len(hist_list) > period:
+            history[key] = hist_list[-period:]
+            hist_list = history[key]
 
         # 윈도우 내 True 수
         window = hist_list[-period:] if period > 0 else []

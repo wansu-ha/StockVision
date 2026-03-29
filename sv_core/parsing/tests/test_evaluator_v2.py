@@ -3,6 +3,7 @@
 import pytest
 
 from sv_core.parsing import parse_v2, evaluate_v2, EvalV2Result, ActionResult, ConditionSnapshot
+from sv_core.parsing.evaluator import _Evaluator
 
 
 def _ctx(**overrides):
@@ -12,11 +13,15 @@ def _ctx(**overrides):
         "보유수량": 0, "고점 대비": 0, "수익률고점": 0,
         "진입가": 0, "보유일": 0, "보유봉": 0,
         "실행횟수": 0, "장시작후": 30, "시간": 930, "요일": 1,
+        "등락률": 2.5,
         "RSI": lambda period, tf=None: 50,
         "MA": lambda period, tf=None: 50000,
         "EMA": lambda period, tf=None: 50000,
         "MACD": lambda tf=None: 0,
         "MACD_SIGNAL": lambda tf=None: 0,
+        "MACD_HIST": lambda tf=None: 0,
+        "STOCH_K": lambda k=5, s=3, tf=None: 50,
+        "STOCH_D": lambda k=5, s=3, d=3, tf=None: 50,
         "볼린저_상단": lambda period, tf=None: 55000,
         "볼린저_하단": lambda period, tf=None: 45000,
         "평균거래량": lambda period, tf=None: 500,
@@ -257,3 +262,118 @@ class TestEvalV2Snapshots:
         assert len(result.snapshots) == 3
         for i, snap in enumerate(result.snapshots):
             assert snap.rule_index == i
+
+
+# ── 신규 함수 테스트 ──
+
+
+class TestEvalV2NewFunctions:
+    """MACD_HIST, STOCH_K/D, 등락률 테스트."""
+
+    def test_macd_hist_positive(self):
+        ast = parse_v2("MACD_HIST() > 0 AND 보유수량 == 0 → 매수 100%")
+        result = evaluate_v2(ast, _ctx(MACD_HIST=lambda tf=None: 1.5))
+        assert result.action is not None
+        assert result.action.side == "매수"
+
+    def test_macd_hist_negative_no_match(self):
+        ast = parse_v2("MACD_HIST() > 0 → 매수 100%")
+        result = evaluate_v2(ast, _ctx(MACD_HIST=lambda tf=None: -1.0))
+        assert result.action is None
+
+    def test_stoch_k_oversold(self):
+        ast = parse_v2("STOCH_K(5, 3) < 20 AND 보유수량 == 0 → 매수 100%")
+        result = evaluate_v2(ast, _ctx(STOCH_K=lambda k=5, s=3, tf=None: 15))
+        assert result.action is not None
+        assert result.action.side == "매수"
+
+    def test_stoch_d_overbought(self):
+        ast = parse_v2("STOCH_D(5, 3, 3) >= 80 → 매도 전량")
+        result = evaluate_v2(ast, _ctx(STOCH_D=lambda k=5, s=3, d=3, tf=None: 85))
+        assert result.action is not None
+        assert result.action.side == "매도"
+
+    def test_change_rate_field(self):
+        """등락률 필드 테스트."""
+        ast = parse_v2("등락률 >= 3 AND 보유수량 == 0 → 매수 100%")
+        result = evaluate_v2(ast, _ctx(등락률=5.0))
+        assert result.action is not None
+        assert result.action.side == "매수"
+
+    def test_change_rate_below_threshold(self):
+        ast = parse_v2("등락률 >= 3 → 매수 100%")
+        result = evaluate_v2(ast, _ctx(등락률=1.0))
+        assert result.action is None
+
+
+class TestEvalV2Divergence:
+    """강세/약세 다이버전스 테스트."""
+
+    def test_bullish_divergence_detected(self):
+        """가격 저점↓ + 지표 저점↑ → True."""
+        hist = [
+            (100, -5), (98, -6), (96, -7),
+            (97, -6),
+            (95, -5), (94, -4),
+            (93, -3),
+            (95, -2),
+        ]
+        assert _Evaluator._detect_divergence(hist, bullish=True) is True
+
+    def test_bullish_divergence_not_detected(self):
+        """가격↓ 지표↓ → False."""
+        hist = [
+            (100, -5), (98, -6), (96, -7),
+            (97, -6),
+            (95, -8), (94, -9),
+            (93, -10),
+            (95, -9),
+        ]
+        assert _Evaluator._detect_divergence(hist, bullish=True) is False
+
+    def test_bearish_divergence_detected(self):
+        """가격 고점↑ + 지표 고점↓ → True."""
+        hist = [
+            (90, 5), (92, 6), (94, 7),
+            (93, 6),
+            (95, 5), (96, 4),
+            (97, 3),
+            (95, 2),
+        ]
+        assert _Evaluator._detect_divergence(hist, bullish=False) is True
+
+    def test_bearish_divergence_not_detected(self):
+        """가격↑ 지표↑ → False."""
+        hist = [
+            (90, 5), (92, 6), (94, 7),
+            (93, 6),
+            (95, 8), (96, 9),
+            (97, 10),
+            (95, 9),
+        ]
+        assert _Evaluator._detect_divergence(hist, bullish=False) is False
+
+    def test_insufficient_data(self):
+        """데이터 부족 시 False."""
+        hist = [(100, -5), (98, -6), (96, -7)]
+        assert _Evaluator._detect_divergence(hist, bullish=True) is False
+
+    def test_divergence_via_evaluate_v2(self):
+        """evaluate_v2를 통한 다이버전스 통합 테스트 (히스토리 축적)."""
+        ast = parse_v2("강세다이버전스(MACD_HIST(), 20) AND 보유수량 == 0 → 매수 100%")
+        state = {}
+
+        # 히스토리를 충분히 쌓는다 (강세 다이버전스 패턴)
+        prices =  [100, 98, 96, 97, 95, 94, 93, 95]
+        indvals = [ -5, -6, -7, -6, -5, -4, -3, -2]
+        result = None
+        for p, iv in zip(prices, indvals):
+            result = evaluate_v2(
+                ast,
+                _ctx(현재가=p, MACD_HIST=lambda tf=None, _v=iv: _v),
+                state,
+            )
+        # 8봉 쌓인 후 → 강세 다이버전스 감지되어야 함
+        assert result is not None
+        assert result.action is not None
+        assert result.action.side == "매수"
