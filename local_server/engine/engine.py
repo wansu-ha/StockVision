@@ -14,11 +14,13 @@ from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from local_server.engine.alert_monitor import AlertMonitor
 from local_server.engine.bar_builder import BarBuilder
+from local_server.engine.condition_tracker import ConditionTracker
 from local_server.engine.context_cache import ContextCache
 from local_server.engine.evaluator import RuleEvaluator
 from local_server.engine.indicator_provider import IndicatorProvider
 from local_server.engine.executor import ExecutionResult, ExecutionStatus, OrderExecutor
 from local_server.engine.limit_checker import LimitChecker
+from local_server.engine.position_state import PositionState
 from local_server.engine.price_verifier import PriceVerifier
 from local_server.engine.safeguard import KillSwitchLevel, Safeguard
 from local_server.engine.scheduler import EngineScheduler
@@ -84,6 +86,10 @@ class StrategyEngine:
 
         # AlertMonitor (alerts 설정 섹션 전달)
         self._alert_monitor = AlertMonitor(config=cfg.get("alerts"))
+
+        # v2: 종목별 포지션 상태 / 조건 추적
+        self._position_states: dict[str, PositionState] = {}
+        self._condition_tracker = ConditionTracker()
 
         # HealthWatchdog가 참조하는 마지막 evaluate 시각
         self._last_evaluate_ts: Optional[datetime] = None
@@ -161,6 +167,10 @@ class StrategyEngine:
     @property
     def indicator_provider(self) -> IndicatorProvider:
         return self._indicator_provider
+
+    @property
+    def condition_tracker(self) -> ConditionTracker:
+        return self._condition_tracker
 
     # ── 메인 루프 ──
 
@@ -298,6 +308,11 @@ class StrategyEngine:
                     cycle_id, candidate.rule_id, candidate.side,
                     result.status.value, result.message,
                 )
+
+                # v2 PositionState 갱신 (체결 성공 시)
+                if result.status == ExecutionStatus.SUCCESS:
+                    self._update_position_state_on_fill(candidate)
+
                 # result_store 기록
                 if result.status == ExecutionStatus.SUCCESS:
                     record_result(candidate.rule_id, ResultStatus.SUCCESS, result.message)
@@ -341,9 +356,13 @@ class StrategyEngine:
                     indicators_by_tf[tf] = minute_ind
             latest["indicators"] = indicators_by_tf
 
-            context = self._context_cache.get()
+            # v2 분기: script에 → / -> / 매수: / 매도: 가 있으면 v2 경로
+            script = rule.get("script") or ""
+            if RuleEvaluator.is_v2_script(script):
+                return self._collect_candidates_v2(rule, cycle_id, latest)
 
-            # 조건 평가 → (buy_result, sell_result)
+            # ── v1 경로 (기존 코드) ──
+            context = self._context_cache.get()
             buy_result, sell_result = self._evaluator.evaluate(rule, latest, context)
 
             priority = rule.get("priority", 0)
@@ -389,6 +408,179 @@ class StrategyEngine:
             logger.exception("Rule %d 후보 수집 오류", rule_id)
 
         return results
+
+    def _collect_candidates_v2(
+        self,
+        rule: dict,
+        cycle_id: str,
+        latest: dict[str, Any],
+    ) -> list[tuple[CandidateSignal, dict[str, Any]]]:
+        """v2 DSL 규칙 평가 → CandidateSignal 리스트."""
+        rule_id = rule.get("id", 0)
+        symbol = rule.get("symbol", "")
+        price = float(latest.get("price", 0))
+        results: list[tuple[CandidateSignal, dict[str, Any]]] = []
+
+        try:
+            # PositionState: 종목별 (per-symbol)
+            ps = self._position_states.get(symbol)
+            if ps is None:
+                ps = PositionState(symbol=symbol)
+                self._position_states[symbol] = ps
+
+            ps.update_cycle(price)
+
+            # context = 포지션 상태 + 실행횟수
+            context = ps.to_context(price)
+            for idx, cnt in ps.execution_counts.items():
+                context[f"실행횟수_{idx}"] = cnt
+
+            # v2 평가
+            result = self._evaluator.evaluate_v2(rule, latest, context)
+
+            # ConditionTracker 기록 (매 사이클)
+            conditions = [
+                {"index": s.rule_index, "result": s.result, "details": s.details}
+                for s in result.snapshots
+            ]
+            action_dict = None
+            if result.action:
+                action_dict = {
+                    "side": result.action.side,
+                    "qty_type": result.action.qty_type,
+                    "qty_value": result.action.qty_value,
+                    "rule_index": result.action.rule_index,
+                }
+            self._condition_tracker.record(
+                rule_id=rule_id, cycle=cycle_id,
+                conditions=conditions, position=context, action=action_dict,
+            )
+
+            if result.action is None:
+                return results
+
+            action = result.action
+            side = "BUY" if action.side == "매수" else "SELL"
+
+            # 수량 계산
+            qty = self._calc_v2_qty(action, side, ps, price, rule)
+
+            if qty <= 0:
+                logger.debug("Rule %d v2: qty=0, 스킵", rule_id)
+                return results
+
+            # raw_rule에 execution.qty_value를 오버라이드한 사본 전달
+            rule_copy = {**rule, "execution": {
+                **(rule.get("execution") or {}),
+                "qty_value": qty,
+            }}
+
+            signal = CandidateSignal(
+                signal_id=uuid.uuid4().hex[:12],
+                cycle_id=cycle_id,
+                rule_id=rule_id,
+                symbol=symbol,
+                side=side,
+                priority=rule.get("priority", 0),
+                desired_qty=qty,
+                detected_at=datetime.now(),
+                latest_price=price,
+                reason=action.expr_text or f"v2 규칙 #{action.rule_index} 충족",
+                raw_rule=rule_copy,
+                intent_id=uuid.uuid4().hex[:12],
+            )
+            results.append((signal, latest))
+
+            # ConditionTracker 트리거 기록
+            self._condition_tracker.record_trigger(
+                rule_id=rule_id,
+                at=datetime.now().isoformat(),
+                index=action.rule_index,
+                action=f"{side} {qty}",
+            )
+
+        except Exception:
+            logger.exception("Rule %d v2 후보 수집 오류 — v1 폴백 시도", rule_id)
+            # v2 실패 시 v1 폴백
+            try:
+                context = self._context_cache.get()
+                buy_result, sell_result = self._evaluator.evaluate(rule, latest, context)
+                execution = rule.get("execution") or {}
+                qty = int(execution.get("qty_value", rule.get("qty", 1)))
+                priority = rule.get("priority", 0)
+
+                if buy_result:
+                    results.append((CandidateSignal(
+                        signal_id=uuid.uuid4().hex[:12], cycle_id=cycle_id,
+                        rule_id=rule_id, symbol=symbol, side="BUY",
+                        priority=priority, desired_qty=qty,
+                        detected_at=datetime.now(), latest_price=price,
+                        reason="매수 조건 충족 (v1 폴백)", raw_rule=rule,
+                        intent_id=uuid.uuid4().hex[:12],
+                    ), latest))
+                if sell_result:
+                    results.append((CandidateSignal(
+                        signal_id=uuid.uuid4().hex[:12], cycle_id=cycle_id,
+                        rule_id=rule_id, symbol=symbol, side="SELL",
+                        priority=priority, desired_qty=qty,
+                        detected_at=datetime.now(), latest_price=price,
+                        reason="매도 조건 충족 (v1 폴백)", raw_rule=rule,
+                        intent_id=uuid.uuid4().hex[:12],
+                    ), latest))
+            except Exception:
+                logger.exception("Rule %d v1 폴백도 실패", rule_id)
+
+        return results
+
+    def _calc_v2_qty(
+        self,
+        action: Any,
+        side: str,
+        ps: PositionState,
+        price: float,
+        rule: dict,
+    ) -> int:
+        """v2 action의 qty_type/qty_value로 실제 수량 계산."""
+        if action.qty_type == "percent":
+            if side == "BUY":
+                # 매수 N% = budget_ratio 기반 일일 예산의 N%
+                budget_ratio = float(self._limit_checker._budget_ratio)
+                # cash는 아직 모르므로 최소 1주. 실제 예산 제한은 SystemTrader/LimitChecker가 처리.
+                qty = max(1, int(action.qty_value / 100))
+            else:
+                # 매도 N% = 보유수량의 N%
+                qty = max(1, int(ps.total_qty * action.qty_value / 100)) if ps.total_qty > 0 else 0
+        else:
+            # "all" — 전량
+            if side == "BUY":
+                execution = rule.get("execution") or {}
+                qty = int(execution.get("qty_value", rule.get("qty", 1)))
+            else:
+                qty = ps.total_qty
+        return qty
+
+    # ── v2 체결 후 PositionState 갱신 ──
+
+    def _update_position_state_on_fill(self, candidate: CandidateSignal) -> None:
+        """체결 성공 시 PositionState에 매수/매도 기록."""
+        symbol = candidate.symbol
+        ps = self._position_states.get(symbol)
+        if ps is None:
+            return  # v1 규칙이면 PositionState 없음 — 무시
+
+        price = candidate.latest_price
+        qty = candidate.desired_qty
+
+        if candidate.side == "BUY":
+            ps.record_buy(price, qty)
+        elif candidate.side == "SELL":
+            ps.record_sell(qty)
+
+        # raw_rule에서 v2 action의 rule_index를 추출하여 실행횟수 기록
+        action_dict = self._condition_tracker.get_latest(candidate.rule_id)
+        if action_dict and action_dict.get("action"):
+            rule_index = action_dict["action"].get("rule_index", 0)
+            ps.record_execution(rule_index)
 
     # ── 손실 제한 처리 ──
 

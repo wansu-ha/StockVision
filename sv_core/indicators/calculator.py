@@ -128,3 +128,27 @@ def calc_avg_volume(volumes: pd.Series, period: int = 20) -> float | None:
         return None
     val = volumes.rolling(period).mean().iloc[-1]
     return round(float(val), 2) if not np.isnan(val) else None
+
+
+def calc_atr(highs: pd.Series, lows: pd.Series, closes: pd.Series, period: int = 14) -> float | None:
+    """ATR (Average True Range). 데이터 부족 시 None."""
+    if len(closes) < period + 1:
+        return None
+    prev_close = closes.shift(1)
+    tr = pd.concat([highs - lows, (highs - prev_close).abs(), (lows - prev_close).abs()], axis=1).max(axis=1)
+    val = tr.rolling(period).mean().iloc[-1]
+    return round(float(val), 2) if not np.isnan(val) else None
+
+
+def calc_highest(prices: pd.Series, period: int) -> float | None:
+    """기간 내 최고가."""
+    if len(prices) < period:
+        return None
+    return round(float(prices.iloc[-period:].max()), 2)
+
+
+def calc_lowest(prices: pd.Series, period: int) -> float | None:
+    """기간 내 최저가."""
+    if len(prices) < period:
+        return None
+    return round(float(prices.iloc[-period:].min()), 2)

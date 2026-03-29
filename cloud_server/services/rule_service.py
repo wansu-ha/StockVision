@@ -28,6 +28,7 @@ def _rule_to_dict(rule: TradingRule) -> dict:
         "qty": rule.qty,
         "max_position_count": rule.max_position_count,
         "budget_ratio": rule.budget_ratio,
+        "parameters": rule.parameters,
         "is_active": rule.is_active,
         "version": rule.version,
         "created_at": rule.created_at.isoformat() if rule.created_at else None,
@@ -84,6 +85,7 @@ def create_rule(user_id: str, data: dict, db: Session) -> dict:
         qty=data.get("qty", 1),
         max_position_count=data.get("max_position_count", 5),
         budget_ratio=data.get("budget_ratio", 0.2),
+        parameters=data.get("parameters"),
         is_active=data.get("is_active", True),
         version=1,
     )
@@ -133,6 +135,7 @@ def update_rule(rule_id: int, user_id: str, data: dict, db: Session) -> dict:
         "name", "symbol", "script", "execution", "trigger_policy", "priority",
         "buy_conditions", "sell_conditions",
         "order_type", "qty", "max_position_count", "budget_ratio", "is_active",
+        "parameters",
     ]
     for field in updatable:
         if field in data:
