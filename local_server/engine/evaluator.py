@@ -201,6 +201,44 @@ class RuleEvaluator:
         ctx["MACD"] = _macd
         ctx["MACD_SIGNAL"] = _macd_signal
 
+        def _macd_hist(tf=None):
+            resolved_tf = tf or "1d"
+            tf_dict = indicators.get(resolved_tf)
+            if tf_dict is None:
+                return None
+            v = tf_dict.get("macd_hist")
+            return float(v) if v is not None else None
+
+        ctx["MACD_HIST"] = _macd_hist
+
+        def _stoch_k(k_period=5, slowing=3, tf=None):
+            resolved_tf = tf or "1d"
+            tf_dict = indicators.get(resolved_tf)
+            if tf_dict is None:
+                return None
+            key = f"stoch_k_{int(k_period)}_{int(slowing)}"
+            val = tf_dict.get(key)
+            return float(val) if val is not None else None
+
+        def _stoch_d(k_period=5, slowing=3, d_period=3, tf=None):
+            resolved_tf = tf or "1d"
+            tf_dict = indicators.get(resolved_tf)
+            if tf_dict is None:
+                return None
+            key = f"stoch_d_{int(k_period)}_{int(slowing)}_{int(d_period)}"
+            val = tf_dict.get(key)
+            return float(val) if val is not None else None
+
+        ctx["STOCH_K"] = _stoch_k
+        ctx["STOCH_D"] = _stoch_d
+
+        # 등락률 — 전일 대비 %
+        prev_close = market_data.get("prev_close")
+        if price is not None and prev_close is not None and prev_close != 0:
+            ctx["등락률"] = round((float(price) - float(prev_close)) / float(prev_close) * 100, 2)
+        else:
+            ctx["등락률"] = None
+
         return ctx
 
     # ── v1 JSON 폴백 ──

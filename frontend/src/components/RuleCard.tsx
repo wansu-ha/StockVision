@@ -3,6 +3,7 @@ import type { Rule } from '../types/strategy'
 import { parseDirection } from '../types/strategy'
 import type { LastRuleResult } from '../types/rule-result'
 import type { BacktestSummary } from '../services/backtest'
+import { analyzeDsl } from '../utils/dslAnalyzer'
 
 interface Props {
   rule: Rule
@@ -96,10 +97,27 @@ export default function RuleCard({ rule, symbolName, engineRunning, lastResult, 
         </button>
       </div>
 
-      {/* 블록 1: 조건 */}
+      {/* 블록 1: 전략 구성 */}
       <div className="mb-2">
-        <p className="text-[11px] font-medium text-gray-400 uppercase mb-0.5">조건</p>
-        <p className="text-xs text-gray-600 truncate">{summarizeConditions(rule)}</p>
+        <p className="text-[11px] font-medium text-gray-400 uppercase mb-0.5">전략 구성</p>
+        {(() => {
+          const summary = analyzeDsl(rule.script)
+          if (summary.buyCount === 0 && summary.sellCount === 0) {
+            return <p className="text-xs text-gray-600 truncate">{summarizeConditions(rule)}</p>
+          }
+          return (
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-blue-400">매수 {summary.buyCount}</span>
+              <span className="text-gray-300">|</span>
+              <span className="text-red-400">매도 {summary.sellCount}</span>
+              <span className="text-gray-300">|</span>
+              {summary.hasStopLoss
+                ? <span className="text-green-400">손절 ✓</span>
+                : <span className="text-gray-500">손절 ✗</span>
+              }
+            </div>
+          )
+        })()}
       </div>
 
       {/* 블록 2: 실행 */}
