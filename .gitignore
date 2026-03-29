@@ -142,4 +142,4 @@ prototypes/
 *.tmp
 *.temp
 frontend/test-results/
-data/
+/data/

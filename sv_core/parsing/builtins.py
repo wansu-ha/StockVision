@@ -12,10 +12,28 @@ if TYPE_CHECKING:
 # ── 내장 필드 (괄호 없음, 현재 시세 컨텍스트에서 resolve) ──
 
 BUILTIN_FIELDS: set[str] = {
+    # 기존
     "현재가",
     "거래량",
     "수익률",
     "보유수량",
+    # v2 포지션 필드
+    "고점 대비",     # 보유 중 최고가 대비 하락률%
+    "수익률고점",     # 보유 중 최고 수익률%
+    "진입가",        # 평균 진입 단가
+    "보유일",        # 영업일 수
+    "보유봉",        # 봉 수
+    # v2 시간 필드
+    "시간",          # 현재 시각 HHMM (정수)
+    "장시작후",       # 장 시작 후 경과 분
+    "요일",          # 1=월 ~ 5=금
+    # v2 상태 필드
+    "실행횟수",       # 이 규칙의 현재 포지션 내 실행 횟수
+}
+
+# 복합 필드 (공백 포함) — 파서에서 lookahead 결합 시 사용
+COMPOUND_FIELDS: dict[str, str] = {
+    "고점": "고점 대비",  # "고점" + "대비" → "고점 대비"
 }
 
 # ── 내장 함수 (괄호 필수, 인자 있음) ──
@@ -47,6 +65,14 @@ BUILTIN_FUNCTIONS: dict[str, BuiltinFuncSpec] = {
     # 크로스오버: 인자 고정
     "상향돌파": BuiltinFuncSpec("상향돌파", 2, 2, "boolean"),
     "하향돌파": BuiltinFuncSpec("하향돌파", 2, 2, "boolean"),
+    # v2 지표 함수
+    "ATR": BuiltinFuncSpec("ATR", 1, 2, "number"),
+    "최고가": BuiltinFuncSpec("최고가", 1, 2, "number"),
+    "최저가": BuiltinFuncSpec("최저가", 1, 2, "number"),
+    "이격도": BuiltinFuncSpec("이격도", 1, 2, "number"),
+    # v2 상태 함수
+    "횟수": BuiltinFuncSpec("횟수", 2, 2, "number"),
+    "연속": BuiltinFuncSpec("연속", 1, 1, "number"),
 }
 
 # ── 내장 패턴 함수 (괄호 필수, 인자 없음 — spec §3) ──

@@ -47,6 +47,11 @@ class TradingRule(Base):
     max_position_count = Column(Integer, default=5, nullable=False)
     budget_ratio       = Column(Float, default=0.2, nullable=False)
 
+    # DSL 상수 파라미터 메타데이터 (자동 추출)
+    parameters = Column(JSON, nullable=True)
+    # Expected format:
+    # {"기간": {"type": "number", "default": 14}, "tf": {"type": "string", "default": "1d"}}
+
     # 상태
     is_active  = Column(Boolean, default=True, nullable=False)
     version    = Column(Integer, default=1, nullable=False)  # 클라이언트 동기화용
