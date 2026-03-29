@@ -1,6 +1,6 @@
 # StockVision 로드맵
 
-> 최종 갱신: 2026-03-29 (전략 엔진 v2 구현 완료, 테스트 521개)
+> 최종 갱신: 2026-03-29 (AI 코어 서비스 구현 완료, 테스트 174+)
 > 역할: 개발 우선순위와 Phase 간 의존성을 요약하는 최상위 방향 문서.
 > 상세 제품 방향: `docs/product/product-direction-log.md`
 
@@ -130,7 +130,7 @@ Step 4
 |--------|----------|------|
 | cloud_server | 79 | WS relay 8, scheduler 3, backtest 9 포함 |
 | local_server | 213 | 브로커 + 엔진 + 라우터 + 분봉 지표 + **엔진 v2 30 + PositionState 11 + 링버퍼 4 + Tracker 6 + 시간 2** |
-| sv_core (DSL + indicators) | 152 | 파서/평가기/렉서 + 지표 + **v2 파서 44 + v2 평가기 21** |
+| sv_core (DSL + indicators) | 174 | 파서/평가기/렉서 + 지표 + **v2 파서 44 + v2 평가기 21 + 신규 함수/다이버전스 16 + 스키마 6** |
 | frontend Vitest | 53 | dslParser 26 + dslConverter 8 + e2eCrypto 8 + **dslParserV2 11** |
 | frontend Playwright | 24 | auth 4, admin 2, onboarding 1, strategy 2, backtest 2, Builder E2E 5, **v2 E2E 8** |
 | **합계** | **521** | (2개 flaky backtest 간헐 실패 — 기존 이슈) |
@@ -173,10 +173,12 @@ Step 4
 | 전략 수명주기 (Builder→백테스트→결과→RuleCard) | 백테스트 | 구현 완료 |
 | 라이브 분봉 IndicatorProvider | 분봉 수집 | 구현 완료 |
 | 전략 엔진 v2 (DSL+엔진+상태API+카드UI+프리셋) | - | 구현 완료 (2026-03-29) |
-| AI 전략 생성 (자연어→DSL, 운영자 API) | Claude API | 미착수 |
-| 시험 모드 (모의 실행) | 엔진 v2 | 미착수 |
-| 사용자 프로필/메모리 모델 | - | 미착수 |
-| 기본 복구/최근 이력 | 무료 범위 | 미착수 |
+| DSL 함수 ���장 + 프리셋 8개 + 전략 상태 요약 | - | 구현 완료 (2026-03-29) |
+| DSL 스키마 API + 자동��성 + dsl_meta + validators v2 | - | 구현 완료 (2026-03-29) |
+| AI 코어 서비스 (코파일럿+비서+크레딧+대화패널+버전) | Claude API | 구현 완료 (2026-03-29) |
+| DSL 에디터 구문 하이라이팅 (CodeMirror 6) | - | 미착수 (별도 이슈) |
+| 사용자 프로필/메모리 ��델 | - | 미착수 |
+| 기본 복구/최근 이력 | 무��� 범위 | 미착수 |
 | 장기 보관/다기기 연속성 | Pro 과금 핵심 | 미착수 |
 
 > 무료: 로컬 메모리, 최근 30일 이력/롤백, 기기 교체 복구 기본, 전략 import/export.
