@@ -119,15 +119,48 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("클라우드 하트비트 시작: %s", cloud_url)
 
     # 자동 업데이트 체크
+    update_mgr = None
     try:
         from local_server.updater.manager import get_update_manager
+        from local_server.updater.installer import get_install_dir
         update_mgr = get_update_manager()
+
+        # pending_rollback.json 마커 처리
+        marker = get_install_dir() / "pending_rollback.json"
+        if marker.exists():
+            import json as _json
+            try:
+                data = _json.loads(marker.read_text())
+                marker_status = data.get("status")
+                if marker_status == "rolled_back":
+                    logger.warning(
+                        "업데이트 실패: v%s → v%s 롤백됨",
+                        data.get("from_version"), data.get("to_version"),
+                    )
+                    update_mgr.state.status = "rolled_back"
+                    update_mgr.state.last_error = (
+                        f"v{data.get('to_version')} 업데이트 실패, "
+                        f"v{data.get('from_version')}으로 복원됨"
+                    )
+                    marker.unlink()
+                elif marker_status in ("installing", "verifying"):
+                    # .bat이 처리 중 — 마커 유지
+                    logger.info("pending_rollback 마커 (status=%s) — .bat 처리 대기", marker_status)
+                else:
+                    logger.warning("pending_rollback 알 수 없는 상태: %s — 마커 삭제", marker_status)
+                    marker.unlink()
+            except Exception:
+                logger.warning("pending_rollback.json 파싱 실패 — 마커 삭제")
+                marker.unlink(missing_ok=True)
+
         await update_mgr.startup()
         if update_mgr.state.info and update_mgr.state.info.available:
             logger.info("업데이트 가능: %s → %s", update_mgr.state.info.current, update_mgr.state.info.latest)
             # 자동 다운로드
             if cfg.get("update.auto_enabled", True):
                 asyncio.create_task(update_mgr.start_download())
+        # 백그라운드 루프 (체크 + 설치)
+        await update_mgr.start_background_tasks()
     except Exception as e:
         logger.warning("업데이트 체크 실패 (서버 시작은 계속): %s", e)
 
@@ -160,6 +193,34 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.watchdog = watchdog
     await watchdog.start()
     logger.info("HealthWatchdog 시작")
+
+    # 업데이트 설치 안전 조건 콜백 주입
+    if update_mgr:
+        def can_install_now() -> bool:
+            """엔진 정지 + 미체결 없음."""
+            engine = getattr(app.state, "strategy_engine", None)
+            if engine and getattr(engine, "running", False):
+                return False
+            broker = getattr(app.state, "broker", None)
+            if broker:
+                try:
+                    # has_pending_orders 미구현 → get_open_orders 길이로 대체
+                    orders = broker.get_open_orders()
+                    if orders:
+                        return False
+                except Exception:
+                    pass
+            return True
+        update_mgr.set_install_guard(can_install_now)
+
+    # 업데이트 이벤트 → 토스트 알림 연결
+    if update_mgr and tray_thread is not None:
+        from local_server.utils.toast import show_toast
+
+        def _on_update_event(event: str, message: str) -> None:
+            show_toast("StockVision", message)
+
+        update_mgr.set_event_callback(_on_update_event)
 
     # 트레이 아이콘 초록으로 전환
     if tray_thread is not None:
@@ -197,6 +258,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if ws_client:
         await ws_client.stop()
         logger.info("클라우드 WS 릴레이 종료")
+
+    # 업데이트 백그라운드 태스크 종료
+    if update_mgr:
+        await update_mgr.shutdown()
 
     # 하트비트 태스크 취소
     if heartbeat_task and not heartbeat_task.done():
@@ -279,6 +344,8 @@ def create_app() -> FastAPI:
 
     from local_server.routers import devices as devices_router
     app.include_router(devices_router.router, tags=["디바이스"])
+    from local_server.routers import update as update_router
+    app.include_router(update_router.router)
 
     import time as _time
     _start_time = _time.monotonic()

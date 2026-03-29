@@ -1,6 +1,7 @@
 """인스톨러 다운로드 + SHA256 검증."""
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 from pathlib import Path
@@ -85,6 +86,10 @@ async def download_installer(
             logger.warning("다운로드 실패 (시도 %d/%d)", attempt, MAX_RETRIES, exc_info=True)
             dest.unlink(missing_ok=True)
 
+        if attempt < MAX_RETRIES:
+            logger.info("재시도 대기: %d초", RETRY_DELAY_SEC)
+            await asyncio.sleep(RETRY_DELAY_SEC)
+
     logger.error("다운로드 최종 실패 (%d회 시도)", MAX_RETRIES)
     return None
 
@@ -97,8 +102,8 @@ async def _verify_sha256(file_path: Path, sha256_url: str) -> bool:
             resp.raise_for_status()
             expected = resp.text.strip().split()[0].lower()
     except Exception:
-        logger.warning("SHA256 파일 다운로드 실패 — 검증 생략")
-        return True  # sha256 파일 못 받으면 통과 (폴백)
+        logger.warning("SHA256 파일 다운로드 실패 — 검증 실패 처리")
+        return False  # fail-closed: 해시 파일 못 받으면 검증 실패
 
     actual = hashlib.sha256(file_path.read_bytes()).hexdigest().lower()
     return actual == expected

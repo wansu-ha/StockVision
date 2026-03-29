@@ -6,7 +6,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { cloudHealth } from '../../services/cloudClient'
-import { localLogs, localHealth, localStatus } from '../../services/localClient'
+import { localLogs, localHealth, localStatus, localUpdate } from '../../services/localClient'
 import type { LogSummary, DailyPnL } from '../../services/localClient'
 import AlertsDropdown from '../AlertsDropdown'
 
@@ -143,7 +143,9 @@ export default function OpsPanel({ localConnected, brokerConnected, engineRunnin
     {
       label: '로컬',
       ok: isLocalUp,
-      text: isLocalUp ? '연결됨' : '연결 불가',
+      text: isLocalUp
+        ? `연결됨${localHp?.version ? ` v${localHp.version}` : ''}`
+        : '연결 불가',
       color: isLocalUp ? 'bg-green-400' : 'bg-red-400',
     },
     {
@@ -191,19 +193,57 @@ export default function OpsPanel({ localConnected, brokerConnected, engineRunnin
 
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 sm:p-4 mb-4 sm:mb-5">
-      {/* 업데이트 배너 */}
-      {localHp?.update_status?.available && (
-        <div className={`mb-3 px-3 py-2 rounded-lg text-xs ${
-          localHp.update_status.major_mismatch
-            ? 'bg-red-900/40 border border-red-800 text-red-300'
-            : 'bg-yellow-900/40 border border-yellow-800 text-yellow-300'
-        }`}>
-          {localHp.update_status.major_mismatch
-            ? '⚠ 로컬 서버 버전이 호환되지 않습니다. 업데이트가 필요합니다.'
-            : `로컬 서버 업데이트 가능 (v${localHp?.version} → v${localHp.update_status.latest})`}
-          {localHp.update_status.ready_to_install && ' — 다음 허용 시간에 자동 설치됩니다'}
-        </div>
-      )}
+      {/* 업데이트 배너 — status 기반 분기 */}
+      {localHp?.update_status?.available && (() => {
+        const us = localHp.update_status!
+        const isMajor = us.major_mismatch
+        const base = isMajor
+          ? 'bg-red-900/40 border border-red-800 text-red-300'
+          : 'bg-yellow-900/40 border border-yellow-800 text-yellow-300'
+        return (
+          <div className={`mb-3 px-3 py-2 rounded-lg text-xs ${base}`}>
+            {us.status === 'downloading' ? (
+              <div>
+                <div className="mb-1">다운로드 중 (v{localHp.version} → v{us.latest})</div>
+                <div className="w-full bg-gray-700 rounded-full h-1.5">
+                  <div className="bg-yellow-400 h-1.5 rounded-full transition-all" style={{ width: `${Math.round(us.download_progress * 100)}%` }} />
+                </div>
+                <div className="text-right text-[10px] mt-0.5">{Math.round(us.download_progress * 100)}%</div>
+              </div>
+            ) : us.status === 'ready' ? (
+              <div className="flex items-center justify-between">
+                <span>업데이트 준비됨 (v{localHp.version} → v{us.latest}) — 허용 시간에 자동 설치</span>
+                <button
+                  onClick={() => localUpdate.install().catch(() => {})}
+                  className="ml-2 px-2 py-0.5 bg-yellow-700/50 hover:bg-yellow-700 rounded text-yellow-200 text-xs font-medium transition shrink-0"
+                >
+                  지금 설치
+                </button>
+              </div>
+            ) : us.status === 'installing' ? (
+              <span>설치 중... 서버가 재시작됩니다</span>
+            ) : us.status === 'rolled_back' ? (
+              <span>{us.last_error || '업데이트 실패, 이전 버전으로 복원됨'}</span>
+            ) : us.status === 'error' ? (
+              <div className="flex items-center justify-between">
+                <span>{us.last_error || '업데이트 오류'}</span>
+                <button
+                  onClick={() => localUpdate.check().catch(() => {})}
+                  className="ml-2 px-2 py-0.5 bg-yellow-700/50 hover:bg-yellow-700 rounded text-yellow-200 text-xs font-medium transition shrink-0"
+                >
+                  재시도
+                </button>
+              </div>
+            ) : (
+              <>
+                {isMajor
+                  ? '⚠ 로컬 서버 버전이 호환되지 않습니다. 업데이트가 필요합니다.'
+                  : `로컬 서버 업데이트 가능 (v${localHp.version} → v${us.latest})`}
+              </>
+            )}
+          </div>
+        )
+      })()}
       {/* 상태 + 요약 */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4 sm:gap-5 flex-wrap">
