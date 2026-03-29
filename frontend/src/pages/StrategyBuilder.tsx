@@ -13,6 +13,7 @@ import DslEditor from '../components/DslEditor'
 import { dslToConditions } from '../utils/dslConverter'
 import { runBacktest, type BacktestResponse } from '../services/backtest'
 import BacktestResultView from '../components/BacktestResult'
+import ParameterSliders from '../components/ParameterSliders'
 
 interface FormState {
   name: string
@@ -312,9 +313,10 @@ export default function StrategyBuilder() {
 
             {condMode === 'script' ? (
               /* DSL 텍스트 편집 모드 */
-              <div>
+              <div className="space-y-2">
                 <DslEditor value={dslText} onChange={setDslText} />
-                <p className="text-xs text-gray-500 mt-1">
+                <ParameterSliders script={dslText} onChange={setDslText} />
+                <p className="text-xs text-gray-500">
                   폼 모드로 전환하면 DSL을 파싱해 조건을 복원합니다 (파싱 오류 시 전환 불가).
                 </p>
               </div>
