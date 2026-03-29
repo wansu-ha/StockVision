@@ -462,6 +462,11 @@ class _EvaluatorV2:
         hist_list: list[bool] = history.setdefault(key, [])
         hist_list.append(cond_bool)
 
+        # 윈도우 초과분 트리밍 (메모리 누수 방지)
+        if period > 0 and len(hist_list) > period:
+            history[key] = hist_list[-period:]
+            hist_list = history[key]
+
         # 윈도우 내 True 수
         window = hist_list[-period:] if period > 0 else []
         result = sum(1 for v in window if v)
