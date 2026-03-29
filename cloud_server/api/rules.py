@@ -9,13 +9,14 @@ DELETE /api/v1/rules/{id}    규칙 삭제
 """
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from cloud_server.api.dependencies import current_user
 from cloud_server.core.database import get_db
 from cloud_server.services import rule_service
+from cloud_server.models.strategy_version import StrategyVersion
 
 router = APIRouter(prefix="/api/v1/rules", tags=["rules"])
 
@@ -204,3 +205,83 @@ def delete_rule(
     """규칙 삭제"""
     rule_service.delete_rule(rule_id, user["sub"], db)
     return {"success": True}
+
+
+# ── 전략 버전 스냅샷 ──
+
+
+@router.get("/{rule_id}/versions")
+def list_versions(
+    rule_id: int,
+    user: dict = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    """전략 버전 목록."""
+    # 규칙 소유 확인
+    rule_service.get_rule(rule_id, user["sub"], db)
+    versions = (
+        db.query(StrategyVersion)
+        .filter(StrategyVersion.rule_id == rule_id)
+        .order_by(StrategyVersion.version.desc())
+        .all()
+    )
+    return {
+        "success": True,
+        "data": [
+            {
+                "version": v.version,
+                "message": v.message,
+                "created_by": v.created_by,
+                "created_at": v.created_at.isoformat() if v.created_at else None,
+            }
+            for v in versions
+        ],
+    }
+
+
+@router.get("/{rule_id}/versions/{v1}/diff/{v2}")
+def diff_versions(
+    rule_id: int,
+    v1: int,
+    v2: int,
+    user: dict = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    """두 버전 간 디프."""
+    rule_service.get_rule(rule_id, user["sub"], db)
+    ver1 = db.query(StrategyVersion).filter(
+        StrategyVersion.rule_id == rule_id, StrategyVersion.version == v1,
+    ).first()
+    ver2 = db.query(StrategyVersion).filter(
+        StrategyVersion.rule_id == rule_id, StrategyVersion.version == v2,
+    ).first()
+    if not ver1 or not ver2:
+        raise HTTPException(404, "버전을 찾을 수 없습니다")
+    return {
+        "success": True,
+        "data": {
+            "v1": {"version": ver1.version, "script": ver1.script},
+            "v2": {"version": ver2.version, "script": ver2.script},
+        },
+    }
+
+
+@router.post("/{rule_id}/versions/{version}/restore")
+def restore_version(
+    rule_id: int,
+    version: int,
+    user: dict = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    """이전 버전으로 되돌리기."""
+    rule_service.get_rule(rule_id, user["sub"], db)
+    ver = db.query(StrategyVersion).filter(
+        StrategyVersion.rule_id == rule_id, StrategyVersion.version == version,
+    ).first()
+    if not ver:
+        raise HTTPException(404, "버전을 찾을 수 없습니다")
+    # 현재 규칙의 script를 해당 버전으로 교체
+    data = {"script": ver.script}
+    data["parameters"] = _extract_parameters(ver.script)
+    rule = rule_service.update_rule(rule_id, user["sub"], data, db)
+    return {"success": True, "data": rule}

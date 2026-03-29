@@ -56,6 +56,12 @@ class Settings:
     AI_DAILY_LIMIT: int = int(os.environ.get("AI_DAILY_LIMIT", "100"))
     AI_CACHE_TTL: int = int(os.environ.get("AI_CACHE_TTL", "3600"))
     AI_STOCK_LIMIT: int = int(os.environ.get("AI_STOCK_LIMIT", "50"))
+    # AI 코어 서비스
+    CLAUDE_MODEL_ASSISTANT: str = os.environ.get("CLAUDE_MODEL_ASSISTANT", "claude-haiku-4-5-20251001")
+    AI_DAILY_TOKEN_LIMIT: int = int(os.environ.get("AI_DAILY_TOKEN_LIMIT", "50000"))
+    AI_ENCRYPTION_KEY: str = os.environ.get("AI_ENCRYPTION_KEY", "")  # Fernet key (운영 필수)
+    AI_MAX_RETRIES: int = int(os.environ.get("AI_MAX_RETRIES", "3"))
+    AI_WINDOW_MAX_TOKENS: int = int(os.environ.get("AI_WINDOW_MAX_TOKENS", "4000"))
 
     # Redis (AI 캐시 + 향후 rate_limit 공용)
     REDIS_URL: str = os.environ.get("REDIS_URL", "")

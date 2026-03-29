@@ -212,6 +212,83 @@ export const cloudAI = {
       `/api/v1/ai/stock-analysis/${symbol}`,
       date ? { params: { date } } : undefined,
     ).then((r) => r.data.data),
+
+  /** AI 대화 — POST SSE (fetch + ReadableStream) */
+  chatStream: async (
+    params: import('../types/ai').AIChatRequest,
+    onEvent: (event: import('../types/ai').SSEEvent) => void,
+  ) => {
+    const jwt = sessionStorage.getItem(JWT_KEY)
+    const resp = await fetch(`${CLOUD_URL}/api/v1/ai/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}),
+      },
+      body: JSON.stringify(params),
+    })
+    if (!resp.ok || !resp.body) throw new Error(`AI chat failed: ${resp.status}`)
+    const reader = resp.body.getReader()
+    const decoder = new TextDecoder()
+    let buf = ''
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buf += decoder.decode(value, { stream: true })
+      const lines = buf.split('\n')
+      buf = lines.pop() ?? ''
+      let eventType = ''
+      for (const line of lines) {
+        if (line.startsWith('event: ')) eventType = line.slice(7)
+        else if (line.startsWith('data: ') && eventType) {
+          try { onEvent({ event: eventType as import('../types/ai').SSEEvent['event'], data: JSON.parse(line.slice(6)) }) } catch { /* skip */ }
+          eventType = ''
+        }
+      }
+    }
+  },
+
+  conversations: () =>
+    client.get<{ success: boolean; data: import('../types/ai').ConversationSummary[] }>(
+      '/api/v1/ai/conversations',
+    ).then((r) => r.data.data),
+
+  conversation: (id: string) =>
+    client.get<{ success: boolean; data: import('../types/ai').ConversationDetail }>(
+      `/api/v1/ai/conversations/${id}`,
+    ).then((r) => r.data.data),
+
+  deleteConversation: (id: string) =>
+    client.delete(`/api/v1/ai/conversations/${id}`),
+
+  credit: () =>
+    client.get<{ success: boolean; data: import('../types/ai').CreditBalance }>(
+      '/api/v1/ai/credit',
+    ).then((r) => r.data.data),
+
+  registerApiKey: (apiKey: string) =>
+    client.post('/api/v1/ai/apikey', { api_key: apiKey }),
+
+  deleteApiKey: () =>
+    client.delete('/api/v1/ai/apikey'),
+}
+
+/** 전략 버전 API */
+export const cloudVersions = {
+  list: (ruleId: number) =>
+    client.get<{ success: boolean; data: import('../types/ai').StrategyVersionSummary[] }>(
+      `/api/v1/rules/${ruleId}/versions`,
+    ).then((r) => r.data.data),
+
+  diff: (ruleId: number, v1: number, v2: number) =>
+    client.get<{ success: boolean; data: { v1: { version: number; script: string }; v2: { version: number; script: string } } }>(
+      `/api/v1/rules/${ruleId}/versions/${v1}/diff/${v2}`,
+    ).then((r) => r.data.data),
+
+  restore: (ruleId: number, version: number) =>
+    client.post<{ success: boolean; data: Rule }>(
+      `/api/v1/rules/${ruleId}/versions/${version}/restore`,
+    ).then((r) => r.data.data),
 }
 
 /** 종목별 AI 분석 — /api/v1/ai/stock-analysis/{symbol} */
