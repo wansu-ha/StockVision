@@ -82,7 +82,7 @@ export default function DslEditor({ value, onChange, errors: externalErrors }: D
   }, [schema])
 
   // 텍스트 변경 시 자동완성 트리거 (디바운스 150ms)
-  const autocompleteTimer = useRef<ReturnType<typeof setTimeout>>()
+  const autocompleteTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value
     onChange(newValue)

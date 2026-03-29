@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from cloud_server.core.validators import validate_conditions
 from cloud_server.models.rule import TradingRule
+from cloud_server.models.strategy_version import StrategyVersion
 
 
 def _rule_to_dict(rule: TradingRule) -> dict:
@@ -99,6 +100,11 @@ def create_rule(user_id: str, data: dict, db: Session) -> dict:
         raise HTTPException(status_code=409, detail="같은 이름의 규칙이 이미 존재합니다.")
 
     db.refresh(rule)
+
+    # 초기 버전 스냅샷
+    if rule.script:
+        _create_version_snapshot(rule.id, rule.script, "초기 생성", "user", db)
+
     return _rule_to_dict(rule)
 
 
@@ -146,6 +152,9 @@ def update_rule(rule_id: int, user_id: str, data: dict, db: Session) -> dict:
         if field in data:
             setattr(rule, field, data[field])
 
+    # script 변경 시 버전 스냅샷
+    script_changed = "script" in data and data["script"] != rule.script
+
     rule.version += 1
     rule.updated_at = datetime.utcnow()
 
@@ -156,6 +165,10 @@ def update_rule(rule_id: int, user_id: str, data: dict, db: Session) -> dict:
         raise HTTPException(status_code=409, detail="같은 이름의 규칙이 이미 존재합니다.")
 
     db.refresh(rule)
+
+    if script_changed and rule.script:
+        _create_version_snapshot(rule.id, rule.script, "수정", "user", db)
+
     return _rule_to_dict(rule)
 
 
@@ -169,6 +182,24 @@ def delete_rule(rule_id: int, user_id: str, db: Session) -> None:
         raise HTTPException(status_code=404, detail="규칙을 찾을 수 없습니다.")
 
     db.delete(rule)
+    db.commit()
+
+
+def _create_version_snapshot(
+    rule_id: int, script: str, message: str, created_by: str, db: Session,
+) -> None:
+    """전략 버전 스냅샷 생성."""
+    max_ver = db.query(func.max(StrategyVersion.version)).filter(
+        StrategyVersion.rule_id == rule_id,
+    ).scalar() or 0
+    sv = StrategyVersion(
+        rule_id=rule_id,
+        version=max_ver + 1,
+        script=script,
+        message=message,
+        created_by=created_by,
+    )
+    db.add(sv)
     db.commit()
 
 
