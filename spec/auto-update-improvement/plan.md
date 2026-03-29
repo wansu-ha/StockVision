@@ -77,7 +77,7 @@ spec: `spec/auto-update-improvement/spec.md`
 
 | 파일 | 변경 | Step | 라인수 |
 |------|------|------|--------|
-| `local_server/updater/manager.py` | 상태 모델 확장 + 루프 + guard + force install + `start_background_tasks`/`shutdown` | S1,S4,S6 | 140→~280 |
+| `local_server/updater/manager.py` | 상태 모델 확장 + 루프 + guard + force install + `start_background_tasks`/`shutdown` + 이벤트 콜백 | S1,S4,S6,S9 | 140→~300 |
 | `local_server/updater/downloader.py` | fail-closed + retry delay | S3 | 104→~110 |
 | `local_server/updater/installer.py` | `_write_pending_rollback` + bat 확장 (verifier) | S7 | 125→~200 |
 | `local_server/updater/version_checker.py` | 릴리즈 노트 캐싱 (`release_notes` 반환) | S4 | 99→~115 |
@@ -101,7 +101,7 @@ spec: `spec/auto-update-improvement/spec.md`
 - `downloader.py:84-86` — 재시도 루프에 `await asyncio.sleep(RETRY_DELAY_SEC)` 추가
 
 **verify:**
-- `pytest local_server/tests/test_updater.py -k "sha256 or retry"` — 기존 테스트 통과
+- `pytest local_server/tests/test_updater.py` — 기존 테스트 전체 통과 (동작 변경이므로)
 - S10에서 `test_sha256_fail_closed`, `test_retry_with_delay` 추가 예정
 
 ---
@@ -128,6 +128,7 @@ manager.py에 루프 2개 + 공개 메서드. main.py 연결.
 
 **변경:**
 - `manager.py` — `_check_loop()`, `_install_loop()` 구현
+  - 주의: 이 시점에서 `try_install`은 아직 기존 시그니처 `(no_update_start, no_update_end)`. `_install_loop`은 config에서 읽어 기존 시그니처로 호출. Step 5에서 시그니처 변경 시 `_install_loop`도 같이 수정.
 - `manager.py` — `start_background_tasks()`, `shutdown()` 구현
 - `manager.py` — `_download_in_progress` 플래그 추가
 - `main.py` — lifespan startup에서 `start_background_tasks()` 호출
@@ -161,7 +162,7 @@ manager.py에 guard 구조 + main.py에 콜백 주입.
 
 **변경:**
 - `manager.py` — `_install_guard`, `set_install_guard()`, `is_safe_to_install()`, `_can_install()` (시간+안전)
-- `manager.py` — `try_install()` 시그니처 변경 (인자 없음 → `_can_install()` 내부)
+- `manager.py` — `try_install()` 시그니처 변경 (인자 없음 → `_can_install()` 내부) + `_install_loop` 호출부도 같이 수정
 - `manager.py` — `try_install_force()`, `_execute_install()` 추가
 - `main.py` — `can_install_now()` 정의 + `set_install_guard()` 호출
   - `has_pending_orders()` 미존재 → `get_open_orders()` 결과 len > 0 으로 대체, 주석 남김
@@ -179,7 +180,8 @@ installer.py 확장 + main.py 마커 처리.
 **변경:**
 - `installer.py` — `_write_pending_rollback()` 함수 추가
 - `installer.py` — `_INSTALL_BAT_TEMPLATE` 확장 (verifier + rollback + Inno 실패 fallback)
-- `installer.py` — `execute_update()` 수정: 마커 생성 + bat에 버전/경로 주입
+- `installer.py` — `execute_update()` 수정: 시그니처 확장 (port, target_version, backup_dir 추가) + bat에 주입
+- `manager.py` — `_execute_install()`의 `execute_update()` 호출부도 새 시그니처에 맞게 수정
 - `main.py` — startup에서 `pending_rollback.json` 읽기 + 상태 분기 (rolled_back/installing/verifying)
 
 **verify:**
