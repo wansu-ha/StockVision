@@ -170,6 +170,37 @@ def _autostart_checked(_item: Any) -> bool:
         return False
 
 
+def _on_check_update(icon: Any, item: Any) -> None:
+    """업데이트 확인 — 로컬 API를 호출한다."""
+    threading.Thread(
+        target=_call_update_check_api,
+        daemon=True,
+    ).start()
+
+
+def _call_update_check_api() -> None:
+    """로컬 서버 업데이트 확인 API를 호출한다."""
+    try:
+        import httpx
+    except ImportError:
+        logger.error("httpx 미설치 — 트레이 업데이트 확인 불가")
+        return
+
+    url = f"http://127.0.0.1:{_local_port}/api/update/check"
+    headers = {"X-Local-Secret": _local_secret or ""}
+    try:
+        resp = httpx.post(url, headers=headers, timeout=15)
+        resp.raise_for_status()
+        logger.info("업데이트 확인 완료")
+    except Exception as e:
+        logger.error("업데이트 확인 실패: %s", e)
+        try:
+            from local_server.utils.toast import show_toast
+            show_toast("업데이트 확인 실패", str(e))
+        except Exception:
+            pass
+
+
 def _on_quit(icon: Any, item: Any) -> None:
     """종료 핸들러."""
     logger.info("트레이 종료 메뉴 선택")
@@ -210,6 +241,8 @@ def start_tray() -> threading.Thread | None:
         pystray.MenuItem("긴급 정지 (Kill Switch)", _on_kill_switch),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("시작 시 자동 실행", _on_toggle_autostart, checked=_autostart_checked),
+        pystray.Menu.SEPARATOR,
+        pystray.MenuItem("업데이트 확인", _on_check_update),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("종료", _on_quit),
     )
