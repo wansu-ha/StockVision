@@ -185,7 +185,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # HealthWatchdog 시작
     from local_server.engine.alert_monitor import AlertMonitor
     from local_server.engine.health_watchdog import HealthWatchdog
-    app.state.alert_monitor = AlertMonitor(config=cfg.get("alerts"))
+    from local_server.adapters import LogDbAdapter
+    from local_server.storage.log_db import get_log_db
+    from decimal import Decimal
+
+    app.state.alert_monitor = AlertMonitor(
+        config=cfg.get("alerts"),
+        log=LogDbAdapter(get_log_db()),
+        max_loss_pct=Decimal(str(cfg.get("max_loss_pct", "5.0"))),
+    )
     watchdog = HealthWatchdog(alert_monitor=app.state.alert_monitor)
     if app.state.broker:
         watchdog.set_broker(app.state.broker)
