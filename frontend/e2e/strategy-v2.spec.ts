@@ -24,7 +24,7 @@ test.describe('Strategy Engine v2', () => {
     await page.getByText('템플릿에서 시작').click()
 
     // 7개 프리셋 이름 모두 확인
-    await expect(page.getByText('추세 추종')).toBeVisible()
+    await expect(page.getByText('추세 추종', { exact: true })).toBeVisible()
     await expect(page.getByText('다단계 청산 + 트레일링')).toBeVisible()
     await expect(page.getByText('DCA (분할 매수)')).toBeVisible()
     await expect(page.getByText('브레이크이븐 + 트레일링')).toBeVisible()
@@ -40,16 +40,16 @@ test.describe('Strategy Engine v2', () => {
 
     // 프리셋 패널 열기
     await page.getByText('템플릿에서 시작').click()
-    await expect(page.getByText('추세 추종')).toBeVisible()
+    await expect(page.getByText('추세 추종', { exact: true })).toBeVisible()
 
     // 추세 추종 프리셋 선택
-    await page.getByText('추세 추종').click()
+    await page.getByText('추세 추종', { exact: true }).click()
 
-    // 프리셋 패널 닫힘 확인
-    await expect(page.getByText('추세 추종')).not.toBeVisible({ timeout: 3_000 })
+    // 프리셋 패널 닫힘 확인 (React 배치 렌더 완료 배리어)
+    await expect(page.getByText('추세 추종', { exact: true })).not.toBeVisible({ timeout: 3_000 })
 
     // DSL 모드로 전환됨 — DslEditor textarea에 스크립트 반영
-    const dslTextarea = page.locator('textarea').first()
+    const dslTextarea = page.getByPlaceholder('RSI(14) < 30')
     await expect(dslTextarea).toBeVisible()
     const value = await dslTextarea.inputValue()
     // 추세 추종 preset의 핵심 DSL 요소 확인
@@ -69,7 +69,10 @@ test.describe('Strategy Engine v2', () => {
 
     await page.getByText('DCA (분할 매수)').click()
 
-    const dslTextarea = page.locator('textarea').first()
+    // React 배치 렌더 완료 대기: 패널 닫히면 dslText도 커밋됨
+    await expect(page.getByText('DCA (분할 매수)')).not.toBeVisible({ timeout: 3_000 })
+
+    const dslTextarea = page.getByPlaceholder('RSI(14) < 30')
     await expect(dslTextarea).toBeVisible()
     const value = await dslTextarea.inputValue()
     // DCA 프리셋 핵심 요소: 분할 진입 비율 두 개
@@ -83,11 +86,11 @@ test.describe('Strategy Engine v2', () => {
 
     // 열기
     await page.getByText('템플릿에서 시작').click()
-    await expect(page.getByText('추세 추종')).toBeVisible()
+    await expect(page.getByText('추세 추종', { exact: true })).toBeVisible()
 
     // 닫기 — 토글 버튼 텍스트가 '템플릿 닫기'로 바뀜
     await page.getByText('템플릿 닫기').click()
-    await expect(page.getByText('추세 추종')).not.toBeVisible({ timeout: 3_000 })
+    await expect(page.getByText('추세 추종', { exact: true })).not.toBeVisible({ timeout: 3_000 })
 
     // 다시 열기 버튼 복원 확인
     await expect(page.getByText('템플릿에서 시작')).toBeVisible()
@@ -107,7 +110,7 @@ test.describe('Strategy Engine v2', () => {
     await dslToggle.click()
 
     // textarea 표시 확인
-    const dslTextarea = page.locator('textarea').first()
+    const dslTextarea = page.getByPlaceholder('RSI(14) < 30')
     await expect(dslTextarea).toBeVisible()
 
     // v2 DSL 문법 입력
@@ -123,7 +126,10 @@ test.describe('Strategy Engine v2', () => {
 
     // 프리셋으로 DSL 채우기
     await page.getByText('템플릿에서 시작').click()
-    await page.getByText('추세 추종').click()
+    await page.getByText('추세 추종', { exact: true }).click()
+
+    // React 배치 렌더 완료 대기
+    await expect(page.getByText('추세 추종', { exact: true })).not.toBeVisible({ timeout: 3_000 })
 
     // 이름, 종목 입력
     await page.getByTestId('strategy-name-input').fill('v2 추세 추종 전략')
@@ -152,7 +158,7 @@ test.describe('Strategy Engine v2', () => {
     await page.getByText('ATR 동적 청산').click()
 
     // DSL 텍스트가 채워진 상태
-    const dslTextarea = page.locator('textarea').first()
+    const dslTextarea = page.getByPlaceholder('RSI(14) < 30')
     await expect(dslTextarea).toBeVisible()
 
     // 취소 버튼 클릭
