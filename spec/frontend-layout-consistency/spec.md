@@ -25,6 +25,7 @@
 - 각 페이지 내부 기능 변경 (전략 빌더, 백테스트 등의 로직)
 - 새 기능 추가
 - 백엔드 변경
+- **Admin 페이지** — 별도 흰색 레이아웃이며 의도적으로 분리됨. 이번 범위에서 제외.
 
 ---
 
@@ -67,6 +68,16 @@
 - 활성 탭: `color: white`, `font-weight: 600`, `border-bottom: 2px solid #6366f1`
 - 호버: `color: #d1d5db`
 
+#### 네비 탭 경로 매핑
+
+| 탭 | 경로 | 비고 |
+|----|------|------|
+| 대시보드 | `/` | |
+| 전략 | `/strategies` | 목록 페이지. 빌더(`/strategy`)는 내부 CTA로 진입, "전략" 탭 하이라이트 유지. |
+| 백테스트 | `/backtest` | |
+| 관심종목 | `/stocks` | |
+| 실행 로그 | `/logs` | |
+
 ### 2.4 계정 메뉴 (데스크탑)
 
 - 트리거: 아바타 클릭
@@ -84,12 +95,29 @@
 - 오른쪽: 장 상태 + KOSPI 지수
 - 폰트: `11px`
 
-### 2.6 콘텐츠 영역
+#### 데이터 소스
+
+| 항목 | 소스 | 비고 |
+|------|------|------|
+| 로컬 연결 | `useAccountStatus` → localStatus | 기존 TrafficLightStatus와 동일 |
+| 브로커 연결 | `useAccountStatus` → brokerStatus | |
+| 클라우드 연결 | `useAccountStatus` → cloudStatus | |
+| 엔진 상태 | `useAccountStatus` → engineStatus | |
+| 장 상태 | `useMarketContext` → marketPhase | 기존 BriefingCard에서 사용 중, 재사용 |
+| KOSPI 지수 | `useMarketContext` → kospiIndex | 기존 BriefingCard에서 사용 중, 재사용 |
+
+### 2.6 글로벌 검색
+
+- 현재 대시보드 Header의 `StockSearch` 컴포넌트를 통합 헤더로 이동
+- 검색 결과 클릭 시: **대시보드의 종목 상세 인라인 뷰로 이동** (현재 동작 유지)
+- `/stocks/:symbol` 라우트는 이번 범위에서 새로 만들지 않음
+
+### 2.7 콘텐츠 영역
 
 - `max-width: 1100px`, `margin: 0 auto`, 패딩 `24px 32px`
 - 카드: `background: #1f2937`, `border-radius: 12px`, `padding: 20px`
 
-### 2.7 모바일 (≤768px)
+### 2.8 모바일 (≤768px)
 
 **헤더:**
 - 검색바 숨김
@@ -97,7 +125,7 @@
 - 햄버거 (☰) 표시
 
 **풀스크린 메뉴:**
-- 오른쪽에서 슬라이드 (`transform: translateX`)
+- 오른쪽에서 슬라이드 (`transform: translateX`, `will-change: transform`)
 - 상단: 로고 + ✕ 닫기
 - 계정 카드: 아바타 + 이메일 + 플랜 (아이콘 없음)
 - 메뉴 항목: 대시보드 / 전략 / 백테스트 / 관심종목 / 실행 로그 / 설정 (텍스트만, 아이콘 없음, 활성=white+bold)
@@ -117,7 +145,6 @@
 | **테이블** | `th`: 11px uppercase gray, `td`: 13px, `hover: #262f3d` |
 | **배지** | green (`#064e3b/#6ee7b7`), red (`#3b1818/#fca5a5`), gray, blue |
 | **빈 상태** | 중앙 정렬, gray 텍스트 + CTA 링크 |
-| **통계 카드** | `stat-label` (11px uppercase) + `stat-value` (22px bold) |
 | **내부 탭** | pill 스타일 (`radius: 8px`), 활성=인디고 배경 |
 | **버튼 primary** | `bg: #6366f1`, `radius: 8px`, `hover: #4f46e5` |
 | **버튼 outline** | 투명 + `border: #374151` |
@@ -139,29 +166,53 @@
 | 성공/상승 | `#22c55e` |
 | 위험/하락 | `#ef4444` |
 
+Tailwind에 아직 공용 색상 토큰이 없으므로, `tailwind.config.js`에 시맨틱 변수를 먼저 정의한다.
+
 ---
 
-## 4. 파일 영향 범위
+## 4. 구현 전제: 책임 분리
 
-### 4.1 신규 파일
+### 4.1 Header.tsx의 책임이 너무 큼
+
+현재 `Header.tsx`는 UI(검색/알림/계정) 외에 엔진 stop/kill, 브로커 상태, WS 구독 등의 상태/액션을 직접 포함한다. 이대로 UnifiedHeader에 옮기면 결합도가 높아짐.
+
+**선행 작업:** Header에서 상태/액션 로직을 커스텀 훅으로 분리한 뒤 UnifiedHeader에서 훅만 호출.
+
+### 4.2 useLocalBridgeWS 소유자
+
+현재 `Layout.tsx`가 `useLocalBridgeWS()`를 호출하여 알림/상태 WS를 유지한다. Layout을 교체하면 이 호출이 사라짐.
+
+**해결:** `UnifiedLayout`에서 `useLocalBridgeWS()`를 호출하거나, `App.tsx` 레벨로 올린다.
+
+### 4.3 페이지 셸 정리
+
+여러 페이지가 자체적으로 `min-h-screen`, `max-w-*`를 잡고 있다. 통합 레이아웃 적용 후 중복 셸 스타일 제거 필요.
+
+---
+
+## 5. 파일 영향 범위
+
+### 5.1 신규 파일
 
 | 파일 | 역할 |
 |------|------|
-| `components/UnifiedHeader.tsx` | 통합 헤더 (검색바 + 알림 + 아바타) |
-| `components/NavTabs.tsx` | 네비 탭 |
-| `components/AccountDropdown.tsx` | 계정 드롭다운 |
-| `components/StatusBar.tsx` | 하단 상태 바 |
-| `components/MobileMenu.tsx` | 모바일 풀스크린 메뉴 |
-| `components/UnifiedLayout.tsx` | 통합 레이아웃 (위 컴포넌트 조합) |
+| `components/layout/UnifiedLayout.tsx` | 통합 레이아웃 (Outlet 기반) |
+| `components/layout/UnifiedHeader.tsx` | 통합 헤더 (검색바 + 알림 + 아바타) |
+| `components/layout/NavTabs.tsx` | 네비 탭 |
+| `components/layout/AccountDropdown.tsx` | 계정 드롭다운 |
+| `components/layout/StatusBar.tsx` | 하단 상태 바 |
+| `components/layout/MobileMenu.tsx` | 모바일 풀스크린 메뉴 |
 
-### 4.2 수정 파일
+### 5.2 수정 파일
 
 | 파일 | 변경 |
 |------|------|
-| `App.tsx` | 모든 보호 라우트가 `UnifiedLayout` 사용 |
+| `App.tsx` | 보호 라우트를 Outlet 기반 `UnifiedLayout`으로 변경 |
 | `pages/MainDashboard.tsx` | 자체 `Header` import 제거, 콘텐츠만 렌더링 |
+| `tailwind.config.js` | 시맨틱 색상 토큰 추가 |
+| `index.css` | CSS 변수 정의 (선택) |
 
-### 4.3 제거 (또는 미사용)
+### 5.3 제거 (또는 미사용)
 
 | 파일 | 사유 |
 |------|------|
@@ -170,26 +221,43 @@
 
 ---
 
-## 5. 수용 기준
+## 6. 수용 기준
 
 - [ ] 모든 페이지(대시보드/전략/백테스트/관심종목/실행 로그/설정)가 동일한 헤더 + 네비 탭 사용
-- [ ] 하단 상태 바 모든 페이지에 표시
+- [ ] "전략" 탭 → `/strategies` (목록), 빌더는 내부 CTA
+- [ ] 하단 상태 바 모든 페이지에 표시 (데이터: 로컬/브로커/클라우드/엔진 + 장 상태 + KOSPI)
 - [ ] 데스크탑: 아바타 클릭 → 계정 드롭다운 동작
 - [ ] 모바일 (≤768px): 햄버거 → 풀스크린 메뉴 동작
+- [ ] `useLocalBridgeWS()` 호출이 유지되어 알림/상태 WS 정상 동작
+- [ ] Admin 페이지는 기존 레이아웃 유지 (이번 범위 밖)
 - [ ] 기존 페이지 기능 정상 동작 (전략 빌더, 백테스트 등)
 - [ ] E2E 테스트 24개 PASS 유지
-- [ ] 인터랙티브 프로토타입: `.superpowers/brainstorm/984-1774886349/content/full-prototype.html`
 
 ---
 
-## 6. 리스크와 주의점
+## 7. 리스크와 주의점
 
-1. **MainDashboard의 Header 의존**: 대시보드가 Header.tsx에 props를 많이 넘기고 있음 (broker 상태, engine 상태 등). 이 데이터를 UnifiedHeader에서도 접근할 수 있어야 함. Context나 app.state에서 가져오는 방식 확인 필요.
+1. **Header.tsx 책임 분리**: 상태/액션 훅을 먼저 빼야 함. 이걸 건너뛰면 UnifiedHeader가 비대해짐.
 
-2. **Layout.tsx의 기존 기능**: 현재 Layout.tsx가 ConsentGate, NotificationCenter 등을 포함하고 있을 수 있음. UnifiedLayout으로 이관 시 빠뜨리지 않도록 주의.
+2. **useLocalBridgeWS 누락**: Layout 교체 시 WS 연결이 죽으면 알림이 조용히 사라짐. UnifiedLayout에서 반드시 호출.
 
-3. **E2E 테스트 셀렉터**: 헤더/네비 구조가 바뀌면 기존 E2E 테스트의 네비게이션 셀렉터가 깨질 수 있음. `mock-auth.ts`의 `setupAllMocks`에서 로컬 서버 요청을 차단하는 패턴도 확인 필요.
+3. **E2E 테스트 셀렉터**: 헤더/네비 구조가 바뀌면 기존 E2E 테스트의 네비게이션 셀렉터가 깨질 수 있음.
 
-4. **검색바 컴포넌트**: 현재 대시보드 Header에만 있는 검색 기능을 모든 페이지로 확장. 검색 결과 드롭다운이 다른 페이지에서도 정상 동작하는지 확인.
+4. **검색 결과 동작**: 글로벌 검색 결과 클릭 시 대시보드 인라인 뷰로 이동. 다른 페이지에서 클릭하면 `/`로 네비게이트 후 상세 표시.
 
-5. **모바일 메뉴 전환 애니메이션**: `transform: translateX` 슬라이드가 iOS Safari에서 부드럽게 동작하는지 확인. `will-change: transform` 추가 고려.
+5. **페이지 셸 중복**: 통합 레이아웃 적용 후 각 페이지의 자체 `min-h-screen`/`max-w-*` 정리 필요. 안 하면 이중 패딩/마진 발생.
+
+6. **모바일 애니메이션**: `will-change: transform` 추가. iOS Safari에서 슬라이드 전환 버벅임 방지.
+
+---
+
+## 8. 프로토타입
+
+인터랙티브 프로토타입: `.superpowers/brainstorm/984-1774886349/content/full-prototype-v2.html`
+
+브라우저에서 확인 가능 (로컬 서버 필요):
+- 네비 탭 클릭 → 페이지 전환
+- 아바타 클릭 → 계정 드롭다운
+- 브라우저 폭 768px 이하 → 모바일 전환
+- ☰ 클릭 → 풀스크린 메뉴
+- 하단 상태 바 상시 표시
