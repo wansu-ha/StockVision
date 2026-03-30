@@ -6,7 +6,6 @@
 import { useState, useMemo } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import Header from '../components/main/Header'
 import OpsPanel from '../components/main/OpsPanel'
 import BriefingCard from '../components/BriefingCard'
 import KillSwitchFAB from '../components/KillSwitchFAB'
@@ -190,13 +189,7 @@ export default function MainDashboard() {
   if (!onboardingDone) return <Navigate to="/onboarding" replace />
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100">
-      <Header
-        onStockSelect={handleDetail}
-        engineRunning={engineRunning}
-        brokerConnected={brokerConnected}
-      />
-
+    <>
       <main className="w-full max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-5">
         <div key={view} className="animate-[fadeSlideIn_200ms_ease-out]">
           {view === 'list' ? (
@@ -274,6 +267,6 @@ export default function MainDashboard() {
           )}
         </>
       )}
-    </div>
+    </>
   )
 }

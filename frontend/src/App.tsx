@@ -25,7 +25,7 @@ const ProtoB = lazy(() => import('./pages/ProtoB'))
 const ProtoC = lazy(() => import('./pages/ProtoC'))
 import MainDashboard from './pages/MainDashboard'
 import OnboardingWizard from './pages/OnboardingWizard'
-import Layout from './components/Layout'
+import UnifiedLayout from './components/layout/UnifiedLayout'
 import AlertContainer from './components/AlertContainer'
 import ToastContainer from './components/ToastContainer'
 import AdminGuard from './components/AdminGuard'
@@ -74,13 +74,6 @@ function AppRoutes() {
         </>
       )}
 
-      {/* 메인 대시보드 (Layout 없음 — 자체 헤더 사용) */}
-      <Route path="/" element={
-        <ProtectedRoute>
-          <MainDashboard />
-        </ProtectedRoute>
-      } />
-
       {/* 온보딩 (Layout 없음) */}
       <Route path="/onboarding" element={
         <ProtectedRoute>
@@ -88,39 +81,30 @@ function AppRoutes() {
         </ProtectedRoute>
       } />
 
-      {/* 설정 (Layout 없음 — 자체 헤더 사용) */}
-      <Route path="/settings" element={
-        <ProtectedRoute>
-          <Settings />
-        </ProtectedRoute>
-      } />
+      {/* 관리자 라우트 */}
+      <Route path="/admin" element={<AdminGuard><Suspense fallback={null}><AdminLayout /></Suspense></AdminGuard>}>
+        <Route index element={<Suspense fallback={null}><AdminDash /></Suspense>} />
+        <Route path="users" element={<Suspense fallback={null}><AdminUsers /></Suspense>} />
+        <Route path="stats" element={<Suspense fallback={null}><AdminStats /></Suspense>} />
+        <Route path="service-keys" element={<Suspense fallback={null}><AdminServiceKeys /></Suspense>} />
+        <Route path="templates" element={<Suspense fallback={null}><AdminTemplates /></Suspense>} />
+        <Route path="ai" element={<Suspense fallback={null}><AdminAiMonitor /></Suspense>} />
+        <Route path="errors" element={<Suspense fallback={null}><AdminErrorLogs /></Suspense>} />
+      </Route>
 
-      {/* 인증 필수 라우트 (Layout 포함) */}
-      <Route path="*" element={
-        <ProtectedRoute>
-          <Layout>
-            <Routes>
-              <Route path="/stocks" element={<StockList />} />
-              <Route path="/logs" element={<ExecutionLog />} />
-              <Route path="/strategies" element={<StrategyList />} />
-              <Route path="/strategies/new" element={<StrategyBuilder />} />
-              <Route path="/strategies/:id/edit" element={<StrategyBuilder />} />
-              <Route path="/strategy" element={<StrategyBuilder />} />
-              <Route path="/backtest" element={<Suspense fallback={null}><Backtest /></Suspense>} />
-              <Route path="/admin" element={<AdminGuard><Suspense fallback={null}><AdminLayout /></Suspense></AdminGuard>}>
-                <Route index element={<Suspense fallback={null}><AdminDash /></Suspense>} />
-                <Route path="users" element={<Suspense fallback={null}><AdminUsers /></Suspense>} />
-                <Route path="stats" element={<Suspense fallback={null}><AdminStats /></Suspense>} />
-                <Route path="service-keys" element={<Suspense fallback={null}><AdminServiceKeys /></Suspense>} />
-                <Route path="templates" element={<Suspense fallback={null}><AdminTemplates /></Suspense>} />
-                <Route path="ai" element={<Suspense fallback={null}><AdminAiMonitor /></Suspense>} />
-                <Route path="errors" element={<Suspense fallback={null}><AdminErrorLogs /></Suspense>} />
-              </Route>
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </Layout>
-        </ProtectedRoute>
-      } />
+      {/* 인증 필수 라우트 (UnifiedLayout) */}
+      <Route element={<ProtectedRoute><UnifiedLayout /></ProtectedRoute>}>
+        <Route path="/" element={<MainDashboard />} />
+        <Route path="/settings" element={<Settings />} />
+        <Route path="/stocks" element={<StockList />} />
+        <Route path="/logs" element={<ExecutionLog />} />
+        <Route path="/strategies" element={<StrategyList />} />
+        <Route path="/strategies/new" element={<StrategyBuilder />} />
+        <Route path="/strategies/:id/edit" element={<StrategyBuilder />} />
+        <Route path="/strategy" element={<StrategyBuilder />} />
+        <Route path="/backtest" element={<Suspense fallback={null}><Backtest /></Suspense>} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Route>
     </Routes>
     </ErrorBoundary>
   )
