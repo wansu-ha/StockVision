@@ -11,22 +11,9 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
+from local_server.engine.ports import BarStorePort
+
 logger = logging.getLogger(__name__)
-
-# 분봉 저장소 (지연 임포트로 순환 참조 방지)
-_bar_store = None
-
-
-def _get_bar_store():
-    """MinuteBarStore 싱글턴 반환 (지연 초기화)."""
-    global _bar_store
-    if _bar_store is None:
-        try:
-            from local_server.storage.minute_bar import get_minute_bar_store
-            _bar_store = get_minute_bar_store()
-        except Exception as e:
-            logger.warning("MinuteBarStore 초기화 실패 (분봉 저장 비활성화): %s", e)
-    return _bar_store
 
 
 @dataclass
@@ -44,13 +31,14 @@ class Bar:
 class BarBuilder:
     """WS 시세로 1분 OHLCV 구성."""
 
-    def __init__(self) -> None:
+    def __init__(self, bar_store: BarStorePort | None = None) -> None:
         # symbol → 현재 구성 중인 분봉 데이터
         self._current: dict[str, dict] = {}
         # symbol → 직전 완성 분봉
         self._completed: dict[str, Bar] = {}
         # symbol → 최근 시세 (price, volume)
         self._latest: dict[str, dict] = {}
+        self._bar_store = bar_store
 
     def on_quote(
         self,
@@ -90,10 +78,9 @@ class BarBuilder:
             self._completed[symbol] = completed
 
             # MinuteBarStore에 완성 분봉 저장
-            store = _get_bar_store()
-            if store is not None:
+            if self._bar_store is not None:
                 try:
-                    store.save_bars(symbol, [{
+                    self._bar_store.save_bars(symbol, [{
                         "time": completed.timestamp.isoformat(),
                         "open": float(completed.open),
                         "high": float(completed.high),
