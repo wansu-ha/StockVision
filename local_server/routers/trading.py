@@ -128,7 +128,6 @@ async def start_strategy(request: Request, _: None = Depends(require_local_secre
         request.app.state.broker = broker
         request.app.state.broker_reason = "connected"
 
-    from local_server.storage.log_db import get_log_db
     from local_server.storage.stock_master_cache import get_stock_master_cache
     from local_server.storage.minute_bar import get_minute_bar_store
     from local_server.cloud.heartbeat import get_cloud_client
