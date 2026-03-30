@@ -425,7 +425,9 @@ class TestOrderExecutor:
         pv = PriceVerifier(broker)
         lc = LimitChecker(budget_ratio=Decimal("0.1"), max_positions=5)
         sg = Safeguard()
-        executor = OrderExecutor(broker, sm, pv, lc, sg)
+        mock_log = MagicMock()
+        mock_log.write = AsyncMock()
+        executor = OrderExecutor(broker, sm, pv, lc, sg, log=mock_log)
         return executor, broker
 
     def _balance(self, cash: Decimal = Decimal("10000000")) -> BalanceResult:
