@@ -21,7 +21,7 @@ export default function MobileMenu({ open, onClose }: Props) {
 
   const isActive = (path: string) => {
     if (path === '/') return pathname === '/'
-    return pathname.startsWith(path)
+    return pathname.startsWith(path) || (path === '/strategies' && pathname.startsWith('/strategy'))
   }
 
   const initial = (email?.[0] ?? 'U').toUpperCase()

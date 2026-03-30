@@ -190,7 +190,7 @@ export default function MainDashboard() {
 
   return (
     <>
-      <main className="w-full max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-5">
+      <div className="w-full max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-5">
         <div key={view} className="animate-[fadeSlideIn_200ms_ease-out]">
           {view === 'list' ? (
             <>
@@ -237,7 +237,7 @@ export default function MainDashboard() {
             />
           )}
         </div>
-      </main>
+      </div>
 
       {/* 면책 고지 모달 */}
       {showDisclaimer && consentStatus && (

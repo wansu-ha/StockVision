@@ -1,4 +1,5 @@
 import { useAccountStatus } from '../../hooks/useAccountStatus'
+import { useMarketContext } from '../../hooks/useMarketContext'
 
 interface StatusItem {
   label: string
@@ -7,6 +8,14 @@ interface StatusItem {
 
 export default function StatusBar() {
   const { engineRunning, brokerConnected, isLoading } = useAccountStatus()
+  const { context } = useMarketContext()
+
+  const now = new Date()
+  const dayOfWeek = now.getDay()
+  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6
+  const isHoliday = isWeekend || context?.is_holiday === true
+  const hhmm = now.getHours() * 100 + now.getMinutes()
+  const marketPhase = isHoliday ? '휴장' : hhmm >= 900 && hhmm < 1530 ? '장중' : hhmm < 900 ? '장전' : '장후'
 
   const items: StatusItem[] = [
     { label: '로컬', ok: !isLoading },
@@ -25,7 +34,7 @@ export default function StatusBar() {
           </span>
         ))}
       </div>
-      <span className="text-gray-500">장전</span>
+      <span className="text-gray-500">{marketPhase}</span>
     </div>
   )
 }
