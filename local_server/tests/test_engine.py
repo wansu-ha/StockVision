@@ -8,7 +8,7 @@ import asyncio
 from datetime import datetime, date
 from decimal import Decimal
 from typing import Callable, Optional
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -425,7 +425,9 @@ class TestOrderExecutor:
         pv = PriceVerifier(broker)
         lc = LimitChecker(budget_ratio=Decimal("0.1"), max_positions=5)
         sg = Safeguard()
-        executor = OrderExecutor(broker, sm, pv, lc, sg)
+        mock_log = MagicMock()
+        mock_log.write = AsyncMock()
+        executor = OrderExecutor(broker, sm, pv, lc, sg, log=mock_log)
         return executor, broker
 
     def _balance(self, cash: Decimal = Decimal("10000000")) -> BalanceResult:
@@ -496,7 +498,19 @@ class TestLossLockCancelOrders:
             status=OrderStatus.CANCELLED,
         ))
 
-        engine = StrategyEngine(broker, config={"max_loss_pct": "1.0"})
+        mock_log = MagicMock()
+        mock_log.write = AsyncMock()
+        mock_log.today_realized_pnl = MagicMock(return_value=0.0)
+        mock_log.today_executed_amount = MagicMock(return_value=Decimal(0))
+
+        engine = StrategyEngine(
+            broker,
+            log=mock_log,
+            bar_data=MagicMock(),
+            bar_store=MagicMock(),
+            ref_data=MagicMock(),
+            config={"max_loss_pct": "1.0"},
+        )
         return engine, broker
 
     def test_loss_lock_cancels_open_orders(self) -> None:

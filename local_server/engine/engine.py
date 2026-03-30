@@ -13,6 +13,10 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from local_server.engine.alert_monitor import AlertMonitor
+from local_server.engine.ports import (
+    BarDataPort, BarStorePort, LogPort, ReferenceDataPort,
+    LOG_TYPE_ERROR, LOG_TYPE_STRATEGY,
+)
 from local_server.engine.bar_builder import BarBuilder
 from local_server.engine.condition_tracker import ConditionTracker
 from local_server.engine.context_cache import ContextCache
@@ -42,10 +46,16 @@ class StrategyEngine:
     def __init__(
         self,
         broker: BrokerAdapter,
+        log: LogPort,
+        bar_data: BarDataPort,
+        bar_store: BarStorePort,
+        ref_data: ReferenceDataPort,
         config: dict[str, Any] | None = None,
     ) -> None:
         cfg = config or {}
         self._broker = broker
+        self._log = log
+        self._ref_data = ref_data
         self._running = False
 
         # 서브 모듈
@@ -66,12 +76,13 @@ class StrategyEngine:
             price_verifier=self._price_verifier,
             limit_checker=self._limit_checker,
             safeguard=self._safeguard,
+            log=log,
         )
         self._context_cache = ContextCache(
             ttl_seconds=int(cfg.get("context_ttl", 3600)),
         )
-        self._bar_builder = BarBuilder()
-        self._indicator_provider = IndicatorProvider()
+        self._bar_builder = BarBuilder(bar_store=bar_store)
+        self._indicator_provider = IndicatorProvider(bar_data=bar_data)
         self._system_trader = SystemTrader(
             max_positions=int(cfg.get("max_positions", 5)),
             budget_ratio=Decimal(str(cfg.get("budget_ratio", "0.1"))),
@@ -85,7 +96,11 @@ class StrategyEngine:
         self._on_execution: Optional[Callable[[ExecutionResult], Any]] = None
 
         # AlertMonitor (alerts 설정 섹션 전달)
-        self._alert_monitor = AlertMonitor(config=cfg.get("alerts"))
+        self._alert_monitor = AlertMonitor(
+            config=cfg.get("alerts"),
+            log=log,
+            max_loss_pct=Decimal(str(cfg.get("max_loss_pct", "5.0"))),
+        )
 
         # v2: 종목별 포지션 상태 / 조건 추적
         self._position_states: dict[str, PositionState] = {}
@@ -100,8 +115,7 @@ class StrategyEngine:
         """엔진 시작."""
         self._running = True
         # LimitChecker 당일 금액 복원 (재시작 시)
-        from local_server.storage.log_db import get_log_db
-        self._limit_checker.restore_from_db(get_log_db())
+        self._limit_checker.restore_from_db(self._log)
         # 활성 규칙 종목들
         symbols = list({r.get("symbol", "") for r in self._rules if r.get("is_active")})
         # 일봉 지표 계산 (yfinance)
@@ -220,8 +234,7 @@ class StrategyEngine:
             balance = await self._broker.get_balance()
             holding_symbols = {p.symbol for p in balance.positions}
             open_orders = await self._broker.get_open_orders()
-            from local_server.storage.log_db import get_log_db
-            today_pnl = get_log_db().today_realized_pnl()
+            today_pnl = self._log.today_realized_pnl()
 
             # AlertMonitor 경고 평가 (trading_enabled 여부와 무관하게 실행)
             await self._alert_monitor.check_all(balance, open_orders, today_pnl)
@@ -283,8 +296,7 @@ class StrategyEngine:
                 )
                 record_result(candidate.rule_id, ResultStatus.BLOCKED, reason.value)
                 # 차단 로그 (intent_id로 타임라인 추적)
-                from local_server.storage.log_db import get_log_db, LOG_TYPE_ERROR
-                await get_log_db().async_write(
+                await self._log.write(
                     LOG_TYPE_ERROR,
                     f"{reason.value}: {candidate.symbol} {candidate.side} 거부",
                     symbol=candidate.symbol,
@@ -297,8 +309,7 @@ class StrategyEngine:
             for candidate in batch.selected:
                 md = market_data_map[candidate.signal_id]
                 # PROPOSED 로그 (전략 평가 통과)
-                from local_server.storage.log_db import get_log_db, LOG_TYPE_STRATEGY
-                await get_log_db().async_write(
+                await self._log.write(
                     LOG_TYPE_STRATEGY,
                     f"{candidate.reason}: {candidate.symbol} {candidate.side}",
                     symbol=candidate.symbol,
@@ -662,16 +673,12 @@ class StrategyEngine:
         Returns:
             {symbol: "KOSPI"|"KOSDAQ"} — 확인된 종목만 포함 (미확인은 키 없음)
         """
-        from local_server.storage.stock_master_cache import get_stock_master_cache
-        master_map = {
-            s["symbol"]: s.get("market", "")
-            for s in get_stock_master_cache().get_all()
-        }
+        all_markets = self._ref_data.get_market_map()
 
         market_map: dict[str, str] = {}
         unknown: list[str] = []
         for sym in symbols:
-            market = master_map.get(sym, "")
+            market = all_markets.get(sym, "")
             if market in ("KOSPI", "KOSDAQ"):
                 market_map[sym] = market
             else:

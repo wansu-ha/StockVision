@@ -21,6 +21,8 @@ import yfinance as yf
 
 from sv_core.indicators import calc_all_indicators
 
+from local_server.engine.ports import BarDataPort
+
 logger = logging.getLogger(__name__)
 
 _LOOKBACK_DAYS = 80  # 60일 + 여유
@@ -32,11 +34,12 @@ _EMPTY: dict[str, Any] = {}
 class IndicatorProvider:
     """종목별 일봉/분봉 기반 기술적 지표 제공."""
 
-    def __init__(self) -> None:
+    def __init__(self, bar_data: BarDataPort | None = None) -> None:
         # 일봉 캐시: {symbol: {"date": date, "indicators": dict}}
         self._daily_cache: dict[str, dict] = {}
         # 분봉 캐시: {symbol: {tf: {"expires": datetime, "indicators": dict}}}
         self._minute_cache: dict[str, dict[str, dict]] = {}
+        self._bar_data = bar_data
 
     async def refresh(
         self,
@@ -73,16 +76,12 @@ class IndicatorProvider:
             symbol: 종목코드
             tf: 타임프레임 ("1m", "5m", "15m", "1h")
         """
-        from local_server.cloud.heartbeat import get_cloud_client
-        client = get_cloud_client()
-        if client is None:
-            logger.debug("CloudClient 없음 — 분봉 지표 갱신 생략 [%s %s]", symbol, tf)
+        if self._bar_data is None:
+            logger.debug("BarDataPort 없음 — 분봉 지표 갱신 생략 [%s %s]", symbol, tf)
             return
 
         try:
-            path = f"/api/v1/stocks/{symbol}/bars?resolution={tf}&limit={_MINUTE_LOOKBACK}"
-            resp = await client._get(path)
-            data: list[dict] = resp.get("data", []) if isinstance(resp, dict) else []
+            data = await self._bar_data.fetch_minute_bars(symbol, tf, _MINUTE_LOOKBACK)
         except Exception:
             logger.warning("분봉 조회 실패 [%s %s]", symbol, tf)
             return

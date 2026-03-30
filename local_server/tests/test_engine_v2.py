@@ -7,7 +7,8 @@ from __future__ import annotations
 
 import pytest
 
-from unittest.mock import MagicMock
+from decimal import Decimal
+from unittest.mock import AsyncMock, MagicMock
 
 from local_server.engine.evaluator import RuleEvaluator
 from local_server.engine.position_state import PositionState
@@ -441,9 +442,20 @@ class TestStateFunctionsThroughEvaluator:
 
 
 def _make_engine() -> StrategyEngine:
-    """mock broker로 StrategyEngine 인스턴스 생성."""
+    """mock broker + mock ports로 StrategyEngine 인스턴스 생성."""
     broker = MagicMock()
-    return StrategyEngine(broker=broker)
+    mock_log = MagicMock()
+    mock_log.write = AsyncMock()
+    mock_log.today_realized_pnl = MagicMock(return_value=0.0)
+    mock_log.today_executed_amount = MagicMock(return_value=Decimal(0))
+
+    return StrategyEngine(
+        broker=broker,
+        log=mock_log,
+        bar_data=MagicMock(),
+        bar_store=MagicMock(),
+        ref_data=MagicMock(),
+    )
 
 
 class TestFillLoopIntegration:
