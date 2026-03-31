@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from local_server.storage.log_db import LogDB
+    from local_server.engine.ports import LogPort
 
 logger = logging.getLogger(__name__)
 
@@ -74,9 +74,9 @@ class LimitChecker:
         self._today_executed = Decimal(0)
         logger.info("LimitChecker 일일 누적 리셋")
 
-    def restore_from_db(self, log_db: LogDB) -> None:
-        """당일 체결 금액을 LogDB에서 복원한다 (엔진 재시작 시)."""
-        self._today_executed = log_db.today_executed_amount()
+    def restore_from_db(self, log: LogPort) -> None:
+        """당일 체결 금액을 LogPort에서 복원한다 (엔진 재시작 시)."""
+        self._today_executed = log.today_executed_amount()
         self._last_date = date.today()
         logger.info("LimitChecker 복원: _today_executed=%s", self._today_executed)
 

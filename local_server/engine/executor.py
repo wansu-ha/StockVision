@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING, Any
 
 from sv_core.broker.models import OrderSide, OrderType
 
+from local_server.engine.ports import LOG_TYPE_ORDER, LOG_TYPE_FILL, LOG_TYPE_ERROR
+
 if TYPE_CHECKING:
     from sv_core.broker.base import BrokerAdapter
     from sv_core.broker.models import BalanceResult
@@ -21,6 +23,7 @@ if TYPE_CHECKING:
     from local_server.engine.price_verifier import PriceVerifier
     from local_server.engine.safeguard import Safeguard
     from local_server.engine.signal_manager import SignalManager
+    from local_server.engine.ports import LogPort
 
 logger = logging.getLogger(__name__)
 
@@ -59,12 +62,14 @@ class OrderExecutor:
         price_verifier: PriceVerifier,
         limit_checker: LimitChecker,
         safeguard: Safeguard,
+        log: LogPort,
     ) -> None:
         self._broker = broker
         self._signal = signal_manager
         self._price = price_verifier
         self._limit = limit_checker
         self._safeguard = safeguard
+        self._log = log
 
     async def execute(
         self,
@@ -83,11 +88,8 @@ class OrderExecutor:
             balance: BalanceResult (cash, positions)
             intent_id: 타임라인 그룹핑용 ID
         """
-        from local_server.storage.log_db import get_log_db, LOG_TYPE_ORDER, LOG_TYPE_FILL, LOG_TYPE_ERROR
-
         rule_id = int(rule.get("id", 0))
         symbol = str(rule.get("symbol", ""))
-        db = get_log_db()
 
         # intent_id가 없으면 생성 (하위 호환)
         if not intent_id:
@@ -104,7 +106,7 @@ class OrderExecutor:
         if side == "SELL":
             holding = any(p.symbol == symbol for p in balance.positions)
             if not holding:
-                await db.async_write(LOG_TYPE_ERROR, "미보유 종목 매도 거부", symbol=symbol,
+                await self._log.write(LOG_TYPE_ERROR, "미보유 종목 매도 거부", symbol=symbol,
                                      meta={"rule_id": rule_id, "side": side}, intent_id=intent_id)
                 return ExecutionResult(
                     status=ExecutionStatus.REJECTED,
@@ -115,7 +117,7 @@ class OrderExecutor:
         # 1. 중복 체크 (매수/매도 독립)
         if not self._signal.can_trigger(rule_id, side):
             msg = f"오늘 이미 실행된 규칙 ({side})"
-            await db.async_write(LOG_TYPE_ERROR, msg, symbol=symbol,
+            await self._log.write(LOG_TYPE_ERROR, msg, symbol=symbol,
                                  meta={"rule_id": rule_id, "side": side, "check": "duplicate"}, intent_id=intent_id)
             return ExecutionResult(
                 status=ExecutionStatus.REJECTED,
@@ -130,7 +132,7 @@ class OrderExecutor:
         if side == "BUY":
             budget_check = self._limit.check_budget(balance.cash, order_amount)
             if not budget_check.ok:
-                await db.async_write(LOG_TYPE_ERROR, budget_check.reason, symbol=symbol,
+                await self._log.write(LOG_TYPE_ERROR, budget_check.reason, symbol=symbol,
                                      meta={"rule_id": rule_id, "side": side, "check": "budget"}, intent_id=intent_id)
                 return ExecutionResult(
                     status=ExecutionStatus.REJECTED,
@@ -140,7 +142,7 @@ class OrderExecutor:
 
             pos_check = self._limit.check_max_positions(len(balance.positions))
             if not pos_check.ok:
-                await db.async_write(LOG_TYPE_ERROR, pos_check.reason, symbol=symbol,
+                await self._log.write(LOG_TYPE_ERROR, pos_check.reason, symbol=symbol,
                                      meta={"rule_id": rule_id, "side": side, "check": "max_positions"}, intent_id=intent_id)
                 return ExecutionResult(
                     status=ExecutionStatus.REJECTED,
@@ -151,7 +153,7 @@ class OrderExecutor:
         # 3. 안전장치 체크
         if not self._safeguard.is_trading_enabled():
             msg = "Trading Enabled = OFF (Kill Switch 또는 손실 락)"
-            await db.async_write(LOG_TYPE_ERROR, msg, symbol=symbol,
+            await self._log.write(LOG_TYPE_ERROR, msg, symbol=symbol,
                                  meta={"rule_id": rule_id, "side": side, "check": "safeguard"}, intent_id=intent_id)
             return ExecutionResult(
                 status=ExecutionStatus.REJECTED,
@@ -161,7 +163,7 @@ class OrderExecutor:
 
         if not self._safeguard.check_order_speed():
             msg = "주문 속도 제한 초과"
-            await db.async_write(LOG_TYPE_ERROR, msg, symbol=symbol,
+            await self._log.write(LOG_TYPE_ERROR, msg, symbol=symbol,
                                  meta={"rule_id": rule_id, "side": side, "check": "speed"}, intent_id=intent_id)
             return ExecutionResult(
                 status=ExecutionStatus.REJECTED,
@@ -177,7 +179,7 @@ class OrderExecutor:
                 f"REST={verify_result.actual_price}, "
                 f"괴리={verify_result.diff_pct:.2f}%)"
             )
-            await db.async_write(LOG_TYPE_ERROR, msg, symbol=symbol,
+            await self._log.write(LOG_TYPE_ERROR, msg, symbol=symbol,
                                  meta={"rule_id": rule_id, "side": side, "check": "price_verify",
                                         "ws_price": float(ws_price), "rest_price": float(verify_result.actual_price)},
                                  intent_id=intent_id)
@@ -188,7 +190,7 @@ class OrderExecutor:
             )
 
         # 5. 주문 제출 전 ORDER 로그
-        await db.async_write(LOG_TYPE_ORDER, f"주문 준비 ({side} {qty}주, {order_type_str})",
+        await self._log.write(LOG_TYPE_ORDER, f"주문 준비 ({side} {qty}주, {order_type_str})",
                              symbol=symbol, meta={"rule_id": rule_id, "side": side, "qty": qty, "order_type": order_type_str},
                              intent_id=intent_id)
 
@@ -217,7 +219,7 @@ class OrderExecutor:
             self._limit.record_execution(order_amount)
 
             # 주문 제출 완료 로그
-            await db.async_write(LOG_TYPE_ORDER, f"주문 제출 완료 (order_id={result.order_id})",
+            await self._log.write(LOG_TYPE_ORDER, f"주문 제출 완료 (order_id={result.order_id})",
                                  symbol=symbol, meta={"rule_id": rule_id, "side": side, "order_id": result.order_id,
                                                       "qty": qty, "price": float(ws_price)},
                                  intent_id=intent_id)
@@ -230,7 +232,7 @@ class OrderExecutor:
                     pnl = (ws_price - pos.avg_price) * qty
 
             # 체결 로그 (TS-3: 주문 제출 시점 기록 — 실제 체결가는 Reconciler에서 확정)
-            await db.async_write(LOG_TYPE_FILL, f"주문 제출 완료 ({ws_price}원, {qty}주)",
+            await self._log.write(LOG_TYPE_FILL, f"주문 제출 완료 ({ws_price}원, {qty}주)",
                                  symbol=symbol, meta={"rule_id": rule_id, "side": side,
                                                       "order_id": result.order_id, "fill_price": float(ws_price),
                                                       "qty": qty, "realized_pnl": float(pnl) if pnl else None},
@@ -253,7 +255,7 @@ class OrderExecutor:
         except Exception as e:
             self._signal.mark_failed(rule_id, side)
             logger.error("주문 실행 실패: Rule %d — %s", rule_id, e)
-            await db.async_write(LOG_TYPE_ERROR, f"주문 실행 실패: {e}",
+            await self._log.write(LOG_TYPE_ERROR, f"주문 실행 실패: {e}",
                                  symbol=symbol, meta={"rule_id": rule_id, "side": side, "error": str(e)},
                                  intent_id=intent_id)
             return ExecutionResult(

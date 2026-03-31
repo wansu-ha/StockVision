@@ -17,6 +17,9 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
+from local_server.adapters import (
+    LogDbAdapter, CloudBarDataAdapter, MinuteBarStoreAdapter, StockMasterAdapter,
+)
 from local_server.core.local_auth import require_local_secret
 from local_server.engine import StrategyEngine, KillSwitchLevel, ExecutionResult
 from local_server.broker.factory import create_broker_from_config
@@ -125,7 +128,17 @@ async def start_strategy(request: Request, _: None = Depends(require_local_secre
         request.app.state.broker = broker
         request.app.state.broker_reason = "connected"
 
-    engine = StrategyEngine(broker)
+    from local_server.storage.stock_master_cache import get_stock_master_cache
+    from local_server.storage.minute_bar import get_minute_bar_store
+    from local_server.cloud.heartbeat import get_cloud_client
+
+    engine = StrategyEngine(
+        broker=broker,
+        log=LogDbAdapter(get_log_db()),
+        bar_data=CloudBarDataAdapter(get_cloud_client()),
+        bar_store=MinuteBarStoreAdapter(get_minute_bar_store()),
+        ref_data=StockMasterAdapter(get_stock_master_cache()),
+    )
     engine.set_rules(get_rules_cache().get_rules())
     engine.set_on_execution(_on_execution)
     request.app.state.engine = engine

@@ -9,7 +9,10 @@ import asyncio
 import logging
 import uuid
 from datetime import datetime, timedelta
+from decimal import Decimal
 from typing import Any, Awaitable, Callable, Optional
+
+from local_server.engine.ports import LogPort, LOG_TYPE_ALERT
 
 logger = logging.getLogger(__name__)
 
@@ -30,13 +33,20 @@ class AlertMonitor:
 
     _cooldown = timedelta(minutes=30)
 
-    def __init__(self, config: dict[str, Any] | None = None) -> None:
+    def __init__(
+        self,
+        config: dict[str, Any] | None = None,
+        log: LogPort | None = None,
+        max_loss_pct: Decimal | None = None,
+    ) -> None:
         cfg = config or {}
         self._cfg = cfg
         # 쿨다운 상태: alert_key → (마지막 발송 시각, 발송 시 값)
         self._fired: dict[str, tuple[datetime, float | None]] = {}
         # WS 브로드캐스트 콜백 (async)
         self._broadcast: Optional[Callable[[dict], Awaitable[None]]] = None
+        self._log = log
+        self._max_loss_pct = max_loss_pct or Decimal("5.0")
         logger.info("AlertMonitor initialized")
 
     def set_broadcast(self, callback: Callable[[dict], Awaitable[None]]) -> None:
@@ -135,22 +145,22 @@ class AlertMonitor:
                 logger.error("AlertMonitor broadcast 실패: %s", e)
 
         # LogDB 기록
-        try:
-            from local_server.storage.log_db import get_log_db, LOG_TYPE_ALERT
-            await get_log_db().async_write(
-                LOG_TYPE_ALERT,
-                message,
-                symbol=symbol,
-                meta={
-                    "alert_id": alert_id,
-                    "alert_type": alert_type,
-                    "severity": severity,
-                    "current_value": current_value,
-                    **(meta or {}),
-                },
-            )
-        except Exception as e:
-            logger.error("AlertMonitor LogDB 기록 실패: %s", e)
+        if self._log:
+            try:
+                await self._log.write(
+                    LOG_TYPE_ALERT,
+                    message,
+                    symbol=symbol,
+                    meta={
+                        "alert_id": alert_id,
+                        "alert_type": alert_type,
+                        "severity": severity,
+                        "current_value": current_value,
+                        **(meta or {}),
+                    },
+                )
+            except Exception as e:
+                logger.error("AlertMonitor LogDB 기록 실패: %s", e)
 
         logger.info(
             "경고 발송 [%s] %s — %s (key=%s)",
@@ -227,9 +237,7 @@ class AlertMonitor:
     async def _check_daily_loss_proximity(self, balance: Any, today_pnl: Any) -> None:
         """당일 실현손익이 max_loss_pct의 80% 도달 시 경고."""
         try:
-            from local_server.config import get_config
-            from decimal import Decimal
-            max_loss_pct = Decimal(str(get_config().get("max_loss_pct", "5.0")))
+            max_loss_pct = self._max_loss_pct
             total_equity = getattr(balance, "cash", Decimal(0)) + getattr(balance, "total_eval", Decimal(0))
             if total_equity <= 0:
                 return
