@@ -47,7 +47,7 @@ client.interceptors.response.use(
       } catch { /* 로컬 서버 다운 — 폴백 진행 */ }
 
       // 2단계: 폴백 — 클라우드 직접 refresh
-      const rt = localStorage.getItem(RT_KEY)
+      const rt = localStorage.getItem(RT_KEY) ?? sessionStorage.getItem(RT_KEY)
       if (rt) {
         try {
           const { data } = await axios.post(`${CLOUD_URL}/api/v1/auth/refresh`, { refresh_token: rt })

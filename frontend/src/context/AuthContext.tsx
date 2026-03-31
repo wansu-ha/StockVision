@@ -75,7 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const d = res.data
           sessionStorage.setItem(STORAGE_KEY_JWT, d.access_token)
           saveRt(d.refresh_token)
-          await localAuth.setAuthToken(d.access_token, d.refresh_token)
+          await localAuth.setAuthToken(d.access_token, d.refresh_token).catch(() => {})
           setState(prev => ({
             ...prev,
             jwt: d.access_token,
