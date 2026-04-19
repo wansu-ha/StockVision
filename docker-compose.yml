@@ -5,9 +5,9 @@ services:
     image: postgres:15
     container_name: stockvision_postgres
     environment:
-      POSTGRES_DB: stockvision
-      POSTGRES_USER: stockvision_user
-      POSTGRES_PASSWORD: stockvision_pass
+      POSTGRES_DB: ${POSTGRES_DB:-stockvision}
+      POSTGRES_USER: ${POSTGRES_USER:-stockvision_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-stockvision_pass}
     ports:
       - "5432:5432"
     volumes:
@@ -32,7 +32,7 @@ services:
       - "4010:4010"
     env_file: cloud_server/.env
     environment:
-      - DATABASE_URL=postgresql://stockvision_user:stockvision_pass@postgres:5432/stockvision
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-stockvision_user}:${POSTGRES_PASSWORD:-stockvision_pass}@postgres:5432/${POSTGRES_DB:-stockvision}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5173}
       - REDIS_URL=redis://redis:6379
     depends_on:
