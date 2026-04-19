@@ -20,9 +20,6 @@ import Login from './pages/Login'
 import Register from './pages/Register'
 import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
-const ProtoA = lazy(() => import('./pages/ProtoA'))
-const ProtoB = lazy(() => import('./pages/ProtoB'))
-const ProtoC = lazy(() => import('./pages/ProtoC'))
 import MainDashboard from './pages/MainDashboard'
 import OnboardingWizard from './pages/OnboardingWizard'
 import UnifiedLayout from './components/layout/UnifiedLayout'
@@ -66,13 +63,6 @@ function AppRoutes() {
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/oauth/callback" element={<OAuthCallback />} />
       <Route path="/legal/:type" element={<LegalDocument />} />
-      {import.meta.env.DEV && (
-        <>
-          <Route path="/proto-a" element={<Suspense fallback={null}><ProtoA /></Suspense>} />
-          <Route path="/proto-b" element={<Suspense fallback={null}><ProtoB /></Suspense>} />
-          <Route path="/proto-c" element={<Suspense fallback={null}><ProtoC /></Suspense>} />
-        </>
-      )}
 
       {/* 온보딩 (Layout 없음) */}
       <Route path="/onboarding" element={
