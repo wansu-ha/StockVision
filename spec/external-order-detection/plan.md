@@ -1,6 +1,6 @@
 # 외부 주문 감지 — 구현 계획
 
-> 작성일: 2026-03-12 | 상태: 초안 | spec: `spec/external-order-detection/spec.md`
+> 작성일: 2026-03-12 | 상태: 보류 (GHOST 감지만 구현, 외부 주문 경고 미착수) | spec: `spec/external-order-detection/spec.md`
 > 갱신일: 2026-03-15 | 선행 조건 해소 — 착수 가능
 
 ## 현황 (2026-03-15 점검)

@@ -1,6 +1,6 @@
 # 규칙 카드 구조화 구현 계획
 
-> 작성일: 2026-03-11 | 상태: 초안 | spec: spec/rule-card-structured/spec.md
+> 작성일: 2026-03-11 | 상태: 구현 완료 | spec: spec/rule-card-structured/spec.md
 
 ---
 

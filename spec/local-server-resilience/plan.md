@@ -1,6 +1,6 @@
 # 로컬 서버 견고성 — 구현 계획
 
-> 작성일: 2026-03-16 | 상태: 확정 | spec: `spec/local-server-resilience/spec.md`
+> 작성일: 2026-03-16 | 상태: 구현 완료 | spec: `spec/local-server-resilience/spec.md`
 
 ## 의존관계
 

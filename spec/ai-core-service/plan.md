@@ -1,6 +1,6 @@
 # AI 코어 서비스 — 구현 계획서
 
-> 작성일: 2026-03-29 | 상태: 초안 | spec: spec/ai-core-service/spec.md
+> 작성일: 2026-03-29 | 상태: 구현 완료 | spec: spec/ai-core-service/spec.md
 
 ## 의존성
 

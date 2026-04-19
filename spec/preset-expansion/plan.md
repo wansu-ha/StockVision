@@ -1,6 +1,6 @@
 # 프리셋 보강 + DSL 함수 확장 — 구현 계획서
 
-> 작성일: 2026-03-29 | 상태: 초안 | spec: spec/preset-expansion/spec.md
+> 작성일: 2026-03-29 | 상태: 구현 완료 | spec: spec/preset-expansion/spec.md
 
 ## 아키텍처
 

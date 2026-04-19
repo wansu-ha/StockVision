@@ -1,6 +1,6 @@
 # 원격 제어 (Remote Control)
 
-> 작성일: 2026-03-12 | 상태: 확정 | Phase C (C6 + C7 + C8)
+> 작성일: 2026-03-12 | 상태: 구현 완료 (SUPERSEDED by `spec/remote-ops/`) | Phase C (C6 + C7 + C8)
 
 ## 1. 배경
 

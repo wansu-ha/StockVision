@@ -1,6 +1,6 @@
 # 프로덕션 하드닝 v2 명세서
 
-> 작성일: 2026-03-24 | 상태: 초안 | 선행: `spec/pre-deploy-hardening/` (완료)
+> 작성일: 2026-03-24 | 상태: 부분 구현 (H1 Alembic + H2 로그 레벨 완료, H3~ 미구현) | 선행: `spec/pre-deploy-hardening/` (완료), `spec/production-hardening/` (완료, M1~M6)
 
 ---
 

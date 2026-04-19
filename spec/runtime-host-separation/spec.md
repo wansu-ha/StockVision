@@ -1,6 +1,6 @@
 # Runtime / Host 분리 명세서
 
-> 작성일: 2026-03-30 | 상태: 초안
+> 작성일: 2026-03-30 | 상태: 구현 완료
 > 관련 문서:
 > - `docs/product/assistant-copilot-engine-structure.md`
 > - `docs/product/system-trader-definition.md`

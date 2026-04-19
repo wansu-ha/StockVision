@@ -1,6 +1,6 @@
 # 프론트엔드 메인 화면 UX 구현 계획서
 
-> 작성일: 2026-03-09 | 상태: 확정 | Unit 5
+> 작성일: 2026-03-09 | 상태: 구현 완료 | Unit 5
 >
 > **spec**: `spec/frontend-main-ux/spec.md`
 > **기반 프로토타입**: `frontend/src/pages/ProtoC.tsx` (모든 UI 완성, 100% mock 데이터)
