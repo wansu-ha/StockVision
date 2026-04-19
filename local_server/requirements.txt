@@ -11,3 +11,6 @@ pandas>=2.2.0         # 지표 계산
 numpy>=2.0.0          # pandas 의존
 yfinance>=0.2.40      # 일봉 데이터 조회
 packaging>=24.0       # 버전 비교 (heartbeat)
+
+# 공유 패키지
+-e ../sv_core

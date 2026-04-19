@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sv_core"
+version = "0.1.0"
+description = "StockVision 공유 코어 모듈 (브로커 인터페이스, 지표, DSL 파서)"
+requires-python = ">=3.13"
+dependencies = [
+    "pydantic>=2.0",
+    "pandas>=2.0",
+    "numpy>=1.26",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["sv_core*"]
